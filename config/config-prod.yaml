@@ -1,0 +1,25 @@
+# Configuración Production
+# TODOS los secretos desde variables de ambiente
+
+server:
+  read_timeout: 60s
+  write_timeout: 60s
+
+database:
+  postgres:
+    host: "prod-postgres.edugo.internal"
+    max_connections: 100
+    ssl_mode: "require"
+    # Password desde ENV: POSTGRES_PASSWORD (obligatorio)
+  
+  mongodb:
+    # URI desde ENV: MONGODB_URI (obligatorio)
+
+messaging:
+  rabbitmq:
+    # URL desde ENV: RABBITMQ_URL (obligatorio)
+    prefetch_count: 20
+
+logging:
+  level: "warn"
+  format: "json"

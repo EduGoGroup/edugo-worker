@@ -1,0 +1,17 @@
+# Configuración Development Server
+# Usa variables de ambiente para secretos
+
+database:
+  postgres:
+    host: "dev-postgres.edugo.internal"
+  
+  mongodb:
+    # URI completa desde ENV: MONGODB_URI
+
+messaging:
+  rabbitmq:
+    # URL completa desde ENV: RABBITMQ_URL
+
+logging:
+  level: "debug"
+  format: "json"

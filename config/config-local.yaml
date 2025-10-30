@@ -1,0 +1,17 @@
+# Local Development
+database:
+  postgres:
+    password: "edugo_pass"
+  mongodb:
+    uri: "mongodb://edugo_admin:edugo_pass@localhost:27017/edugo?authSource=admin"
+
+messaging:
+  rabbitmq:
+    url: "amqp://edugo_user:edugo_pass@localhost:5672/"
+
+nlp:
+  api_key: "sk-test-key-local"
+
+logging:
+  level: "debug"
+  format: "text"
