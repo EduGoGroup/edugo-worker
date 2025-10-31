@@ -2,6 +2,8 @@
 
 Worker que consume eventos de RabbitMQ para procesar materiales educativos con IA.
 
+> 🚀 **CI/CD Automatizado**: Este proyecto incluye workflows de GitHub Actions para testing, linting y deployment automático de imágenes Docker.
+
 ## Responsabilidades
 
 1. **Generación de Resumen y Quiz** (`material_uploaded`):
