@@ -1,0 +1,261 @@
+name: Release CI/CD
+
+# Solo se ejecuta cuando creas un tag de versión (ej: v1.0.0, v1.2.3)
+# Construye y publica Docker image con el tag de versión
+on:
+  push:
+    tags:
+      - 'v*'  # v1.0.0, v2.0.0, etc.
+
+env:
+  GO_VERSION: '1.25'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  validate-and-test:
+    name: Validate and Test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Configurar acceso a repos privados
+        run: |
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GOPRIVATE: github.com/EduGoGroup/*
+
+      - name: Descargar dependencias
+        run: go mod download
+
+      - name: Verificar formato
+        run: |
+          if ! gofmt -l . | grep -q .; then
+            echo "✓ Código formateado correctamente"
+          else
+            echo "✗ Código no está formateado:"
+            gofmt -l .
+            exit 1
+          fi
+
+      - name: Análisis estático (go vet)
+        run: go vet ./...
+
+      - name: Ejecutar tests
+        run: go test -v -race ./...
+
+      - name: Tests con cobertura
+        run: |
+          mkdir -p coverage
+          go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic ./... || true
+          if [ -f coverage/coverage.out ]; then
+            go tool cover -func=coverage/coverage.out
+          fi
+
+      - name: Verificar build
+        run: go build -v ./...
+
+      - name: Build binario principal
+        run: go build -o worker ./cmd/main.go
+
+      - name: Subir cobertura
+        uses: codecov/codecov-action@v3
+        if: success()
+        with:
+          file: coverage/coverage.out
+          flags: release-worker
+          name: codecov-release
+          fail_ci_if_error: false
+
+  build-and-push-docker:
+    name: Build and Push Docker Image
+    runs-on: ubuntu-latest
+    needs: [validate-and-test]
+
+    permissions:
+      contents: read
+      packages: write
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login a GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extraer versión del tag
+        id: version
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          VERSION=${TAG#v}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "📌 Version: $VERSION"
+
+      - name: Extraer metadata para Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=raw,value=latest
+            type=raw,value=${{ steps.version.outputs.tag }}
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            GITHUB_TOKEN=${{ secrets.GITHUB_TOKEN }}
+            VERSION=${{ steps.version.outputs.version }}
+
+      - name: Generar resumen de imágenes
+        run: |
+          echo "# 🐳 Docker Images Publicadas" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## Tags Disponibles:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 📥 Cómo usar:" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "# Login a GHCR" >> $GITHUB_STEP_SUMMARY
+          echo "echo \$GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "# Pull la imagen" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:${{ steps.version.outputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  create-github-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [validate-and-test, build-and-push-docker]
+
+    permissions:
+      contents: write
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Obtener tag actual
+        id: tag
+        run: |
+          TAG=${GITHUB_REF#refs/tags/}
+          echo "tag=$TAG" >> $GITHUB_OUTPUT
+          echo "version=${TAG#v}" >> $GITHUB_OUTPUT
+
+      - name: Extraer changelog para esta versión
+        id: changelog
+        run: |
+          TAG=${{ steps.tag.outputs.tag }}
+          VERSION=${{ steps.tag.outputs.version }}
+
+          # Intentar extraer del CHANGELOG si existe
+          if [ -f "CHANGELOG.md" ] && grep -q "## \[$VERSION\]" CHANGELOG.md; then
+            CHANGELOG=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d')
+            echo "$CHANGELOG" > /tmp/changelog.md
+          else
+            echo "Release $TAG" > /tmp/changelog.md
+            echo "" >> /tmp/changelog.md
+            echo "## 🚀 What's Changed" >> /tmp/changelog.md
+            echo "" >> /tmp/changelog.md
+            # Generar changelog desde commits
+            git log --pretty=format:"- %s (%h)" $(git describe --tags --abbrev=0 HEAD^)..HEAD >> /tmp/changelog.md || true
+          fi
+
+      - name: Crear GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG=${{ steps.tag.outputs.tag }}
+          VERSION=${{ steps.tag.outputs.version }}
+
+          # Crear release con gh CLI
+          gh release create "$TAG" \
+            --title "Release $TAG - EduGo Worker" \
+            --notes-file /tmp/changelog.md \
+            --notes "
+
+          ---
+
+          ## 🐳 Docker Image
+
+          La imagen Docker está disponible en GitHub Container Registry:
+
+          \`\`\`bash
+          # Login a GHCR
+          echo \$GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin
+
+          # Pull la imagen
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
+          docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest
+          \`\`\`
+
+          ## 📦 Despliegue con Docker Compose
+
+          \`\`\`yaml
+          version: '3.8'
+          services:
+            worker:
+              image: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:$VERSION
+              environment:
+                RABBITMQ_URL: amqp://guest:guest@rabbitmq:5672/
+                MONGODB_URL: mongodb://mongo:27017/edugo
+                POSTGRES_URL: postgresql://user:pass@postgres:5432/edugo
+              depends_on:
+                - rabbitmq
+                - mongodb
+                - postgres
+          \`\`\`
+
+          ## ⚙️ Variables de Entorno Requeridas
+
+          - \`RABBITMQ_URL\`: URL de conexión a RabbitMQ
+          - \`MONGODB_URL\`: URL de conexión a MongoDB
+          - \`POSTGRES_URL\`: URL de conexión a PostgreSQL
+          - \`S3_ENDPOINT\`: Endpoint de S3 (opcional)
+          - \`OPENAI_API_KEY\`: API Key de OpenAI (opcional)
+
+          ## 📊 Métricas
+
+          - ✅ Tests pasados
+          - ✅ Build exitoso
+          - ✅ Docker image publicada
+          - 🐳 Multi-platform support (linux/amd64)
+
+          ## 📚 Documentación
+
+          - [README.md](https://github.com/EduGoGroup/edugo-worker/blob/$TAG/README.md)
+          - [CHANGELOG.md](https://github.com/EduGoGroup/edugo-worker/blob/$TAG/CHANGELOG.md)
+
+          ---
+
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)"

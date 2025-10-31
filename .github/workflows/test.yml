@@ -1,0 +1,170 @@
+name: Tests with Coverage
+
+# Manual o en PRs
+on:
+  workflow_dispatch:  # Manual desde GitHub UI
+  pull_request:
+    branches: [ main, develop ]
+
+env:
+  GO_VERSION: '1.25'
+
+jobs:
+  test-coverage:
+    name: Run Tests with Coverage
+    runs-on: ubuntu-latest
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: postgres
+          POSTGRES_DB: edugo_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+      mongodb:
+        image: mongo:7
+        env:
+          MONGO_INITDB_ROOT_USERNAME: mongo
+          MONGO_INITDB_ROOT_PASSWORD: mongo
+        options: >-
+          --health-cmd "mongosh --eval 'db.runCommand({ ping: 1 })'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 27017:27017
+
+      rabbitmq:
+        image: rabbitmq:3-management-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: guest
+          RABBITMQ_DEFAULT_PASS: guest
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5672:5672
+          - 15672:15672
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Configurar acceso a repos privados
+        run: |
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GOPRIVATE: github.com/EduGoGroup/*
+
+      - name: Descargar dependencias
+        run: go mod download
+
+      - name: Esperar a que servicios estén listos
+        run: |
+          echo "Esperando a PostgreSQL..."
+          sleep 5
+          echo "Esperando a MongoDB..."
+          sleep 5
+          echo "Esperando a RabbitMQ..."
+          sleep 5
+
+      - name: Ejecutar tests con cobertura
+        env:
+          POSTGRES_URL: postgresql://postgres:postgres@localhost:5432/edugo_test?sslmode=disable
+          MONGODB_URL: mongodb://mongo:mongo@localhost:27017/edugo_test?authSource=admin
+          RABBITMQ_URL: amqp://guest:guest@localhost:5672/
+        run: |
+          mkdir -p coverage
+          go test -v -race -coverprofile=coverage/coverage.out -covermode=atomic ./...
+
+          if [ -f coverage/coverage.out ]; then
+            echo ""
+            echo "📊 Cobertura de edugo-worker:"
+            go tool cover -func=coverage/coverage.out | tail -1
+          fi
+
+      - name: Generar reporte HTML
+        run: |
+          if [ -f coverage/coverage.out ]; then
+            go tool cover -html=coverage/coverage.out -o coverage/coverage.html
+          fi
+
+      - name: Subir reporte de cobertura
+        uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: coverage-report
+          path: coverage/
+          retention-days: 30
+
+      - name: Subir a Codecov
+        uses: codecov/codecov-action@v3
+        if: success()
+        with:
+          file: coverage/coverage.out
+          flags: worker
+          fail_ci_if_error: false
+
+      - name: Generar resumen
+        if: always()
+        run: |
+          echo "# 📊 Resumen de Tests" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+
+          if [ -f coverage/coverage.out ]; then
+            coverage=$(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $NF}')
+            echo "| Métrica | Valor |" >> $GITHUB_STEP_SUMMARY
+            echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+            echo "| Cobertura | $coverage |" >> $GITHUB_STEP_SUMMARY
+            echo "| Servicios | PostgreSQL + MongoDB + RabbitMQ |" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "⚠️ No se generó reporte de cobertura" >> $GITHUB_STEP_SUMMARY
+          fi
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch'  # Solo manual
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+
+      - name: Setup Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Configurar acceso a repos privados
+        run: |
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GOPRIVATE: github.com/EduGoGroup/*
+
+      - name: Descargar dependencias
+        run: go mod download
+
+      - name: Ejecutar integration tests
+        run: |
+          if [ -d "test/integration" ]; then
+            echo "Ejecutando integration tests..."
+            go test -v -tags=integration ./test/integration/...
+          else
+            echo "No hay integration tests disponibles"
+          fi

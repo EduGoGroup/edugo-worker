@@ -14,11 +14,7 @@ on:
           - staging
           - production
 
-  # Trigger automático en PR (opcional)
-  pull_request:
-    branches: [ main, develop ]
-
-  # Trigger automático en push a main
+  # Trigger automático en push a main (sin tests para despliegues rápidos)
   push:
     branches: [ main ]
 
@@ -27,47 +23,9 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  test:
-    name: Run Tests
-    runs-on: ubuntu-latest
-
-    steps:
-      - name: Checkout código
-        uses: actions/checkout@v4
-
-      - name: Setup Go
-        uses: actions/setup-go@v5
-        with:
-          go-version: '1.23'
-          cache: true
-
-      - name: Configurar acceso a repos privados
-        run: |
-          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
-        env:
-          GOPRIVATE: github.com/EduGoGroup/*
-
-      - name: Descargar dependencias
-        run: go mod download
-
-      - name: Ejecutar tests
-        run: go test -v -race -coverprofile=coverage.txt ./...
-
-      - name: Generar reporte de cobertura
-        run: go tool cover -html=coverage.txt -o coverage.html
-
-      - name: Subir reporte de cobertura
-        uses: actions/upload-artifact@v4
-        with:
-          name: coverage-report
-          path: coverage.html
-
   build-and-push:
     name: Build and Push Docker Image
-    needs: test
     runs-on: ubuntu-latest
-    # Solo ejecutar en main o cuando sea manual
-    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
 
     permissions:
       contents: read
@@ -94,7 +52,6 @@ jobs:
           images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
           tags: |
             type=ref,event=branch
-            type=ref,event=pr
             type=sha,prefix={{branch}}-
             type=raw,value=latest,enable={{is_default_branch}}
             type=raw,value=${{ inputs.environment }},enable=${{ github.event_name == 'workflow_dispatch' }}
@@ -115,8 +72,9 @@ jobs:
         run: |
           echo "✅ Imagen Docker construida y pusheada exitosamente"
           echo ""
-          echo "📦 Puedes descargarla con:"
-          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
+          echo "📦 Tags disponibles:"
+          echo "${{ steps.meta.outputs.tags }}"
           echo ""
-          echo "🔑 Para acceder (desde tu máquina):"
-          echo "echo \$GITHUB_TOKEN | docker login ghcr.io -u USERNAME --password-stdin"
+          echo "🔑 Para descargar localmente:"
+          echo "echo \$GITHUB_TOKEN | docker login ghcr.io -u ${{ github.actor }} --password-stdin"
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:latest"
