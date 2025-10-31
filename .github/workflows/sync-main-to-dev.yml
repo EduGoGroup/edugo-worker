@@ -1,0 +1,132 @@
+name: Sync Main to Dev
+
+# Se ejecuta después de push a main (generalmente después de auto-version)
+on:
+  push:
+    branches: [main]
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  sync:
+    name: Create PR to sync main → dev
+    runs-on: ubuntu-latest
+    # Solo ejecutar si NO es un commit de bot (evitar loops)
+    if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'chore: sync')"
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          ref: main
+
+      - name: Obtener versión actual
+        id: version
+        run: |
+          if [ -f ".github/version.txt" ]; then
+            VERSION=$(cat .github/version.txt)
+            echo "version=$VERSION" >> $GITHUB_OUTPUT
+            echo "📌 Versión actual: v$VERSION"
+          else
+            echo "version=unknown" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Verificar si dev existe
+        id: check_dev
+        run: |
+          if git ls-remote --heads origin dev | grep -q dev; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "✓ Rama dev existe"
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+            echo "⚠️  Rama dev no existe, se creará"
+          fi
+
+      - name: Crear rama dev si no existe
+        if: steps.check_dev.outputs.exists == 'false'
+        run: |
+          git checkout -b dev
+          git push -u origin dev
+          echo "✓ Rama dev creada"
+
+      - name: Verificar si hay diferencias
+        id: check_diff
+        run: |
+          git fetch origin dev
+          if git diff --quiet origin/main origin/dev; then
+            echo "has_diff=false" >> $GITHUB_OUTPUT
+            echo "✓ main y dev están sincronizados"
+          else
+            echo "has_diff=true" >> $GITHUB_OUTPUT
+            echo "⚠️  Hay diferencias entre main y dev"
+          fi
+
+      - name: Crear PR de sync
+        if: steps.check_diff.outputs.has_diff == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          VERSION="${{ steps.version.outputs.version }}"
+
+          # Crear PR
+          gh pr create \
+            --base dev \
+            --head main \
+            --title "chore: sync main v$VERSION to dev" \
+            --body "## 🔄 Sincronización Automática
+
+Este PR sincroniza los cambios de \`main\` (v$VERSION) a \`dev\`.
+
+### Cambios incluidos:
+- Versión actualizada a v$VERSION
+- CHANGELOG actualizado
+- Release v$VERSION publicado
+
+### ⚠️ Importante:
+Si hay conflictos, resuélvelos manualmente.
+
+---
+
+🤖 PR automático generado por workflow \`sync-main-to-dev.yml\`" \
+            --label "sync" \
+            --label "automated" || echo "⚠️  PR ya existe o hubo un error"
+
+      - name: Auto-merge si es posible
+        if: steps.check_diff.outputs.has_diff == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          # Obtener número del PR recién creado
+          PR_NUMBER=$(gh pr list --base dev --head main --json number --jq '.[0].number')
+
+          if [ -n "$PR_NUMBER" ]; then
+            echo "📋 PR #$PR_NUMBER creado"
+
+            # Intentar auto-merge si no hay conflictos
+            # (esto fallará si hay conflictos o si require approvals)
+            gh pr merge "$PR_NUMBER" --auto --squash || echo "⚠️  Auto-merge no disponible (puede requerir aprobación manual)"
+          fi
+
+      - name: Resumen
+        run: |
+          echo "# 🔄 Sincronización Main → Dev" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Aspecto | Estado |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|--------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Versión | v${{ steps.version.outputs.version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Rama dev existe | ${{ steps.check_dev.outputs.exists }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Diferencias | ${{ steps.check_diff.outputs.has_diff }} |" >> $GITHUB_STEP_SUMMARY
+
+          if [ "${{ steps.check_diff.outputs.has_diff }}" == "true" ]; then
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ PR de sincronización creado" >> $GITHUB_STEP_SUMMARY
+            echo "👉 Revisa PRs abiertos para confirmar merge" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "" >> $GITHUB_STEP_SUMMARY
+            echo "✅ main y dev ya están sincronizados" >> $GITHUB_STEP_SUMMARY
+          fi

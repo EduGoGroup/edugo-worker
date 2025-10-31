@@ -1,0 +1,67 @@
+name: Auto Version and Tag
+
+# Se ejecuta cuando se hace merge de un PR a main
+on:
+  pull_request:
+    types: [closed]
+    branches: [main]
+
+permissions:
+  contents: write
+
+jobs:
+  auto-version:
+    name: Auto Version and Create Tag
+    # Solo si el PR fue mergeado (no cerrado sin merge)
+    if: github.event.pull_request.merged == true
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0  # Necesario para git log completo
+          ref: main
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configurar Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Calcular nueva versión
+        id: version
+        run: |
+          chmod +x .github/scripts/bump-version.sh
+          .github/scripts/bump-version.sh
+
+      - name: Generar CHANGELOG
+        run: |
+          chmod +x .github/scripts/generate-changelog.sh
+          .github/scripts/generate-changelog.sh ${{ steps.version.outputs.new_version }}
+
+      - name: Commit cambios de versión
+        run: |
+          git add .github/version.txt CHANGELOG.md
+          git commit -m "chore: bump version to v${{ steps.version.outputs.new_version }}
+
+[skip ci]"
+
+      - name: Crear y pushear tag
+        run: |
+          NEW_VERSION="${{ steps.version.outputs.new_version }}"
+          git tag -a "v$NEW_VERSION" -m "Release v$NEW_VERSION"
+          git push origin main
+          git push origin "v$NEW_VERSION"
+
+      - name: Resumen
+        run: |
+          echo "# 🎉 Auto-Versionado Completado" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Aspecto | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Bump Type | ${{ steps.version.outputs.bump_type }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Nueva Versión | v${{ steps.version.outputs.new_version }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag Creado | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "El tag \`v${{ steps.version.outputs.new_version }}\` disparará automáticamente el workflow de Release." >> $GITHUB_STEP_SUMMARY
