@@ -4,12 +4,12 @@ import (
 	"context"
 	"database/sql"
 
+	"github.com/EduGoGroup/edugo-shared/common/errors"
+	"github.com/EduGoGroup/edugo-shared/common/types/enum"
+	"github.com/EduGoGroup/edugo-shared/database/postgres"
+	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/valueobject"
-	"github.com/EduGoGroup/edugo-shared/database/postgres"
-	"github.com/EduGoGroup/edugo-shared/common/errors"
-	"github.com/EduGoGroup/edugo-shared/logger"
-	"github.com/EduGoGroup/edugo-shared/common/types/enum"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
@@ -83,12 +83,12 @@ func (p *MaterialUploadedProcessor) Process(ctx context.Context, event dto.Mater
 			"material_id": event.MaterialID,
 			"questions": []bson.M{
 				{
-					"id":            "q1",
-					"question_text": "Pregunta de ejemplo",
-					"question_type": "multiple_choice",
-					"options":       []string{"A", "B", "C", "D"},
+					"id":             "q1",
+					"question_text":  "Pregunta de ejemplo",
+					"question_type":  "multiple_choice",
+					"options":        []string{"A", "B", "C", "D"},
 					"correct_answer": "A",
-					"explanation":   "Explicación",
+					"explanation":    "Explicación",
 				},
 			},
 			"created_at": event.Timestamp,

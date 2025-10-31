@@ -38,10 +38,10 @@ type MessagingConfig struct {
 }
 
 type RabbitMQConfig struct {
-	URL           string        `mapstructure:"url"`
-	Queues        QueuesConfig  `mapstructure:"queues"`
+	URL           string         `mapstructure:"url"`
+	Queues        QueuesConfig   `mapstructure:"queues"`
 	Exchanges     ExchangeConfig `mapstructure:"exchanges"`
-	PrefetchCount int           `mapstructure:"prefetch_count"`
+	PrefetchCount int            `mapstructure:"prefetch_count"`
 }
 
 type QueuesConfig struct {

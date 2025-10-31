@@ -4,20 +4,20 @@ import (
 	"context"
 	"encoding/json"
 
+	"github.com/EduGoGroup/edugo-shared/common/types/enum"
+	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
-	"github.com/EduGoGroup/edugo-shared/logger"
-	"github.com/EduGoGroup/edugo-shared/common/types/enum"
 )
 
 // EventConsumer consume eventos de RabbitMQ y los enruta a processors
 type EventConsumer struct {
-	materialUploadedProc   *processor.MaterialUploadedProcessor
-	materialReprocessProc  *processor.MaterialReprocessProcessor
-	materialDeletedProc    *processor.MaterialDeletedProcessor
-	assessmentAttemptProc  *processor.AssessmentAttemptProcessor
-	studentEnrolledProc    *processor.StudentEnrolledProcessor
-	logger                 logger.Logger
+	materialUploadedProc  *processor.MaterialUploadedProcessor
+	materialReprocessProc *processor.MaterialReprocessProcessor
+	materialDeletedProc   *processor.MaterialDeletedProcessor
+	assessmentAttemptProc *processor.AssessmentAttemptProcessor
+	studentEnrolledProc   *processor.StudentEnrolledProcessor
+	logger                logger.Logger
 }
 
 func NewEventConsumer(
@@ -29,12 +29,12 @@ func NewEventConsumer(
 	logger logger.Logger,
 ) *EventConsumer {
 	return &EventConsumer{
-		materialUploadedProc:   materialUploadedProc,
-		materialReprocessProc:  materialReprocessProc,
-		materialDeletedProc:    materialDeletedProc,
-		assessmentAttemptProc:  assessmentAttemptProc,
-		studentEnrolledProc:    studentEnrolledProc,
-		logger:                 logger,
+		materialUploadedProc:  materialUploadedProc,
+		materialReprocessProc: materialReprocessProc,
+		materialDeletedProc:   materialDeletedProc,
+		assessmentAttemptProc: assessmentAttemptProc,
+		studentEnrolledProc:   studentEnrolledProc,
+		logger:                logger,
 	}
 }
 
