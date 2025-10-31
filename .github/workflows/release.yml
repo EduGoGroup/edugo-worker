@@ -107,11 +107,16 @@ jobs:
           echo "version=$VERSION" >> $GITHUB_OUTPUT
           echo "📌 Version: $VERSION"
 
+      - name: Convertir nombre a minúsculas
+        id: lowercase
+        run: |
+          echo "image_name=$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_OUTPUT
+
       - name: Extraer metadata para Docker
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          images: ${{ env.REGISTRY }}/${{ steps.lowercase.outputs.image_name }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
