@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
-	"github.com/EduGoGroup/edugo-shared/pkg/logger"
+	"github.com/EduGoGroup/edugo-shared/logger"
 )
 
 type StudentEnrolledProcessor struct {

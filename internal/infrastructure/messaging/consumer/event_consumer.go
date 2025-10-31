@@ -6,8 +6,8 @@ import (
 
 	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
-	"github.com/EduGoGroup/edugo-shared/pkg/logger"
-	"github.com/EduGoGroup/edugo-shared/pkg/types/enum"
+	"github.com/EduGoGroup/edugo-shared/logger"
+	"github.com/EduGoGroup/edugo-shared/common/types/enum"
 )
 
 // EventConsumer consume eventos de RabbitMQ y los enruta a processors

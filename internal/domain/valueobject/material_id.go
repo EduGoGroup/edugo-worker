@@ -1,7 +1,7 @@
 package valueobject
 
 import (
-	"github.com/EduGoGroup/edugo-shared/pkg/types"
+	"github.com/EduGoGroup/edugo-shared/common/types"
 )
 
 type MaterialID struct {

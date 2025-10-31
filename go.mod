@@ -3,7 +3,9 @@ module github.com/EduGoGroup/edugo-worker
 go 1.25.3
 
 require (
-	github.com/EduGoGroup/edugo-shared v0.1.0
+	github.com/EduGoGroup/edugo-shared/common v0.0.0-20251031204120-ecc6528ef4b6
+	github.com/EduGoGroup/edugo-shared/database/postgres v0.0.0-20251031175907-0437932f9865
+	github.com/EduGoGroup/edugo-shared/logger v0.0.0-20251031204214-949cb60a661c
 	github.com/google/uuid v1.6.0
 	github.com/spf13/viper v1.21.0
 	github.com/streadway/amqp v1.1.0
