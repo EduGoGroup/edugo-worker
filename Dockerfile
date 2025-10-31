@@ -1,7 +1,7 @@
 # Dockerfile para Worker de Procesamiento
 # Procesa materiales usando RabbitMQ
 
-FROM golang:1.23-alpine AS builder
+FROM golang:alpine AS builder
 
 # Argumento para GitHub token (acceso a repos privados)
 ARG GITHUB_TOKEN
@@ -17,6 +17,7 @@ WORKDIR /app
 
 # Variables de entorno para Go
 ENV GOPRIVATE=github.com/EduGoGroup/*
+ENV GONOSUMDB=github.com/EduGoGroup/*
 
 # Copiar go.mod y go.sum
 COPY go.mod go.sum ./
