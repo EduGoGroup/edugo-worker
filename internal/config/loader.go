@@ -36,10 +36,10 @@ func Load() (*Config, error) {
 	v.SetEnvPrefix("EDUGO_WORKER")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 
-	v.BindEnv("database.postgres.password", "POSTGRES_PASSWORD")
-	v.BindEnv("database.mongodb.uri", "MONGODB_URI")
-	v.BindEnv("messaging.rabbitmq.url", "RABBITMQ_URL")
-	v.BindEnv("nlp.api_key", "OPENAI_API_KEY")
+	_ = v.BindEnv("database.postgres.password", "POSTGRES_PASSWORD")
+	_ = v.BindEnv("database.mongodb.uri", "MONGODB_URI")
+	_ = v.BindEnv("messaging.rabbitmq.url", "RABBITMQ_URL")
+	_ = v.BindEnv("nlp.api_key", "OPENAI_API_KEY")
 
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {

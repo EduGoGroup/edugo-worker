@@ -103,19 +103,25 @@ func main() {
 			var event MaterialUploadedEvent
 			if err := json.Unmarshal(msg.Body, &event); err != nil {
 				log.Printf("❌ Error parseando evento: %v", err)
-				msg.Nack(false, false) // No requeue
+				if err := msg.Nack(false, false); err != nil {
+					log.Printf("⚠️  Error al hacer Nack: %v", err)
+				}
 				continue
 			}
 
 			// Procesar evento
 			if err := ProcessMaterialUploaded(event); err != nil {
 				log.Printf("❌ Error procesando material: %v", err)
-				msg.Nack(false, true) // Requeue para reintento
+				if err := msg.Nack(false, true); err != nil {
+					log.Printf("⚠️  Error al hacer Nack: %v", err)
+				}
 				continue
 			}
 
 			log.Printf("✅ Material %s procesado exitosamente", event.MaterialID)
-			msg.Ack(false)
+			if err := msg.Ack(false); err != nil {
+				log.Printf("⚠️  Error al hacer Ack: %v", err)
+			}
 		}
 	}()
 
