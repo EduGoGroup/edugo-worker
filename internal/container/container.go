@@ -5,7 +5,7 @@ import (
 
 	"github.com/edugo/worker/internal/application/processor"
 	"github.com/edugo/worker/internal/infrastructure/messaging/consumer"
-	"github.com/EduGoGroup/edugo-shared/pkg/logger"
+	"github.com/edugo/shared/pkg/logger"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 

@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/edugo/worker/internal/application/dto"
-	"github.com/EduGoGroup/edugo-shared/pkg/logger"
+	"github.com/edugo/shared/pkg/logger"
 )
 
 type MaterialReprocessProcessor struct {

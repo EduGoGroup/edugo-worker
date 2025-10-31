@@ -3,7 +3,7 @@ module github.com/EduGoGroup/edugo-worker
 go 1.25.3
 
 require (
-	github.com/EduGoGroup/edugo-shared v0.1.0-00010101000000-000000000000
+	github.com/EduGoGroup/edugo-shared v0.1.0
 	github.com/google/uuid v1.6.0
 	github.com/spf13/viper v1.21.0
 	github.com/streadway/amqp v1.1.0
@@ -91,5 +91,3 @@ require (
 	google.golang.org/protobuf v1.36.10 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-replace github.com/edugo/shared => ../../shared
