@@ -3,9 +3,9 @@ package processor
 import (
 	"context"
 
-	"github.com/edugo/worker/internal/application/dto"
-	"github.com/edugo/worker/internal/domain/valueobject"
-	"github.com/edugo/shared/pkg/logger"
+	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
+	"github.com/EduGoGroup/edugo-worker/internal/domain/valueobject"
+	"github.com/EduGoGroup/edugo-shared/pkg/logger"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 )
