@@ -60,6 +60,7 @@ jobs:
         with:
           context: .
           push: true
+          platforms: linux/amd64,linux/arm64
           tags: |
             ${{ env.REGISTRY }}/edugogroup/edugo-worker:${{ steps.tag.outputs.tag }}
             ${{ env.REGISTRY }}/edugogroup/edugo-worker:latest
