@@ -2,7 +2,9 @@ package main
 
 import (
 	"encoding/json"
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/streadway/amqp"
@@ -21,8 +23,19 @@ type MaterialUploadedEvent struct {
 func main() {
 	log.Println("🔄 EduGo Worker iniciando...")
 
+	// Leer configuración desde variables de entorno
+	rabbitmqHost := getEnv("RABBITMQ_HOST", "localhost")
+	rabbitmqPort := getEnv("RABBITMQ_PORT", "5672")
+	rabbitmqUser := getEnv("RABBITMQ_USER", "guest")
+	rabbitmqPass := getEnv("RABBITMQ_PASS", "guest")
+
+	rabbitmqURL := fmt.Sprintf("amqp://%s:%s@%s:%s/",
+		rabbitmqUser, rabbitmqPass, rabbitmqHost, rabbitmqPort)
+
+	log.Printf("🔌 Conectando a RabbitMQ: %s:%s", rabbitmqHost, rabbitmqPort)
+
 	// Conectar a RabbitMQ
-	conn, err := amqp.Dial("amqp://admin:fOrus.1305.@localhost:5672/")
+	conn, err := amqp.Dial(rabbitmqURL)
 	if err != nil {
 		log.Fatal("Error conectando a RabbitMQ:", err)
 	}
@@ -166,4 +179,13 @@ func ProcessMaterialUploaded(event MaterialUploadedEvent) error {
 
 	log.Printf("✨ Material %s listo", event.MaterialID)
 	return nil
+}
+
+// getEnv obtiene variable de entorno con valor por defecto
+func getEnv(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
 }
