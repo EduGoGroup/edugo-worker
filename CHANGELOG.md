@@ -7,29 +7,32 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
-## [1.0.0] - 2025-10-31
+## [0.1.0] - 2025-11-01
 
 ### Added
 - Sistema GitFlow profesional implementado
 - Workflows de CI/CD automatizados:
   - CI Pipeline con tests y validaciones
   - Tests con cobertura y servicios de infraestructura
-  - Build y push automático de Docker images
+  - Manual Release workflow (TODO-EN-UNO) para control total de releases
+  - Docker only workflow para builds manuales
   - Release automático con versionado semántico
-  - Sincronización automática main ↔ dev
-- Auto-versionado basado en Conventional Commits
-- Migración a edugo-shared v2.0.5 con arquitectura modular
+- GitHub Copilot custom instructions en español (adaptado para workers)
+- Migración a edugo-shared con arquitectura modular
 - Submódulos: common, logger, database/postgres
 - .gitignore completo para Go
 - Documentación completa de workflows
+- Patrones específicos de workers (processors, retry logic)
 
 ### Changed
 - Actualizado a Go 1.25.3
-- Optimización de dependencias (reducción ~80%)
+- Versionado corregido a v0.x.x (proyecto en desarrollo)
+- Eliminado auto-version.yml (reemplazado por manual-release.yml)
+- Adaptaciones específicas para workers (sin HTTP handlers)
 
 ### Fixed
 - Corrección de errores de linter (errcheck)
 - Permisos de GitHub Container Registry configurados
 
-[Unreleased]: https://github.com/EduGoGroup/edugo-worker/compare/v1.0.0...HEAD
-[1.0.0]: https://github.com/EduGoGroup/edugo-worker/releases/tag/v1.0.0
+[Unreleased]: https://github.com/EduGoGroup/edugo-worker/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/EduGoGroup/edugo-worker/releases/tag/v0.1.0
