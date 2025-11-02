@@ -73,26 +73,23 @@ jobs:
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Crear PR
+          # Crear PR con body inline
+          BODY="## 🔄 Sincronización Automática"
+          BODY="$BODY\n\nEste PR sincroniza los cambios de \`main\` (v${VERSION}) a \`dev\`."
+          BODY="$BODY\n\n### Cambios incluidos:"
+          BODY="$BODY\n- Versión actualizada a v${VERSION}"
+          BODY="$BODY\n- CHANGELOG actualizado"
+          BODY="$BODY\n- Release v${VERSION} publicado"
+          BODY="$BODY\n\n### ⚠️ Importante:"
+          BODY="$BODY\nSi hay conflictos, resuélvelos manualmente."
+          BODY="$BODY\n\n---"
+          BODY="$BODY\n\n🤖 PR automático generado por workflow \`sync-main-to-dev.yml\`"
+
           gh pr create \
             --base dev \
             --head main \
             --title "chore: sync main v$VERSION to dev" \
-            --body "## 🔄 Sincronización Automática
-
-Este PR sincroniza los cambios de \`main\` (v$VERSION) a \`dev\`.
-
-### Cambios incluidos:
-- Versión actualizada a v$VERSION
-- CHANGELOG actualizado
-- Release v$VERSION publicado
-
-### ⚠️ Importante:
-Si hay conflictos, resuélvelos manualmente.
-
----
-
-🤖 PR automático generado por workflow \`sync-main-to-dev.yml\`" \
+            --body "$BODY" \
             --label "sync" \
             --label "automated" || echo "⚠️  PR ya existe o hubo un error"
 
