@@ -97,10 +97,10 @@ jobs:
 
           # Insertar en CHANGELOG.md después de la cabecera
           if [ -f CHANGELOG.md ]; then
-            # Guardar cabecera (primeras 6 líneas)
-            head -6 CHANGELOG.md > /tmp/changelog_header.md
-            # Guardar resto
-            tail -n +7 CHANGELOG.md > /tmp/changelog_rest.md
+            # Guardar cabecera (primeras 8 líneas, hasta [Unreleased])
+            head -8 CHANGELOG.md > /tmp/changelog_header.md
+            # Guardar resto (desde línea 9 en adelante)
+            tail -n +9 CHANGELOG.md > /tmp/changelog_rest.md
             # Combinar: cabecera + nueva entrada + resto
             cat /tmp/changelog_header.md > CHANGELOG.md
             echo "" >> CHANGELOG.md
