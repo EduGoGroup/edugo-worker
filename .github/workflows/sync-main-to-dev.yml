@@ -54,16 +54,22 @@ jobs:
           git push -u origin dev
           echo "✓ Rama dev creada"
 
-      - name: Verificar si hay diferencias
+      - name: Verificar si hay commits en main que dev no tiene
         id: check_diff
         run: |
           git fetch origin dev
-          if git diff --quiet origin/main origin/dev; then
+
+          # Contar commits en main que dev NO tiene
+          COMMITS_AHEAD=$(git rev-list --count origin/dev..origin/main)
+
+          if [ "$COMMITS_AHEAD" -eq 0 ]; then
             echo "has_diff=false" >> $GITHUB_OUTPUT
-            echo "✓ main y dev están sincronizados"
+            echo "✓ main y dev están sincronizados ($COMMITS_AHEAD commits)"
           else
             echo "has_diff=true" >> $GITHUB_OUTPUT
-            echo "⚠️  Hay diferencias entre main y dev"
+            echo "⚠️  main tiene $COMMITS_AHEAD commits que dev no tiene"
+            echo "Commits a sincronizar:"
+            git log --oneline origin/dev..origin/main
           fi
 
       - name: Merge main to dev con manejo de conflictos
