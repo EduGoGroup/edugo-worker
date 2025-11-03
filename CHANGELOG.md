@@ -7,14 +7,6 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
-## [0.1.0] - 2025-11-02
-
-### Tipo de Release: minor
-
-- feat: CI/CD optimizado y Copilot instructions para Worker (#3)
-
----
-
 ## [0.1.0] - 2025-11-01
 
 ### Added
