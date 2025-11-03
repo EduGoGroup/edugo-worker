@@ -66,48 +66,29 @@ jobs:
             echo "⚠️  Hay diferencias entre main y dev"
           fi
 
-      - name: Crear PR de sync
+      - name: Merge main to dev directamente
         if: steps.check_diff.outputs.has_diff == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           VERSION="${{ steps.version.outputs.version }}"
 
-          # Crear PR con body inline
-          BODY="## 🔄 Sincronización Automática"
-          BODY="$BODY\n\nEste PR sincroniza los cambios de \`main\` (v${VERSION}) a \`dev\`."
-          BODY="$BODY\n\n### Cambios incluidos:"
-          BODY="$BODY\n- Versión actualizada a v${VERSION}"
-          BODY="$BODY\n- CHANGELOG actualizado"
-          BODY="$BODY\n- Release v${VERSION} publicado"
-          BODY="$BODY\n\n### ⚠️ Importante:"
-          BODY="$BODY\nSi hay conflictos, resuélvelos manualmente."
-          BODY="$BODY\n\n---"
-          BODY="$BODY\n\n🤖 PR automático generado por workflow \`sync-main-to-dev.yml\`"
+          # Configurar git
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
 
-          gh pr create \
-            --base dev \
-            --head main \
-            --title "chore: sync main v$VERSION to dev" \
-            --body "$BODY" \
-            --label "sync" \
-            --label "automated" || echo "⚠️  PR ya existe o hubo un error"
+          # Checkout dev y merge main
+          git checkout dev
+          git merge origin/main --no-ff -m "chore: sync main v$VERSION to dev
 
-      - name: Auto-merge si es posible
-        if: steps.check_diff.outputs.has_diff == 'true'
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Obtener número del PR recién creado
-          PR_NUMBER=$(gh pr list --base dev --head main --json number --jq '.[0].number')
+          Sincronización automática de main a dev después de cambios en main.
 
-          if [ -n "$PR_NUMBER" ]; then
-            echo "📋 PR #$PR_NUMBER creado"
+          🤖 Generated with [Claude Code](https://claude.com/claude-code)
 
-            # Intentar auto-merge si no hay conflictos
-            # (esto fallará si hay conflictos o si require approvals)
-            gh pr merge "$PR_NUMBER" --auto --squash || echo "⚠️  Auto-merge no disponible (puede requerir aprobación manual)"
-          fi
+          Co-Authored-By: Claude <noreply@anthropic.com>"
+
+          # Push a dev
+          git push origin dev
+
+          echo "✅ main sincronizado a dev correctamente"
 
       - name: Resumen
         run: |
@@ -121,8 +102,8 @@ jobs:
 
           if [ "${{ steps.check_diff.outputs.has_diff }}" == "true" ]; then
             echo "" >> $GITHUB_STEP_SUMMARY
-            echo "✅ PR de sincronización creado" >> $GITHUB_STEP_SUMMARY
-            echo "👉 Revisa PRs abiertos para confirmar merge" >> $GITHUB_STEP_SUMMARY
+            echo "✅ Merge automático completado" >> $GITHUB_STEP_SUMMARY
+            echo "📍 dev se sincronizó con main correctamente" >> $GITHUB_STEP_SUMMARY
           else
             echo "" >> $GITHUB_STEP_SUMMARY
             echo "✅ main y dev ya están sincronizados" >> $GITHUB_STEP_SUMMARY
