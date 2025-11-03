@@ -33,9 +33,13 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      # Usar GitHub App Token en lugar de GITHUB_TOKEN porque:
+      # - GITHUB_TOKEN NO dispara workflows subsecuentes (limitación de seguridad de GitHub)
+      # - App Token SÍ dispara sync-main-to-dev.yml automáticamente después del push
+      # - Requiere secretos: APP_ID y APP_PRIVATE_KEY (configurados a nivel de organización)
       - name: Generar token desde GitHub App
         id: generate_token
-        uses: actions/create-github-app-token@v1
+        uses: actions/create-github-app-token@v2.1.4  # Commit SHA: 6701853
         with:
           app-id: ${{ secrets.APP_ID }}
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
