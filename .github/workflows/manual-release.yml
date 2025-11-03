@@ -33,12 +33,19 @@ jobs:
     runs-on: ubuntu-latest
 
     steps:
+      - name: Generar token desde GitHub App
+        id: generate_token
+        uses: actions/create-github-app-token@v1
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
       - name: Checkout código
         uses: actions/checkout@v4
         with:
           ref: main
           fetch-depth: 0
-          token: ${{ secrets.GITHUB_TOKEN }}
+          token: ${{ steps.generate_token.outputs.token }}
 
       - name: Configurar Git
         run: |
@@ -97,10 +104,10 @@ jobs:
 
           # Insertar en CHANGELOG.md después de la cabecera
           if [ -f CHANGELOG.md ]; then
-            # Guardar cabecera (primeras 8 líneas, hasta [Unreleased])
-            head -8 CHANGELOG.md > /tmp/changelog_header.md
-            # Guardar resto (desde línea 9 en adelante)
-            tail -n +9 CHANGELOG.md > /tmp/changelog_rest.md
+            # Guardar cabecera (primeras 6 líneas)
+            head -6 CHANGELOG.md > /tmp/changelog_header.md
+            # Guardar resto
+            tail -n +7 CHANGELOG.md > /tmp/changelog_rest.md
             # Combinar: cabecera + nueva entrada + resto
             cat /tmp/changelog_header.md > CHANGELOG.md
             echo "" >> CHANGELOG.md
@@ -172,14 +179,6 @@ jobs:
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
-
-      - name: Configurar acceso a módulos privados
-        run: |
-          echo "Configuring GOPRIVATE and git credentials for private modules"
-          echo "GOPRIVATE=github.com/*" >> $GITHUB_ENV
-          git config --global url."https://${GITHUB_TOKEN}@github.com/".insteadOf "https://github.com/"
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Descargar dependencias
         run: go mod download

@@ -15,8 +15,8 @@ jobs:
   sync:
     name: Create PR to sync main → dev
     runs-on: ubuntu-latest
-    # Solo ejecutar si NO es un commit de bot (evitar loops)
-    if: "!contains(github.event.head_commit.message, '[skip ci]') && !contains(github.event.head_commit.message, 'chore: sync')"
+    # Solo ejecutar si NO es un commit de sincronización (evitar loops)
+    if: "!contains(github.event.head_commit.message, 'chore: sync')"
 
     steps:
       - name: Checkout código
