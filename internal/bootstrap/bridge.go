@@ -5,11 +5,11 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/EduGoGroup/edugo-worker/internal/bootstrap/adapter"
-	"github.com/EduGoGroup/edugo-worker/internal/config"
 	sharedBootstrap "github.com/EduGoGroup/edugo-shared/bootstrap"
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
 	"github.com/EduGoGroup/edugo-shared/logger"
+	"github.com/EduGoGroup/edugo-worker/internal/bootstrap/adapter"
+	"github.com/EduGoGroup/edugo-worker/internal/config"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.mongodb.org/mongo-driver/mongo"
 	gormLogger "gorm.io/gorm/logger"

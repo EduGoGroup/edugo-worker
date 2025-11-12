@@ -70,7 +70,7 @@ func (a *LoggerAdapter) Fatal(msg string, fields ...interface{}) {
 func (a *LoggerAdapter) With(fields ...interface{}) logger.Logger {
 	// Crear un nuevo Entry con los campos adicionales
 	entry := a.logrus.WithFields(convertToLogrusFields(fields...))
-	
+
 	// Retornar un nuevo adapter que envuelva el entry
 	return &loggerEntryAdapter{
 		entry: entry,
@@ -151,7 +151,7 @@ func (e *loggerEntryAdapter) Sync() error {
 // Espera pares key-value: convertToLogrusFields("key1", "value1", "key2", value2)
 func convertToLogrusFields(fields ...interface{}) logrus.Fields {
 	logrusFields := make(logrus.Fields)
-	
+
 	// Procesar pares key-value
 	for i := 0; i < len(fields)-1; i += 2 {
 		// La key debe ser string
@@ -160,15 +160,15 @@ func convertToLogrusFields(fields ...interface{}) logrus.Fields {
 			// Si no es string, convertir a string
 			key = "unknown"
 		}
-		
+
 		// El value puede ser cualquier tipo
 		value := fields[i+1]
 		logrusFields[key] = value
 	}
-	
+
 	// Si hay un número impar de campos, el último se ignora
 	// (esto sigue el comportamiento estándar de loggers estructurados)
-	
+
 	return logrusFields
 }
 

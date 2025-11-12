@@ -2,8 +2,8 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"encoding/json"
+	"fmt"
 	"log"
 	"os"
 	"os/signal"
@@ -55,7 +55,7 @@ func main() {
 		log.Fatal(err)
 	}
 
-	resources.Logger.Info("✅ Worker escuchando eventos", 
+	resources.Logger.Info("✅ Worker escuchando eventos",
 		"queue", cfg.Messaging.RabbitMQ.Queues.MaterialUploaded)
 
 	// 5. Procesar mensajes
@@ -134,10 +134,10 @@ func processMessage(msg amqp.Delivery, resources *bootstrap.Resources, cfg *conf
 	}
 
 	resources.Logger.Info("✅ Evento procesado", "type", event["event_type"])
-	
+
 	// TODO: Implementar procesamiento real con processors
 	// processor := container.GetProcessor(event["event_type"])
 	// return processor.Process(ctx, event)
-	
+
 	return nil
 }
