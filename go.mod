@@ -3,11 +3,11 @@ module github.com/EduGoGroup/edugo-worker
 go 1.25.3
 
 require (
-	github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0
+	github.com/EduGoGroup/edugo-shared/bootstrap v0.4.0
 	github.com/EduGoGroup/edugo-shared/common v0.0.0-20251031204120-ecc6528ef4b6
 	github.com/EduGoGroup/edugo-shared/database/postgres v0.0.0-20251031175907-0437932f9865
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.4.0
-	github.com/EduGoGroup/edugo-shared/logger v0.3.3
+	github.com/EduGoGroup/edugo-shared/logger v0.4.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.68.0
 	github.com/google/uuid v1.6.0
 	github.com/rabbitmq/amqp091-go v1.10.0
