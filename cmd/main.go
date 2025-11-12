@@ -1,191 +1,143 @@
 package main
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
 	"os"
-	"time"
+	"os/signal"
+	"syscall"
 
-	"github.com/streadway/amqp"
+	"github.com/EduGoGroup/edugo-worker/internal/bootstrap"
+	"github.com/EduGoGroup/edugo-worker/internal/config"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
-
-// MaterialUploadedEvent representa el evento de material subido
-type MaterialUploadedEvent struct {
-	EventType         string    `json:"event_type"`
-	MaterialID        string    `json:"material_id"`
-	AuthorID          string    `json:"author_id"`
-	S3Key             string    `json:"s3_key"`
-	PreferredLanguage string    `json:"preferred_language"`
-	Timestamp         time.Time `json:"timestamp"`
-}
 
 func main() {
 	log.Println("🔄 EduGo Worker iniciando...")
 
-	// Leer configuración desde variables de entorno
-	rabbitmqHost := getEnv("RABBITMQ_HOST", "localhost")
-	rabbitmqPort := getEnv("RABBITMQ_PORT", "5672")
-	rabbitmqUser := getEnv("RABBITMQ_USER", "guest")
-	rabbitmqPass := getEnv("RABBITMQ_PASS", "guest")
+	ctx := context.Background()
 
-	rabbitmqURL := fmt.Sprintf("amqp://%s:%s@%s:%s/",
-		rabbitmqUser, rabbitmqPass, rabbitmqHost, rabbitmqPort)
-
-	log.Printf("🔌 Conectando a RabbitMQ: %s:%s", rabbitmqHost, rabbitmqPort)
-
-	// Conectar a RabbitMQ
-	conn, err := amqp.Dial(rabbitmqURL)
+	// 1. Cargar configuración
+	cfg, err := config.Load()
 	if err != nil {
-		log.Fatal("Error conectando a RabbitMQ:", err)
+		log.Fatal("❌ Error cargando configuración:", err)
 	}
-	defer conn.Close()
 
-	ch, err := conn.Channel()
+	// 2. Inicializar infraestructura con shared/bootstrap
+	resources, cleanup, err := bootstrap.Initialize(ctx, cfg)
 	if err != nil {
-		log.Fatal("Error abriendo canal:", err)
+		log.Fatal("❌ Error inicializando infraestructura:", err)
 	}
-	defer ch.Close()
+	defer cleanup()
 
-	// Declarar exchange
-	err = ch.ExchangeDeclare(
-		"edugo_events", // name
-		"topic",        // type
-		true,           // durable
-		false,          // auto-deleted
-		false,          // internal
-		false,          // no-wait
-		nil,            // arguments
+	resources.Logger.Info("✅ Worker iniciado correctamente")
+
+	// 3. Configurar RabbitMQ queue y exchange
+	if err := setupRabbitMQ(resources.RabbitMQChannel, cfg); err != nil {
+		resources.Logger.Error("Error configurando RabbitMQ", "error", err.Error())
+		log.Fatal(err)
+	}
+
+	// 4. Consumir mensajes
+	msgs, err := resources.RabbitMQChannel.Consume(
+		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded, // queue
+		"",    // consumer
+		false, // auto-ack
+		false, // exclusive
+		false, // no-local
+		false, // no-wait
+		nil,   // args
 	)
 	if err != nil {
-		log.Fatal("Error declarando exchange:", err)
+		resources.Logger.Error("Error registrando consumer", "error", err.Error())
+		log.Fatal(err)
 	}
 
-	// Declarar cola de alta prioridad
-	q, err := ch.QueueDeclare(
-		"material_processing_high", // name
-		true,                       // durable
-		false,                      // delete when unused
-		false,                      // exclusive
-		false,                      // no-wait
+	resources.Logger.Info("✅ Worker escuchando eventos",
+		"queue", cfg.Messaging.RabbitMQ.Queues.MaterialUploaded)
+
+	// 5. Procesar mensajes
+	go func() {
+		for msg := range msgs {
+			if err := processMessage(msg, resources, cfg); err != nil {
+				resources.Logger.Error("Error procesando mensaje", "error", err.Error())
+				msg.Nack(false, true) // requeue
+			} else {
+				msg.Ack(false)
+			}
+		}
+	}()
+
+	// 6. Graceful shutdown
+	sigChan := make(chan os.Signal, 1)
+	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
+	<-sigChan
+
+	resources.Logger.Info("🛑 Señal de apagado recibida, cerrando worker...")
+}
+
+// setupRabbitMQ configura exchange, queue y bindings
+func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
+	// Declarar exchange
+	if err := ch.ExchangeDeclare(
+		cfg.Messaging.RabbitMQ.Exchanges.Materials,
+		"topic",
+		true,  // durable
+		false, // auto-deleted
+		false, // internal
+		false, // no-wait
+		nil,
+	); err != nil {
+		return fmt.Errorf("error declarando exchange: %w", err)
+	}
+
+	// Declarar cola
+	_, err := ch.QueueDeclare(
+		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
 		amqp.Table{
 			"x-max-priority":         10,
 			"x-dead-letter-exchange": "edugo_dlq",
 		},
 	)
 	if err != nil {
-		log.Fatal("Error declarando cola:", err)
+		return fmt.Errorf("error declarando cola: %w", err)
 	}
 
-	// Bind cola al exchange
-	err = ch.QueueBind(
-		q.Name,              // queue name
-		"material.uploaded", // routing key
-		"edugo_events",      // exchange
+	// Bind cola
+	if err := ch.QueueBind(
+		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
+		"material.uploaded",
+		cfg.Messaging.RabbitMQ.Exchanges.Materials,
 		false,
 		nil,
-	)
-	if err != nil {
-		log.Fatal("Error binding cola:", err)
+	); err != nil {
+		return fmt.Errorf("error binding cola: %w", err)
 	}
 
-	// Consumir mensajes
-	msgs, err := ch.Consume(
-		q.Name, // queue
-		"",     // consumer
-		false,  // auto-ack
-		false,  // exclusive
-		false,  // no-local
-		false,  // no-wait
-		nil,    // args
-	)
-	if err != nil {
-		log.Fatal("Error registrando consumer:", err)
-	}
-
-	log.Println("✅ Worker escuchando cola 'material_processing_high'")
-	log.Println("   Esperando eventos material.uploaded...")
-
-	// Procesar mensajes
-	forever := make(chan bool)
-
-	go func() {
-		for msg := range msgs {
-			log.Printf("📥 Mensaje recibido: %s", msg.Body)
-
-			var event MaterialUploadedEvent
-			if err := json.Unmarshal(msg.Body, &event); err != nil {
-				log.Printf("❌ Error parseando evento: %v", err)
-				if err := msg.Nack(false, false); err != nil {
-					log.Printf("⚠️  Error al hacer Nack: %v", err)
-				}
-				continue
-			}
-
-			// Procesar evento
-			if err := ProcessMaterialUploaded(event); err != nil {
-				log.Printf("❌ Error procesando material: %v", err)
-				if err := msg.Nack(false, true); err != nil {
-					log.Printf("⚠️  Error al hacer Nack: %v", err)
-				}
-				continue
-			}
-
-			log.Printf("✅ Material %s procesado exitosamente", event.MaterialID)
-			if err := msg.Ack(false); err != nil {
-				log.Printf("⚠️  Error al hacer Ack: %v", err)
-			}
-		}
-	}()
-
-	log.Println("⏸️  Presiona CTRL+C para salir")
-	<-forever
-}
-
-// ProcessMaterialUploaded procesa el evento material_uploaded
-func ProcessMaterialUploaded(event MaterialUploadedEvent) error {
-	log.Printf("🔧 Procesando material: %s", event.MaterialID)
-
-	// TODO: 1. Descargar PDF desde S3
-	log.Println("  1. Descargando PDF desde S3...")
-	time.Sleep(2 * time.Second) // Mock
-
-	// TODO: 2. Extraer texto del PDF
-	log.Println("  2. Extrayendo texto del PDF...")
-	time.Sleep(1 * time.Second) // Mock
-
-	// TODO: 3. Llamar NLP API para generar resumen
-	log.Println("  3. Generando resumen con IA (OpenAI GPT-4)...")
-	time.Sleep(3 * time.Second) // Mock
-
-	// TODO: 4. Guardar resumen en MongoDB
-	log.Println("  4. Guardando resumen en MongoDB...")
-	time.Sleep(1 * time.Second) // Mock
-
-	// TODO: 5. Generar quiz con NLP
-	log.Println("  5. Generando quiz con IA...")
-	time.Sleep(2 * time.Second) // Mock
-
-	// TODO: 6. Guardar quiz en MongoDB
-	log.Println("  6. Guardando quiz en MongoDB...")
-	time.Sleep(1 * time.Second) // Mock
-
-	// TODO: 7. Actualizar PostgreSQL (material_summary_link, assessment)
-	log.Println("  7. Actualizando PostgreSQL...")
-	time.Sleep(1 * time.Second) // Mock
-
-	// TODO: 8. Notificar docente
-	log.Println("  8. Notificando docente...")
-
-	log.Printf("✨ Material %s listo", event.MaterialID)
 	return nil
 }
 
-// getEnv obtiene variable de entorno con valor por defecto
-func getEnv(key, defaultValue string) string {
-	value := os.Getenv(key)
-	if value == "" {
-		return defaultValue
+// processMessage procesa un mensaje de RabbitMQ
+func processMessage(msg amqp.Delivery, resources *bootstrap.Resources, cfg *config.Config) error {
+	resources.Logger.Info("📥 Mensaje recibido", "size", len(msg.Body))
+
+	var event map[string]interface{}
+	if err := json.Unmarshal(msg.Body, &event); err != nil {
+		resources.Logger.Error("Error parseando evento", "error", err.Error())
+		return err
 	}
-	return value
+
+	resources.Logger.Info("✅ Evento procesado", "type", event["event_type"])
+
+	// TODO: Implementar procesamiento real con processors
+	// processor := container.GetProcessor(event["event_type"])
+	// return processor.Process(ctx, event)
+
+	return nil
 }

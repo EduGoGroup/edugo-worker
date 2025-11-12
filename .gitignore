@@ -89,3 +89,4 @@ tmp/
 
 # Testcontainers
 .testcontainers-*
+.envrc
