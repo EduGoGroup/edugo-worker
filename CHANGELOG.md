@@ -5,6 +5,17 @@ Todos los cambios notables en edugo-worker serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.1.2] - 2025-11-12
+
+### Tipo de Release: patch
+
+- chore: actualizar shared a v0.4.0 + migración completada (#10)
+- fix: verificar commits en sync-main-to-dev
+- docs: documentar GitHub App y actualizar a v2.1.4
+- feat: implementar GitHub App Token para sincronización automática
+
+---
+
 ## [Unreleased]
 
 ## [0.1.1] - 2025-11-03
