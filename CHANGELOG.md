@@ -5,6 +5,14 @@ Todos los cambios notables en edugo-worker serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.2.0] - 2025-11-13
+
+### Tipo de Release: minor
+
+- release: v0.2.0 - Go 1.24.10 estandarizado (#12)
+
+---
+
 ## [0.1.2] - 2025-11-12
 
 ### Tipo de Release: patch
