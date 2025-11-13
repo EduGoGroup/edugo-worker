@@ -4,147 +4,160 @@ package integration
 
 import (
 	"context"
+	"database/sql"
 	"testing"
 
-	"github.com/testcontainers/testcontainers-go/modules/mongodb"
-	"github.com/testcontainers/testcontainers-go/modules/postgres"
-	"github.com/testcontainers/testcontainers-go/modules/rabbitmq"
+	_ "github.com/lib/pq"
+	"github.com/EduGoGroup/edugo-shared/testing/containers"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
-// TestContainers contiene todos los contenedores de prueba
-type TestContainers struct {
-	Postgres *postgres.PostgresContainer
-	MongoDB  *mongodb.MongoDBContainer
-	RabbitMQ *rabbitmq.RabbitMQContainer
+// setupAllContainers inicia todos los contenedores necesarios (PostgreSQL + MongoDB + RabbitMQ)
+func setupAllContainers(t *testing.T) (*containers.Manager, func()) {
+	cfg := containers.NewConfig().
+		WithPostgreSQL(&containers.PostgresConfig{
+			Database: "edugo",
+			Username: "edugo_user",
+			Password: "edugo_pass",
+		}).
+		WithMongoDB(&containers.MongoConfig{
+			Database: "edugo",
+			Username: "edugo_admin",
+			Password: "edugo_pass",
+		}).
+		WithRabbitMQ(&containers.RabbitConfig{
+			Username: "edugo_user",
+			Password: "edugo_pass",
+		}).
+		Build()
+	
+	manager, err := containers.GetManager(t, cfg)
+	if err != nil {
+		t.Fatalf("Failed to get manager: %v", err)
+	}
+	
+	cleanup := func() {
+		// Cleanup es manejado por el manager
+	}
+	
+	return manager, cleanup
 }
 
-// SetupContainers inicia todos los contenedores necesarios para testing
-func SetupContainers(t *testing.T) (*TestContainers, func()) {
+// setupPostgres inicia solo PostgreSQL
+func setupPostgres(t *testing.T) (*sql.DB, func()) {
 	ctx := context.Background()
-
-	// PostgreSQL con scripts de inicialización
-	t.Log("🐘 Iniciando PostgreSQL testcontainer...")
-	pgContainer, err := postgres.Run(ctx, "postgres:15-alpine",
-		postgres.WithDatabase("edugo"),
-		postgres.WithUsername("edugo_user"),
-		postgres.WithPassword("edugo_pass"),
-		postgres.WithInitScripts(
-			"../../../scripts/postgresql/01_schema.sql",
-			"../../../scripts/postgresql/02_indexes.sql",
-		),
-	)
+	
+	cfg := containers.NewConfig().
+		WithPostgreSQL(&containers.PostgresConfig{
+			Database: "edugo",
+			Username: "edugo_user",
+			Password: "edugo_pass",
+		}).
+		Build()
+	
+	manager, err := containers.GetManager(t, cfg)
 	if err != nil {
-		t.Fatalf("Failed to start Postgres: %v", err)
+		t.Fatalf("Failed to get manager: %v", err)
 	}
-	t.Log("✅ PostgreSQL ready")
-
-	// MongoDB
-	t.Log("🍃 Iniciando MongoDB testcontainer...")
-	mongoContainer, err := mongodb.Run(ctx, "mongo:7.0",
-		mongodb.WithUsername("edugo_admin"),
-		mongodb.WithPassword("edugo_pass"),
-	)
+	
+	pg := manager.PostgreSQL()
+	if pg == nil {
+		t.Fatal("Failed to get PostgreSQL container")
+	}
+	
+	connString, err := pg.ConnectionString(ctx)
 	if err != nil {
-		pgContainer.Terminate(ctx)
-		t.Fatalf("Failed to start MongoDB: %v", err)
+		t.Fatalf("Failed to get connection string: %v", err)
 	}
-	t.Log("✅ MongoDB ready")
-
-	// RabbitMQ
-	t.Log("🐰 Iniciando RabbitMQ testcontainer...")
-	rabbitContainer, err := rabbitmq.Run(ctx, "rabbitmq:3.12-management-alpine",
-		rabbitmq.WithAdminUsername("edugo_user"),
-		rabbitmq.WithAdminPassword("edugo_pass"),
-	)
+	
+	db, err := sql.Open("postgres", connString)
 	if err != nil {
-		pgContainer.Terminate(ctx)
-		mongoContainer.Terminate(ctx)
-		t.Fatalf("Failed to start RabbitMQ: %v", err)
+		t.Fatalf("Failed to connect to Postgres: %v", err)
 	}
-	t.Log("✅ RabbitMQ ready")
-
-	containers := &TestContainers{
-		Postgres: pgContainer,
-		MongoDB:  mongoContainer,
-		RabbitMQ: rabbitContainer,
+	
+	if err := db.Ping(); err != nil {
+		db.Close()
+		t.Fatalf("Failed to ping Postgres: %v", err)
 	}
-
-	// Cleanup function
+	
 	cleanup := func() {
-		t.Log("🧹 Cleaning up testcontainers...")
-		pgContainer.Terminate(ctx)
-		mongoContainer.Terminate(ctx)
-		rabbitContainer.Terminate(ctx)
-		t.Log("✅ Testcontainers terminated")
+		db.Close()
 	}
-
-	return containers, cleanup
+	
+	return db, cleanup
 }
 
-// SetupPostgres inicia solo PostgreSQL
-func SetupPostgres(t *testing.T) (*postgres.PostgresContainer, func()) {
-	ctx := context.Background()
-
-	t.Log("🐘 Iniciando PostgreSQL testcontainer...")
-	pgContainer, err := postgres.Run(ctx, "postgres:15-alpine",
-		postgres.WithDatabase("edugo"),
-		postgres.WithUsername("edugo_user"),
-		postgres.WithPassword("edugo_pass"),
-		postgres.WithInitScripts(
-			"../../../scripts/postgresql/01_schema.sql",
-			"../../../scripts/postgresql/02_indexes.sql",
-		),
-	)
+// setupMongoDB inicia solo MongoDB
+func setupMongoDB(t *testing.T) (*mongo.Database, func()) {
+	cfg := containers.NewConfig().
+		WithMongoDB(&containers.MongoConfig{
+			Database: "edugo",
+			Username: "edugo_admin",
+			Password: "edugo_pass",
+		}).
+		Build()
+	
+	manager, err := containers.GetManager(t, cfg)
 	if err != nil {
-		t.Fatalf("Failed to start Postgres: %v", err)
+		t.Fatalf("Failed to get manager: %v", err)
 	}
-	t.Log("✅ PostgreSQL ready")
-
+	
+	mongoDB := manager.MongoDB()
+	if mongoDB == nil {
+		t.Fatal("Failed to get MongoDB container")
+	}
+	
+	db := mongoDB.Database()
+	
 	cleanup := func() {
-		pgContainer.Terminate(ctx)
+		// Cleanup es manejado por el manager
 	}
-
-	return pgContainer, cleanup
+	
+	return db, cleanup
 }
 
-// SetupMongoDB inicia solo MongoDB
-func SetupMongoDB(t *testing.T) (*mongodb.MongoDBContainer, func()) {
+// setupRabbitMQ inicia solo RabbitMQ
+func setupRabbitMQ(t *testing.T) (*amqp.Channel, func()) {
 	ctx := context.Background()
-
-	t.Log("🍃 Iniciando MongoDB testcontainer...")
-	mongoContainer, err := mongodb.Run(ctx, "mongo:7.0",
-		mongodb.WithUsername("edugo_admin"),
-		mongodb.WithPassword("edugo_pass"),
-	)
+	
+	cfg := containers.NewConfig().
+		WithRabbitMQ(&containers.RabbitConfig{
+			Username: "edugo_user",
+			Password: "edugo_pass",
+		}).
+		Build()
+	
+	manager, err := containers.GetManager(t, cfg)
 	if err != nil {
-		t.Fatalf("Failed to start MongoDB: %v", err)
+		t.Fatalf("Failed to get manager: %v", err)
 	}
-	t.Log("✅ MongoDB ready")
-
-	cleanup := func() {
-		mongoContainer.Terminate(ctx)
+	
+	rabbitMQ := manager.RabbitMQ()
+	if rabbitMQ == nil {
+		t.Fatal("Failed to get RabbitMQ container")
 	}
-
-	return mongoContainer, cleanup
-}
-
-// SetupRabbitMQ inicia solo RabbitMQ
-func SetupRabbitMQ(t *testing.T) (*rabbitmq.RabbitMQContainer, func()) {
-	ctx := context.Background()
-
-	t.Log("🐰 Iniciando RabbitMQ testcontainer...")
-	rabbitContainer, err := rabbitmq.Run(ctx, "rabbitmq:3.12-management-alpine",
-		rabbitmq.WithAdminUsername("edugo_user"),
-		rabbitmq.WithAdminPassword("edugo_pass"),
-	)
+	
+	connURL, err := rabbitMQ.ConnectionString(ctx)
 	if err != nil {
-		t.Fatalf("Failed to start RabbitMQ: %v", err)
+		t.Fatalf("Failed to get RabbitMQ connection string: %v", err)
 	}
-	t.Log("✅ RabbitMQ ready")
-
+	
+	conn, err := amqp.Dial(connURL)
+	if err != nil {
+		t.Fatalf("Failed to connect to RabbitMQ: %v", err)
+	}
+	
+	channel, err := conn.Channel()
+	if err != nil {
+		conn.Close()
+		t.Fatalf("Failed to create channel: %v", err)
+	}
+	
 	cleanup := func() {
-		rabbitContainer.Terminate(ctx)
+		channel.Close()
+		conn.Close()
 	}
-
-	return rabbitContainer, cleanup
+	
+	return channel, cleanup
 }
