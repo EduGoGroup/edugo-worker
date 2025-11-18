@@ -5,6 +5,14 @@ Todos los cambios notables en edugo-worker serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.4.1] - 2025-11-18
+
+### Tipo de Release: patch
+
+- fix: actualizar edugo-shared/bootstrap a v0.9.0 (#18)
+
+---
+
 ## [0.3.0] - 2025-11-18
 
 ### Tipo de Release: minor
