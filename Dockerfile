@@ -41,5 +41,8 @@ WORKDIR /root/
 # Copiar binario compilado desde builder
 COPY --from=builder /app/main .
 
+# Copiar archivos de configuración
+COPY --from=builder /app/config /root/config
+
 # Comando de inicio
 CMD ["./main"]
