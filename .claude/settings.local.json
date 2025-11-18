@@ -1,0 +1,25 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(make build:*)",
+      "Bash(make test:*)",
+      "Bash(make test-integration:*)",
+      "Bash(docker ps:*)",
+      "Bash(docker info:*)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true go test:*)",
+      "Bash(tee:*)",
+      "Bash(docker container prune:*)",
+      "Bash(TESTCONTAINERS_RYUK_DISABLED=true TESTCONTAINERS_DOCKER_SOCKET_OVERRIDE=/var/run/docker.sock go test:*)"
+    ],
+    "deny": [],
+    "ask": [],
+    "additionalDirectories": [
+      "/Users/jhoanmedina/source/EduGo/repos-separados/edugo-api-mobile",
+      "/Users/jhoanmedina/source/EduGo/repos-separados/edugo-api-administracion",
+      "/Users/jhoanmedina/source/EduGo/repos-separados/edugo-shared",
+      "/Users/jhoanmedina/source/EduGo/repos-separados/edugo-dev-environment",
+      "/Users/jhoanmedina/source/EduGo/repos-separados/edugo-infrastructure",
+      "/Users/jhoanmedina/source/EduGo/Analisys"
+    ]
+  }
+}
