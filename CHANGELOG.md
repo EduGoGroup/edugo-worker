@@ -26,6 +26,16 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Changed
+- **Integración con edugo-infrastructure v0.8.0** (2025-11-18)
+  - Actualizar mongodb a v0.6.0 (usa migraciones de infrastructure)
+  - Actualizar postgres a v0.8.0
+  - Eliminar scripts locales redundantes (ahora en infrastructure)
+  - Collections MongoDB ahora provistas por infrastructure:
+    - material_summary
+    - material_assessment_worker
+    - material_event
+
 ### Added
 - **Sprint-01 Fase 2 - MongoDB Schema & Repositories** (2025-11-18)
   - Schemas MongoDB para material_summary, material_assessment y material_event

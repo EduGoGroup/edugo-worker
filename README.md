@@ -35,8 +35,10 @@ Worker que consume eventos de RabbitMQ para procesar materiales educativos con I
 
 ## Dependencias del Ecosistema
 
-### edugo-infrastructure v0.1.1+
-- **Schemas de validación** de eventos RabbitMQ
+### edugo-infrastructure v0.8.0+
+- **mongodb v0.6.0** - Migraciones MongoDB (material_summary, material_assessment_worker, material_event)
+- **postgres v0.8.0** - Migraciones PostgreSQL + helpers de testing
+- **schemas** - Schemas de validación de eventos RabbitMQ
 - Contratos estandarizados de mensajería
 
 ### edugo-shared v0.7.0
