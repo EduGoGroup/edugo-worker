@@ -26,6 +26,25 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Added
+- **Sprint-01 Fase 2 - MongoDB Schema & Repositories** (2025-11-18)
+  - Schemas MongoDB para material_summary, material_assessment y material_event
+  - Scripts de inicialización: init_collections.js (651 líneas)
+  - Scripts de datos de prueba: seed_data.js (753 líneas)
+  - Documentación completa: MONGODB_SCHEMA.md (1539 líneas)
+  - Auditoría del código: AUDITORIA_RESULTADOS.md (1660 líneas)
+  - Entidades de dominio MongoDB:
+    - MaterialSummary con validación y versionado
+    - MaterialAssessment con preguntas y opciones
+    - MaterialEvent para auditoría con TTL
+  - Repositories MongoDB implementados:
+    - MaterialSummaryRepository (CRUD completo + queries por idioma)
+    - MaterialAssessmentRepository (CRUD + agregaciones)
+    - MaterialEventRepository (auditoría + estadísticas)
+  - Tests de integración con testcontainers (9 tests, 100% passing)
+  - Collections MongoDB creadas con índices optimizados
+  - TTL index en material_event (90 días de retención)
+
 ## [0.1.1] - 2025-11-03
 
 ### Tipo de Release: patch
