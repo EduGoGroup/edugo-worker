@@ -33,6 +33,27 @@ Worker que consume eventos de RabbitMQ para procesar materiales educativos con I
 
 - Go 1.21+ + RabbitMQ + MongoDB
 
+## Dependencias del Ecosistema
+
+### edugo-infrastructure v0.1.1+
+- **Schemas de validación** de eventos RabbitMQ
+- Contratos estandarizados de mensajería
+
+### edugo-shared v0.7.0
+- `bootstrap` - Inicialización de aplicaciones
+- `common` - Utilidades compartidas
+- `logger` - Logging estructurado
+- `database/postgres` - Helpers de PostgreSQL
+- `lifecycle` - Gestión de ciclo de vida
+- `testing` - Utilidades de testing con testcontainers
+
+### Módulos disponibles (para usar cuando se implemente)
+- `evaluation` v0.7.0 - Modelos de evaluación (Assessment, Question)
+- `messaging/rabbit` v0.7.0 - Cliente RabbitMQ con DLQ y retry logic
+- `database/mongodb` v0.7.0 - Helpers de MongoDB
+
+Para más información, ver: `docs/isolated/START_HERE.md`
+
 ## Instalación
 
 ```bash
