@@ -4,8 +4,8 @@ github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6 h1:He8af
 github.com/AdaLogics/go-fuzz-headers v0.0.0-20240806141605-e8a1dd7889d6/go.mod h1:8o94RPi1/7XTJvwPpRSzSUedZrtlirdB3r9Z20bi2f8=
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 h1:UQHMgLO+TxOElx5B5HZ4hJQsoJ/PvUvKRhJHDQXO8P8=
 github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
-github.com/EduGoGroup/edugo-shared/bootstrap v0.7.0 h1:r6MJNz+s3S2VS2RmFQ7RlV2O3SIKKwtlmdEfFQCEPsE=
-github.com/EduGoGroup/edugo-shared/bootstrap v0.7.0/go.mod h1:Vdj7oMeDe52YU8kduP8MB5s1N4zJLXGyUZzhwW9Faiw=
+github.com/EduGoGroup/edugo-shared/bootstrap v0.9.0 h1:CcHBkwmYUpqO33xYGNELaHWXkz8xaZez68ye7oALJQQ=
+github.com/EduGoGroup/edugo-shared/bootstrap v0.9.0/go.mod h1:Vdj7oMeDe52YU8kduP8MB5s1N4zJLXGyUZzhwW9Faiw=
 github.com/EduGoGroup/edugo-shared/common v0.7.0 h1:i//2rdlmEQ8OFXkevjkb0mLu8SeKXfYBTxbojXrsjCY=
 github.com/EduGoGroup/edugo-shared/common v0.7.0/go.mod h1:FVDuw4Wyiz9gdF9tvZ9rOecO5+nY2MR0pqzhK5H7otk=
 github.com/EduGoGroup/edugo-shared/database/postgres v0.7.0 h1:Xwv5RksGVYa84hYrAVK7/mppxEHZZHhrFL1JOIs5Ya4=
@@ -14,8 +14,8 @@ github.com/EduGoGroup/edugo-shared/lifecycle v0.7.0 h1:ixBhiyTAIzyxZnvNprq9OmUO6
 github.com/EduGoGroup/edugo-shared/lifecycle v0.7.0/go.mod h1:0RBBYMc+FaR3eKM3swm+EWN1hoNAcUib3trc0z7UGtk=
 github.com/EduGoGroup/edugo-shared/logger v0.7.0 h1:sFe+d2uEl7AwePnl+C7O1w6/FmHzIuXG48atdp2XGMM=
 github.com/EduGoGroup/edugo-shared/logger v0.7.0/go.mod h1:wS2THHjcGazz6uqe/UlIGMOydPXXnb/ATmGJEWh54mM=
-github.com/EduGoGroup/edugo-shared/testing v0.6.2 h1:oRa6gC2ybA0BptSygxSfVE5p5MC5tx5fAQvVigYdqPw=
-github.com/EduGoGroup/edugo-shared/testing v0.6.2/go.mod h1:OhshWHLkPRyWiifGDp98wHVmoE33GHRWJP/G8bNYpng=
+github.com/EduGoGroup/edugo-shared/testing v0.7.0 h1:nYy6kgLOwyKJ4M2XC3sd67E6tNrnj5OiU6ZJFMOdWOo=
+github.com/EduGoGroup/edugo-shared/testing v0.7.0/go.mod h1:OhshWHLkPRyWiifGDp98wHVmoE33GHRWJP/G8bNYpng=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
 github.com/Microsoft/go-winio v0.6.2/go.mod h1:yd8OoFMLzJbo9gZq8j5qaps8bJ9aShtEA8Ipt1oGCvU=
 github.com/aws/aws-sdk-go-v2 v1.32.5 h1:U8vdWJuY7ruAkzaOdD7guwJjD06YSKmnKCJs7s3IkIo=
