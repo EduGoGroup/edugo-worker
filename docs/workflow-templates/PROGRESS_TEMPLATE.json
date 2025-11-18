@@ -1,0 +1,371 @@
+{
+  "project": "baileys-go-debt-resolution",
+  "version": "2.0.0",
+  "created_at": "2025-11-15T00:00:00Z",
+  "last_updated": "2025-11-16T00:00:00Z",
+  "executor": "claude-3.5-sonnet",
+  "execution_mode": "unattended",
+
+  "summary": {
+    "total_sprints": 6,
+    "completed_sprints": 2,
+    "total_tasks": 23,
+    "completed_tasks": 13,
+    "failed_tasks": 0,
+    "skipped_tasks": 0,
+    "current_sprint": "Sprint-03-Context-Review",
+    "current_task": "TASK-012",
+    "overall_progress_percent": 56.5
+  },
+
+  "sprints": {
+    "Sprint-01-Refactorizacion": {
+      "name": "Refactorización de Archivos Largos",
+      "status": "completed",
+      "priority": "HIGH",
+      "start_date": "2025-11-16T00:00:00Z",
+      "end_date": "2025-11-16T00:00:00Z",
+      "estimated_days": 2,
+      "actual_days": 1,
+      "phase1_completed_at": "2025-11-16T00:00:00Z",
+      "phase2_completed_at": "2025-11-16T00:00:00Z",
+      "merged_at": "2025-11-16T00:00:00Z",
+      "phase2_required": false,
+      "branch": null,
+      "pr_number": 44,
+      "phase2_bridge": "AnalisisEstandarizado/03-Sprints/Sprint-01-Refactorizacion/PHASE2_BRIDGE.md",
+      "execution_report": "AnalisisEstandarizado/03-Sprints/Sprint-01-Refactorizacion/EXECUTION_REPORT.md",
+      "tasks": {
+        "TASK-001": {
+          "name": "Refactorizar session_service.go",
+          "status": "completed",
+          "type": "refactor",
+          "estimated_hours": 4,
+          "actual_hours": 4,
+          "started_at": "2025-11-16T00:00:00Z",
+          "completed_at": "2025-11-16T00:00:00Z",
+          "blocked": false,
+          "files_modified": [
+            "internal/application/services/session_service.go",
+            "internal/application/services/session_service_auth.go",
+            "internal/application/services/session_service_handlers.go"
+          ]
+        },
+        "TASK-002": {
+          "name": "Refactorizar postgres_queue.go",
+          "status": "completed",
+          "type": "refactor",
+          "estimated_hours": 4,
+          "actual_hours": 4,
+          "started_at": "2025-11-16T00:00:00Z",
+          "completed_at": "2025-11-16T00:00:00Z",
+          "blocked": false,
+          "files_modified": [
+            "internal/infrastructure/adapters/outbound/jobqueue/postgres_queue.go",
+            "internal/infrastructure/adapters/outbound/jobqueue/postgres_queue_retry.go",
+            "internal/infrastructure/adapters/outbound/jobqueue/postgres_queue_dlq.go",
+            "internal/infrastructure/adapters/outbound/jobqueue/postgres_queue_scheduler.go"
+          ]
+        },
+        "TASK-003": {
+          "name": "Validar tests después de refactor",
+          "status": "completed",
+          "type": "validation",
+          "estimated_hours": 1,
+          "actual_hours": 1,
+          "started_at": "2025-11-16T00:00:00Z",
+          "completed_at": "2025-11-16T00:00:00Z",
+          "blocked": false,
+          "dependencies": ["TASK-001", "TASK-002"]
+        },
+        "TASK-004": {
+          "name": "Actualizar documentación",
+          "status": "completed",
+          "type": "docs",
+          "estimated_hours": 1,
+          "actual_hours": 1,
+          "started_at": "2025-11-16T00:00:00Z",
+          "completed_at": "2025-11-16T00:00:00Z",
+          "blocked": false,
+          "dependencies": ["TASK-001", "TASK-002", "TASK-003"],
+          "files_modified": [
+            "docs/adr/001-refactor-large-files.md"
+          ]
+        }
+      }
+    },
+
+    "Sprint-02-CICD": {
+      "name": "Reactivar CI/CD Completo",
+      "status": "completed",
+      "priority": "HIGH",
+      "start_date": "2025-11-16T00:00:00Z",
+      "end_date": "2025-11-16T15:52:00Z",
+      "estimated_days": 3,
+      "actual_days": 1,
+      "phase1_completed_at": "2025-11-16T00:00:00Z",
+      "phase2_completed_at": "2025-11-16T15:52:00Z",
+      "merged_at": "2025-11-16T15:52:00Z",
+      "phase2_required": true,
+      "branch": null,
+      "pr_number": 45,
+      "phase2_bridge": "AnalisisEstandarizado/03-Sprints/Sprint-02-CICD/PHASE2_BRIDGE.md",
+      "execution_report": "AnalisisEstandarizado/03-Sprints/Sprint-02-CICD/EXECUTION_REPORT.md",
+      "blocked_by": null,
+      "tasks": {
+        "TASK-000": {
+          "name": "Fix comentario Copilot - mutex lock en Save",
+          "status": "completed",
+          "type": "bug-fix",
+          "estimated_hours": 0.25,
+          "actual_hours": 0.25,
+          "completed_at": "2025-11-16T00:00:00Z",
+          "files_modified": [
+            "internal/application/services/session_service_auth.go"
+          ]
+        },
+        "TASK-005": {
+          "name": "Resolver deadlock race detector",
+          "status": "completed",
+          "type": "bug-fix",
+          "estimated_hours": 6,
+          "actual_hours": 6,
+          "started_at": "2025-11-16T00:00:00Z",
+          "completed_at": "2025-11-16T15:52:00Z",
+          "phase1_work": "Análisis completo + fix implementado",
+          "phase2_work": "Validación con go test -race (✅ 11.696s, 3/3 runs OK)",
+          "blocked": false,
+          "files_modified": [
+            "internal/application/services/session_service_auth.go"
+          ]
+        },
+        "TASK-006": {
+          "name": "Habilitar integration tests en CI",
+          "status": "completed",
+          "type": "ci-cd",
+          "estimated_hours": 2,
+          "actual_hours": 2,
+          "completed_at": "2025-11-16T00:00:00Z",
+          "files_modified": [
+            ".github/workflows/go-ci.yml"
+          ]
+        },
+        "TASK-007": {
+          "name": "Configurar artifacts para logs",
+          "status": "completed",
+          "type": "ci-cd",
+          "estimated_hours": 1,
+          "actual_hours": 1,
+          "completed_at": "2025-11-16T00:00:00Z",
+          "files_modified": [
+            ".github/workflows/go-ci.yml"
+          ]
+        },
+        "TASK-008": {
+          "name": "Documentar solución deadlock",
+          "status": "completed",
+          "type": "docs",
+          "estimated_hours": 1,
+          "actual_hours": 1,
+          "completed_at": "2025-11-16T00:00:00Z",
+          "files_modified": [
+            "docs/race-detector-fix.md",
+            "docs/adr/002-race-detector-deadlock-fix.md"
+          ]
+        }
+      }
+    },
+
+    "Sprint-03-Context-Review": {
+      "name": "Revisar context.Background()",
+      "status": "phase1_completed",
+      "priority": "MEDIUM",
+      "start_date": "2025-11-16T00:00:00Z",
+      "estimated_days": 1,
+      "phase1_completed_at": "2025-11-16T00:00:00Z",
+      "phase2_required": false,
+      "branch": "feature/sprint-03-context-review",
+      "phase2_bridge": "AnalisisEstandarizado/03-Sprints/Sprint-03-Context-Review/PHASE2_BRIDGE.md",
+      "blocked_by": null,
+      "tasks": {
+        "TASK-009": {
+          "name": "Auditar context.Background()",
+          "status": "completed",
+          "type": "audit",
+          "estimated_hours": 2,
+          "actual_hours": 2,
+          "started_at": "2025-11-16T00:00:00Z",
+          "completed_at": "2025-11-16T00:00:00Z",
+          "files_modified": [
+            "docs/context-audit-report.md"
+          ]
+        },
+        "TASK-010": {
+          "name": "Reemplazar usos incorrectos",
+          "status": "completed",
+          "type": "refactor",
+          "estimated_hours": 3,
+          "actual_hours": 1,
+          "started_at": "2025-11-16T00:00:00Z",
+          "completed_at": "2025-11-16T00:00:00Z",
+          "files_modified": [
+            "internal/application/services/session_service.go"
+          ]
+        },
+        "TASK-011": {
+          "name": "Agregar tests de cancelación",
+          "status": "completed",
+          "type": "test",
+          "estimated_hours": 2,
+          "actual_hours": 1,
+          "started_at": "2025-11-16T00:00:00Z",
+          "completed_at": "2025-11-16T00:00:00Z",
+          "files_modified": [
+            "internal/application/services/session_service_test.go"
+          ]
+        },
+        "TASK-012": {
+          "name": "Documentar uso de context",
+          "status": "completed",
+          "type": "docs",
+          "estimated_hours": 1,
+          "actual_hours": 1,
+          "started_at": "2025-11-16T00:00:00Z",
+          "completed_at": "2025-11-16T00:00:00Z",
+          "files_modified": [
+            "docs/context-usage.md",
+            "docs/adr/003-context-usage-guidelines.md"
+          ]
+        }
+      }
+    },
+
+    "Sprint-04-Coverage-Tracking": {
+      "name": "Coverage Tracking Centralizado",
+      "status": "blocked",
+      "priority": "MEDIUM",
+      "estimated_days": 1,
+      "blocked_by": "Sprint-03-Context-Review",
+      "tasks": {
+        "TASK-013": {
+          "name": "Configurar Codecov en CI",
+          "status": "pending",
+          "type": "ci-cd",
+          "estimated_hours": 2
+        },
+        "TASK-014": {
+          "name": "Crear codecov.yml",
+          "status": "pending",
+          "type": "config",
+          "estimated_hours": 1
+        },
+        "TASK-015": {
+          "name": "Agregar badge a README",
+          "status": "pending",
+          "type": "docs",
+          "estimated_hours": 0.5
+        },
+        "TASK-016": {
+          "name": "Validar reporting en PR",
+          "status": "pending",
+          "type": "validation",
+          "estimated_hours": 1
+        }
+      }
+    },
+
+    "Sprint-05-Linters": {
+      "name": "Agregar Linters de Complejidad",
+      "status": "blocked",
+      "priority": "MEDIUM",
+      "estimated_days": 0.5,
+      "blocked_by": "Sprint-04-Coverage-Tracking",
+      "tasks": {
+        "TASK-017": {
+          "name": "Configurar linters en .golangci.yml",
+          "status": "pending",
+          "type": "config",
+          "estimated_hours": 1
+        },
+        "TASK-018": {
+          "name": "Documentar issues existentes",
+          "status": "pending",
+          "type": "docs",
+          "estimated_hours": 1
+        },
+        "TASK-019": {
+          "name": "Integrar en CI/CD",
+          "status": "pending",
+          "type": "ci-cd",
+          "estimated_hours": 1
+        }
+      }
+    },
+
+    "Sprint-06-Parallel-Tests": {
+      "name": "Implementar t.Parallel()",
+      "status": "blocked",
+      "priority": "LOW",
+      "estimated_days": 2,
+      "blocked_by": "Sprint-05-Linters",
+      "tasks": {
+        "TASK-020": {
+          "name": "Identificar tests paralelizables",
+          "status": "pending",
+          "type": "analysis",
+          "estimated_hours": 2
+        },
+        "TASK-021": {
+          "name": "Agregar t.Parallel()",
+          "status": "pending",
+          "type": "refactor",
+          "estimated_hours": 4
+        },
+        "TASK-022": {
+          "name": "Validar con race detector",
+          "status": "pending",
+          "type": "validation",
+          "estimated_hours": 2
+        },
+        "TASK-023": {
+          "name": "Documentar guías",
+          "status": "pending",
+          "type": "docs",
+          "estimated_hours": 1
+        }
+      }
+    }
+  },
+
+  "execution_history": [],
+
+  "validation_results": {
+    "last_validation_date": null,
+    "sprints_validated": []
+  },
+
+  "metrics": {
+    "total_estimated_hours": 46,
+    "total_actual_hours": 0,
+    "efficiency_ratio": 0,
+    "average_task_duration_hours": 0,
+    "sprints_completed_on_time": 0,
+    "sprints_delayed": 0
+  },
+
+  "debt_tasks_mapping": {
+    "task_4_refactor_large_files": "Sprint-01-Refactorizacion",
+    "task_5_reactivate_cicd": "Sprint-02-CICD",
+    "task_6_context_background": "Sprint-03-Context-Review",
+    "task_7_coverage_tracking": "Sprint-04-Coverage-Tracking",
+    "task_9_linters": "Sprint-05-Linters",
+    "task_10_parallel_tests": "Sprint-06-Parallel-Tests"
+  },
+
+  "notes": [
+    "Este archivo se actualiza automáticamente después de cada tarea",
+    "Versión 2.0.0 - Corregido para incluir solo las tareas 4,5,6,7,9,10 del backlog",
+    "Los timestamps usan formato ISO 8601 UTC",
+    "Status posibles: pending, in_progress, completed, failed, skipped, phase1_completed"
+  ]
+}
