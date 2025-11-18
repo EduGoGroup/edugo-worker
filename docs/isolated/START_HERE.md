@@ -8,6 +8,90 @@ Esta carpeta contiene TODO lo necesario para implementar el sistema de procesami
 
 ---
 
+## ⚠️ ESTADO ACTUAL DEL PROYECTO
+
+**Última actualización:** 17 de Noviembre, 2025
+
+### Estado Funcional
+✅ **CÓDIGO FUNCIONANDO**
+- Tests de integración pasando
+- Estructura de proyecto completa
+- Lógica de negocio implementada
+
+### Estado Técnico
+⚠️ **REQUIERE INTEGRACIÓN CON INFRASTRUCTURE**
+
+---
+
+### 📊 Integraciones Pendientes
+
+#### 1. edugo-infrastructure v0.2.0
+- **Estado actual:** ❌ NO INTEGRADO
+- **Versión en go.mod:** N/A (no existe)
+- **Versión requerida:** v0.2.0
+- **Propósito:** Validación de schemas de eventos RabbitMQ
+- **Acción:** Ejecutar Sprint-00
+
+**¿Qué incluye infrastructure?**
+- Schemas de validación de eventos (`material-uploaded-v1`, `assessment-generated-v1`)
+- Validador de eventos centralizado
+- Contratos de mensajería estandarizados
+
+---
+
+#### 2. edugo-shared (DESACTUALIZADO)
+- **Estado actual:** ⚠️ v0.5.0 (desactualizado)
+- **Versión requerida:** v0.7.0
+- **Acción:** Ejecutar Sprint-00
+
+**Módulos actuales (v0.5.0):**
+- ✅ `bootstrap` - Inicialización
+- ✅ `common` - Utilidades comunes
+- ✅ `database/postgres` - Helpers de PostgreSQL
+- ✅ `lifecycle` - Gestión de ciclo de vida
+- ✅ `logger` - Logging estructurado
+- ✅ `testing` v0.6.2 - Testing utilities
+
+**Módulos faltantes (requiere v0.7.0):**
+- ❌ `evaluation` - Modelos compartidos de evaluación (Assessment, Question, etc.)
+- ❌ `messaging/rabbit` - Dead Letter Queue, retry logic, configuración estandarizada
+- ❌ `database/mongodb` - Helpers de MongoDB, conexión centralizada
+
+---
+
+### ⚠️ ACCIÓN REQUERIDA
+
+**EJECUTAR SPRINT-00 ANTES DE CONTINUAR CON DESARROLLO**
+
+```bash
+# Ver plan completo de Sprint-00
+cat docs/isolated/04-Implementation/Sprint-00-Integrar-Infrastructure/README.md
+cat docs/isolated/04-Implementation/Sprint-00-Integrar-Infrastructure/TASKS.md
+
+# Duración estimada: 1 hora
+# Prioridad: CRÍTICA
+```
+
+**¿Por qué es crítico?**
+1. ✅ Validación de eventos evita errores en producción
+2. ✅ DLQ de shared maneja errores automáticamente
+3. ✅ Modelos compartidos evitan duplicación
+4. ✅ Helpers de MongoDB reducen código boilerplate
+
+---
+
+### 📚 Documentación de Reorganización
+
+**Documentos de análisis:**
+- `docs/ANALISIS_DOCUMENTACION_2025-11-17.md` - Análisis de duplicación y estado
+- `docs/PLAN_REORGANIZACION_2025-11-17.md` - Plan de reorganización
+- `docs/REORGANIZACION_EJECUTADA_2025-11-17.md` - Cambios ejecutados (post-reorganización)
+
+**Workflow templates:**
+- `docs/workflow-templates/` - Templates reutilizables para todos los proyectos EduGo
+
+---
+
 ## 📍 ¿Qué es edugo-worker?
 
 **Consumer de mensajes** que procesa PDFs y genera contenido educativo con IA.
