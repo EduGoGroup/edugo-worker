@@ -25,9 +25,9 @@ Esta carpeta contiene TODO lo necesario para implementar el sistema de procesami
 
 ### 📊 Integraciones Pendientes
 
-#### 1. edugo-infrastructure v0.8.0+
+#### 1. edugo-infrastructure v0.9.0+
 - **Estado actual:** ✅ INTEGRADO
-- **Versión en go.mod:** v0.8.0
+- **Versión en go.mod:** v0.9.0
 - **Versión requerida:** v0.8.0+
 - **Propósito:** Validación de schemas de eventos RabbitMQ y migraciones MongoDB
 - **Acción:** ✅ Completado en Sprint-00
@@ -64,7 +64,7 @@ Esta carpeta contiene TODO lo necesario para implementar el sistema de procesami
 **Sprint-00 fue ejecutado exitosamente**
 
 Integraciones completadas:
-1. ✅ edugo-infrastructure v0.8.0 integrado
+1. ✅ edugo-infrastructure v0.9.0 integrado
 2. ✅ edugo-shared actualizado a v0.7.0+
 3. ✅ Validación de eventos configurada
 4. ✅ DLQ de shared configurado
