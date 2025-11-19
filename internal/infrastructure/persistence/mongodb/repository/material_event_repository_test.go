@@ -6,7 +6,6 @@ import (
 	"context"
 	"testing"
 
-	"github.com/EduGoGroup/edugo-shared/testing/containers"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/entity"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/persistence/mongodb/repository"
 	"github.com/google/uuid"
@@ -15,21 +14,9 @@ import (
 
 func TestMaterialEventRepository_Create(t *testing.T) {
 	// Setup
-	cfg := containers.NewConfig().
-		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo_test",
-			Username: "test_user",
-			Password: "test_pass",
-		}).
-		Build()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	mongoDB := manager.MongoDB()
-	db := mongoDB.Database()
 	repo := repository.NewMaterialEventRepository(db)
 	ctx := context.Background()
 
@@ -40,7 +27,7 @@ func TestMaterialEventRepository_Create(t *testing.T) {
 		primitive.M{"file": "test.pdf", "size": 1024},
 	)
 
-	err = repo.Create(ctx, event)
+	err := repo.Create(ctx, event)
 	if err != nil {
 		t.Fatalf("Failed to create event: %v", err)
 	}
@@ -65,21 +52,9 @@ func TestMaterialEventRepository_Create(t *testing.T) {
 
 func TestMaterialEventRepository_FindByStatus(t *testing.T) {
 	// Setup
-	cfg := containers.NewConfig().
-		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo_test",
-			Username: "test_user",
-			Password: "test_pass",
-		}).
-		Build()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	mongoDB := manager.MongoDB()
-	db := mongoDB.Database()
 	repo := repository.NewMaterialEventRepository(db)
 	ctx := context.Background()
 
@@ -111,21 +86,9 @@ func TestMaterialEventRepository_FindByStatus(t *testing.T) {
 
 func TestMaterialEventRepository_MarkAsCompleted(t *testing.T) {
 	// Setup
-	cfg := containers.NewConfig().
-		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo_test",
-			Username: "test_user",
-			Password: "test_pass",
-		}).
-		Build()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	mongoDB := manager.MongoDB()
-	db := mongoDB.Database()
 	repo := repository.NewMaterialEventRepository(db)
 	ctx := context.Background()
 
@@ -137,7 +100,7 @@ func TestMaterialEventRepository_MarkAsCompleted(t *testing.T) {
 
 	// Test
 	event.MarkAsCompleted()
-	err = repo.Update(ctx, event)
+	err := repo.Update(ctx, event)
 	if err != nil {
 		t.Fatalf("Failed to update event: %v", err)
 	}
@@ -154,21 +117,9 @@ func TestMaterialEventRepository_MarkAsCompleted(t *testing.T) {
 
 func TestMaterialEventRepository_GetEventStatistics(t *testing.T) {
 	// Setup
-	cfg := containers.NewConfig().
-		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo_test",
-			Username: "test_user",
-			Password: "test_pass",
-		}).
-		Build()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	mongoDB := manager.MongoDB()
-	db := mongoDB.Database()
 	repo := repository.NewMaterialEventRepository(db)
 	ctx := context.Background()
 

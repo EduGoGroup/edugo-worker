@@ -10,27 +10,27 @@ import (
 // Se almacena en MongoDB en la collection "material_event" con TTL de 90 días
 type MaterialEvent struct {
 	ID          primitive.ObjectID `bson:"_id,omitempty"`
-	EventType   string             `bson:"event_type"`   // Tipo de evento (material_uploaded, assessment_attempt, etc.)
-	MaterialID  string             `bson:"material_id,omitempty"` // UUID del material (opcional)
-	UserID      string             `bson:"user_id,omitempty"`     // UUID del usuario (opcional)
-	Payload     primitive.M        `bson:"payload"`       // Payload del evento (flexible)
-	Status      string             `bson:"status"`        // "pending", "processing", "completed", "failed"
+	EventType   string             `bson:"event_type"`             // Tipo de evento (material_uploaded, assessment_attempt, etc.)
+	MaterialID  string             `bson:"material_id,omitempty"`  // UUID del material (opcional)
+	UserID      string             `bson:"user_id,omitempty"`      // UUID del usuario (opcional)
+	Payload     primitive.M        `bson:"payload"`                // Payload del evento (flexible)
+	Status      string             `bson:"status"`                 // "pending", "processing", "completed", "failed"
 	ErrorMsg    string             `bson:"error_msg,omitempty"`    // Mensaje de error (solo si failed)
 	StackTrace  string             `bson:"stack_trace,omitempty"`  // Stack trace (solo si failed)
-	RetryCount  int                `bson:"retry_count"`   // Número de reintentos
+	RetryCount  int                `bson:"retry_count"`            // Número de reintentos
 	ProcessedAt *time.Time         `bson:"processed_at,omitempty"` // Fecha de procesamiento
-	CreatedAt   time.Time          `bson:"created_at"`    // Fecha de creación (para TTL index)
+	CreatedAt   time.Time          `bson:"created_at"`             // Fecha de creación (para TTL index)
 	UpdatedAt   time.Time          `bson:"updated_at"`
 }
 
 // EventType constants
 const (
-	EventTypeMaterialUploaded     = "material_uploaded"
-	EventTypeMaterialReprocess    = "material_reprocess"
-	EventTypeMaterialDeleted      = "material_deleted"
-	EventTypeAssessmentAttempt    = "assessment_attempt"
-	EventTypeStudentEnrolled      = "student_enrolled"
-	EventTypeStudentUnenrolled    = "student_unenrolled"
+	EventTypeMaterialUploaded  = "material_uploaded"
+	EventTypeMaterialReprocess = "material_reprocess"
+	EventTypeMaterialDeleted   = "material_deleted"
+	EventTypeAssessmentAttempt = "assessment_attempt"
+	EventTypeStudentEnrolled   = "student_enrolled"
+	EventTypeStudentUnenrolled = "student_unenrolled"
 )
 
 // EventStatus constants
