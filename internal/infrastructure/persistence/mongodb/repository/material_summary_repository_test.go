@@ -7,17 +7,27 @@ import (
 	"testing"
 	"time"
 
+	"github.com/EduGoGroup/edugo-infrastructure/mongodb/migrations"
 	"github.com/EduGoGroup/edugo-shared/testing/containers"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/entity"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/persistence/mongodb/repository"
 	"github.com/google/uuid"
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
-func TestMaterialSummaryRepository_Create(t *testing.T) {
-	// Setup
+// setupTestDB configura MongoDB con migraciones aplicadas
+func setupTestDB(t *testing.T) (*mongo.Database, func()) {
+	t.Helper()
+	SkipIfIntegrationTestsDisabled(t)
+
+	ctx := context.Background()
+
+	// Usar nombre de base de datos único por test para evitar conflictos
+	dbName := "edugo_test_" + t.Name()
+
 	cfg := containers.NewConfig().
 		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo_test",
+			Database: dbName,
 			Username: "test_user",
 			Password: "test_pass",
 		}).
@@ -33,7 +43,26 @@ func TestMaterialSummaryRepository_Create(t *testing.T) {
 		t.Fatal("MongoDB container is nil")
 	}
 
-	db := mongoDB.Database()
+	// Usar el cliente para acceder a la base de datos con el nombre correcto
+	client := mongoDB.Client()
+	db := client.Database(dbName)
+
+	// Aplicar migraciones
+	if err := migrations.ApplyAll(ctx, db); err != nil {
+		t.Fatalf("Failed to apply migrations: %v", err)
+	}
+
+	cleanup := func() {
+		// Cleanup es manejado por el manager
+	}
+
+	return db, cleanup
+}
+
+func TestMaterialSummaryRepository_Create(t *testing.T) {
+	// Setup
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
 	repo := repository.NewMaterialSummaryRepository(db)
 	ctx := context.Background()
@@ -48,7 +77,7 @@ func TestMaterialSummaryRepository_Create(t *testing.T) {
 	)
 	summary.ProcessingTimeMs = 1500
 
-	err = repo.Create(ctx, summary)
+	err := repo.Create(ctx, summary)
 	if err != nil {
 		t.Fatalf("Failed to create summary: %v", err)
 	}
@@ -76,21 +105,9 @@ func TestMaterialSummaryRepository_Create(t *testing.T) {
 
 func TestMaterialSummaryRepository_FindByMaterialID(t *testing.T) {
 	// Setup
-	cfg := containers.NewConfig().
-		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo_test",
-			Username: "test_user",
-			Password: "test_pass",
-		}).
-		Build()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	mongoDB := manager.MongoDB()
-	db := mongoDB.Database()
 	repo := repository.NewMaterialSummaryRepository(db)
 	ctx := context.Background()
 
@@ -119,21 +136,9 @@ func TestMaterialSummaryRepository_FindByMaterialID(t *testing.T) {
 
 func TestMaterialSummaryRepository_Update(t *testing.T) {
 	// Setup
-	cfg := containers.NewConfig().
-		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo_test",
-			Username: "test_user",
-			Password: "test_pass",
-		}).
-		Build()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	mongoDB := manager.MongoDB()
-	db := mongoDB.Database()
 	repo := repository.NewMaterialSummaryRepository(db)
 	ctx := context.Background()
 
@@ -151,7 +156,7 @@ func TestMaterialSummaryRepository_Update(t *testing.T) {
 	summary.Summary = "Resumen actualizado"
 	summary.IncrementVersion()
 
-	err = repo.Update(ctx, summary)
+	err := repo.Update(ctx, summary)
 	if err != nil {
 		t.Fatalf("Failed to update summary: %v", err)
 	}
@@ -168,21 +173,9 @@ func TestMaterialSummaryRepository_Update(t *testing.T) {
 
 func TestMaterialSummaryRepository_Delete(t *testing.T) {
 	// Setup
-	cfg := containers.NewConfig().
-		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo_test",
-			Username: "test_user",
-			Password: "test_pass",
-		}).
-		Build()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	mongoDB := manager.MongoDB()
-	db := mongoDB.Database()
 	repo := repository.NewMaterialSummaryRepository(db)
 	ctx := context.Background()
 
@@ -198,7 +191,7 @@ func TestMaterialSummaryRepository_Delete(t *testing.T) {
 	_ = repo.Create(ctx, summary)
 
 	// Test
-	err = repo.Delete(ctx, materialID)
+	err := repo.Delete(ctx, materialID)
 	if err != nil {
 		t.Fatalf("Failed to delete summary: %v", err)
 	}
@@ -212,21 +205,9 @@ func TestMaterialSummaryRepository_Delete(t *testing.T) {
 
 func TestMaterialSummaryRepository_FindByLanguage(t *testing.T) {
 	// Setup
-	cfg := containers.NewConfig().
-		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo_test",
-			Username: "test_user",
-			Password: "test_pass",
-		}).
-		Build()
+	db, cleanup := setupTestDB(t)
+	defer cleanup()
 
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	mongoDB := manager.MongoDB()
-	db := mongoDB.Database()
 	repo := repository.NewMaterialSummaryRepository(db)
 	ctx := context.Background()
 

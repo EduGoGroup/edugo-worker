@@ -9,6 +9,8 @@ import (
 
 // TestSetupContainers verifica que todos los containers se inicialicen correctamente
 func TestSetupContainers(t *testing.T) {
+	SkipIfIntegrationTestsDisabled(t)
+
 	manager, cleanup := setupAllContainers(t)
 	defer cleanup()
 
@@ -35,6 +37,8 @@ func TestSetupContainers(t *testing.T) {
 
 // TestSetupPostgres verifica que PostgreSQL se inicialice correctamente
 func TestSetupPostgres(t *testing.T) {
+	SkipIfIntegrationTestsDisabled(t)
+
 	db, cleanup := setupPostgres(t)
 	defer cleanup()
 
@@ -54,6 +58,8 @@ func TestSetupPostgres(t *testing.T) {
 
 // TestSetupMongoDB verifica que MongoDB se inicialice correctamente
 func TestSetupMongoDB(t *testing.T) {
+	SkipIfIntegrationTestsDisabled(t)
+
 	db, cleanup := setupMongoDB(t)
 	defer cleanup()
 
@@ -69,6 +75,8 @@ func TestSetupMongoDB(t *testing.T) {
 
 // TestSetupRabbitMQ verifica que RabbitMQ se inicialice correctamente
 func TestSetupRabbitMQ(t *testing.T) {
+	SkipIfIntegrationTestsDisabled(t)
+
 	channel, cleanup := setupRabbitMQ(t)
 	defer cleanup()
 
