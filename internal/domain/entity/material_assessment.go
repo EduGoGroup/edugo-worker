@@ -9,31 +9,31 @@ import (
 // MaterialAssessment representa una evaluación (quiz) generada automáticamente por IA
 // Se almacena en MongoDB en la collection "material_assessment"
 type MaterialAssessment struct {
-	ID              primitive.ObjectID `bson:"_id,omitempty"`
-	MaterialID      string             `bson:"material_id"`    // UUID del material en PostgreSQL
-	Questions       []Question         `bson:"questions"`      // Array de preguntas (min 3, max 20)
-	TotalQuestions  int                `bson:"total_questions"` // Total de preguntas
-	TotalPoints     int                `bson:"total_points"`    // Puntos totales del assessment
-	Version         int                `bson:"version"`         // Versión del assessment (>= 1)
-	AIModel         string             `bson:"ai_model"`        // "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo", "gpt-4o"
-	ProcessingTimeMs int               `bson:"processing_time_ms"` // Tiempo de procesamiento en ms
-	TokenUsage      *TokenUsage        `bson:"token_usage,omitempty"` // Metadata de tokens (opcional)
-	Metadata        *AssessmentMetadata `bson:"metadata,omitempty"`   // Metadata adicional (opcional)
-	CreatedAt       time.Time          `bson:"created_at"`
-	UpdatedAt       time.Time          `bson:"updated_at"`
+	ID               primitive.ObjectID  `bson:"_id,omitempty"`
+	MaterialID       string              `bson:"material_id"`           // UUID del material en PostgreSQL
+	Questions        []Question          `bson:"questions"`             // Array de preguntas (min 3, max 20)
+	TotalQuestions   int                 `bson:"total_questions"`       // Total de preguntas
+	TotalPoints      int                 `bson:"total_points"`          // Puntos totales del assessment
+	Version          int                 `bson:"version"`               // Versión del assessment (>= 1)
+	AIModel          string              `bson:"ai_model"`              // "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo", "gpt-4o"
+	ProcessingTimeMs int                 `bson:"processing_time_ms"`    // Tiempo de procesamiento en ms
+	TokenUsage       *TokenUsage         `bson:"token_usage,omitempty"` // Metadata de tokens (opcional)
+	Metadata         *AssessmentMetadata `bson:"metadata,omitempty"`    // Metadata adicional (opcional)
+	CreatedAt        time.Time           `bson:"created_at"`
+	UpdatedAt        time.Time           `bson:"updated_at"`
 }
 
 // Question representa una pregunta del assessment
 type Question struct {
-	QuestionID   string   `bson:"question_id"`   // ID único de la pregunta
-	QuestionText string   `bson:"question_text"` // Texto de la pregunta
-	QuestionType string   `bson:"question_type"` // "multiple_choice", "true_false", "open"
-	Options      []Option `bson:"options,omitempty"` // Opciones (solo para multiple_choice/true_false)
-	CorrectAnswer string  `bson:"correct_answer"` // Respuesta correcta
-	Explanation  string   `bson:"explanation"`    // Explicación de la respuesta
-	Points       int      `bson:"points"`         // Puntos de esta pregunta
-	Difficulty   string   `bson:"difficulty"`     // "easy", "medium", "hard"
-	Tags         []string `bson:"tags,omitempty"` // Tags opcionales
+	QuestionID    string   `bson:"question_id"`       // ID único de la pregunta
+	QuestionText  string   `bson:"question_text"`     // Texto de la pregunta
+	QuestionType  string   `bson:"question_type"`     // "multiple_choice", "true_false", "open"
+	Options       []Option `bson:"options,omitempty"` // Opciones (solo para multiple_choice/true_false)
+	CorrectAnswer string   `bson:"correct_answer"`    // Respuesta correcta
+	Explanation   string   `bson:"explanation"`       // Explicación de la respuesta
+	Points        int      `bson:"points"`            // Puntos de esta pregunta
+	Difficulty    string   `bson:"difficulty"`        // "easy", "medium", "hard"
+	Tags          []string `bson:"tags,omitempty"`    // Tags opcionales
 }
 
 // Option representa una opción de respuesta en preguntas de opción múltiple
@@ -71,15 +71,15 @@ func NewMaterialAssessment(materialID string, questions []Question, aiModel stri
 // NewQuestion crea una nueva pregunta
 func NewQuestion(questionID, questionText, questionType, correctAnswer, explanation string, points int, difficulty string) Question {
 	return Question{
-		QuestionID:   questionID,
-		QuestionText: questionText,
-		QuestionType: questionType,
+		QuestionID:    questionID,
+		QuestionText:  questionText,
+		QuestionType:  questionType,
 		CorrectAnswer: correctAnswer,
-		Explanation:  explanation,
-		Points:       points,
-		Difficulty:   difficulty,
-		Options:      []Option{},
-		Tags:         []string{},
+		Explanation:   explanation,
+		Points:        points,
+		Difficulty:    difficulty,
+		Options:       []Option{},
+		Tags:          []string{},
 	}
 }
 

@@ -152,7 +152,7 @@ func (r *MaterialEventRepository) FindByStatus(ctx context.Context, status strin
 // FindFailedEvents busca eventos fallidos que pueden reintentarse
 func (r *MaterialEventRepository) FindFailedEvents(ctx context.Context, maxRetries int, limit int64) ([]*entity.MaterialEvent, error) {
 	filter := bson.M{
-		"status": entity.EventStatusFailed,
+		"status":      entity.EventStatusFailed,
 		"retry_count": bson.M{"$lt": maxRetries},
 	}
 	opts := options.Find().

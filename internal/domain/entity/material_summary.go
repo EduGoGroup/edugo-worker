@@ -10,14 +10,14 @@ import (
 // Se almacena en MongoDB en la collection "material_summary"
 type MaterialSummary struct {
 	ID               primitive.ObjectID `bson:"_id,omitempty"`
-	MaterialID       string             `bson:"material_id"`       // UUID del material en PostgreSQL
-	Summary          string             `bson:"summary"`           // Resumen completo generado por OpenAI
-	KeyPoints        []string           `bson:"key_points"`        // Puntos clave extraídos (1-10)
-	Language         string             `bson:"language"`          // "es", "en", "pt"
-	WordCount        int                `bson:"word_count"`        // Número de palabras del resumen
-	Version          int                `bson:"version"`           // Versión del resumen (>= 1)
-	AIModel          string             `bson:"ai_model"`          // "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo", "gpt-4o"
-	ProcessingTimeMs int                `bson:"processing_time_ms"` // Tiempo de procesamiento en ms
+	MaterialID       string             `bson:"material_id"`           // UUID del material en PostgreSQL
+	Summary          string             `bson:"summary"`               // Resumen completo generado por OpenAI
+	KeyPoints        []string           `bson:"key_points"`            // Puntos clave extraídos (1-10)
+	Language         string             `bson:"language"`              // "es", "en", "pt"
+	WordCount        int                `bson:"word_count"`            // Número de palabras del resumen
+	Version          int                `bson:"version"`               // Versión del resumen (>= 1)
+	AIModel          string             `bson:"ai_model"`              // "gpt-4", "gpt-3.5-turbo", "gpt-4-turbo", "gpt-4o"
+	ProcessingTimeMs int                `bson:"processing_time_ms"`    // Tiempo de procesamiento en ms
 	TokenUsage       *TokenUsage        `bson:"token_usage,omitempty"` // Metadata de tokens consumidos (opcional)
 	Metadata         *SummaryMetadata   `bson:"metadata,omitempty"`    // Metadata adicional (opcional)
 	CreatedAt        time.Time          `bson:"created_at"`
@@ -41,15 +41,15 @@ type SummaryMetadata struct {
 func NewMaterialSummary(materialID, summary string, keyPoints []string, language, aiModel string) *MaterialSummary {
 	now := time.Now()
 	return &MaterialSummary{
-		MaterialID:   materialID,
-		Summary:      summary,
-		KeyPoints:    keyPoints,
-		Language:     language,
-		WordCount:    countWords(summary),
-		Version:      1,
-		AIModel:      aiModel,
-		CreatedAt:    now,
-		UpdatedAt:    now,
+		MaterialID: materialID,
+		Summary:    summary,
+		KeyPoints:  keyPoints,
+		Language:   language,
+		WordCount:  countWords(summary),
+		Version:    1,
+		AIModel:    aiModel,
+		CreatedAt:  now,
+		UpdatedAt:  now,
 	}
 }
 
