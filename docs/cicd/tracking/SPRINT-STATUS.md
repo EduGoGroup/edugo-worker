@@ -1,9 +1,16 @@
 # Estado del Sprint Actual
 
-**Proyecto:** edugo-shared  
+**Proyecto:** edugo-worker  
 **Sprint:** Pendiente  
 **Fase Actual:** Ninguna  
 **Última Actualización:** Pendiente
+
+⚠️ **UBICACIÓN DE ESTE ARCHIVO:**
+```
+📍 Ruta: 05-worker/tracking/SPRINT-STATUS.md
+📍 Este archivo se actualiza después de CADA tarea completada
+📍 "Las migajas de pan guían el camino"
+```
 
 ---
 
@@ -12,6 +19,27 @@
 **Sprint:** N/A  
 **Inicio:** N/A  
 **Objetivo:** N/A
+
+---
+
+## 💬 Próxima Acción
+
+```
+→ No hay sprint activo
+→ Para iniciar: Ver sprints/SPRINT-3-TASKS.md o SPRINT-4-TASKS.md
+→ Usar PROMPTS.md para ejecutar con sistema de 3 fases
+```
+
+**¿Dónde estás?**
+- Sprint: N/A
+- Fase: N/A
+- Tarea actual: N/A
+
+**¿Qué sigue?**
+- Iniciar nuevo sprint (ver INDEX.md)
+
+**Bloqueadores:**
+- Ninguno
 
 ---
 

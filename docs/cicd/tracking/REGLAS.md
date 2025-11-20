@@ -1,8 +1,15 @@
 # Reglas de Ejecución de Sprints
 
-**Proyecto:** edugo-shared  
+**Proyecto:** edugo-worker  
 **Fecha:** 20 de Noviembre, 2025  
 **Propósito:** Reglas y procedimientos para ejecutar sprints de manera consistente y controlada
+
+⚠️ **UBICACIÓN DE ESTE ARCHIVO:**
+```
+📍 Ruta: 05-worker/tracking/REGLAS.md
+📍 Carpeta base: 05-worker/
+📍 Todas las rutas son relativas a: 05-worker/
+```
 
 ---
 
@@ -34,6 +41,20 @@
 - ✅ Cada error que toma >10 min resolver se documenta en `errors/ERROR-YYYY-MM-DD-HH-MM.md`
 - ✅ Incluir: síntoma, causa raíz, intentos de solución, solución final
 
+### 6. Sistema de Migajas (Breadcrumbs)
+- ✅ **Actualizar migajas después de CADA tarea completada**
+- ✅ Actualizar `SPRINT-STATUS.md` en tiempo real
+- ✅ Actualizar indicadores de fase cuando cambies de fase
+- ✅ "No sirve decir que debes seguir si te comes el pan en el camino"
+
+**Migajas a mantener:**
+- Sprint activo
+- Fase actual (1, 2, o 3)
+- Progreso de la fase (X/Y tareas)
+- Próxima tarea pendiente
+- Tareas con stub (para Fase 2)
+- Timestamp de última actualización
+
 ---
 
 ## 📋 Estructura de 3 Fases
@@ -44,12 +65,12 @@
 #### Paso 1.1: Análisis Pre-Sprint
 ```bash
 # Leer y entender el sprint
-cat docs/cicd/SPRINT-X-TASKS.md
+cat ../sprints/SPRINT-X-TASKS.md
 
 # Leer documentación del proyecto
 cat README.md
-cat docs/cicd/README.md
-cat docs/cicd/INDEX.md
+cat ../README.md
+cat ../INDEX.md
 ```
 
 #### Paso 1.2: Preparación de Rama
@@ -68,7 +89,7 @@ echo "Sprint X iniciado: $(date)" >> .sprint-tracking/logs/SPRINT-X-LOG.md
 #### Paso 1.3: Ejecución Tarea por Tarea
 **Por cada tarea:**
 
-1. Leer la tarea en `docs/cicd/SPRINT-X-TASKS.md`
+1. Leer la tarea en `../sprints/SPRINT-X-TASKS.md`
 2. Marcar como "🔄 En progreso" en `SPRINT-STATUS.md`
 3. Ejecutar la tarea
 4. **SI** requiere dependencia externa (Docker, BD, etc.):
@@ -583,6 +604,183 @@ c) [Opción 3]
 - [ ] (Opcional) PR a main y release
 - [ ] dev y main sincronizados
 - [ ] SPRINT-X-COMPLETE.md creado
+
+---
+
+## 🍞 Sistema de Migajas de Pan (Breadcrumbs)
+
+### Concepto
+
+"No sirve decir que debes seguir el camino si te comes el pan mientras caminas."
+
+Las **migajas de pan** son marcadores de progreso que deben mantenerse SIEMPRE actualizados para que cualquier sesión pueda continuar sin confusión.
+
+### Ubicación de las Migajas
+
+**Archivo principal:** `SPRINT-STATUS.md`
+
+**Secciones críticas:**
+1. **🎯 Sprint Activo** - Sprint y fase actual
+2. **📊 Progreso Global** - Métricas en tiempo real
+3. **📋 Tareas por Fase** - Estado de cada tarea
+4. **🚨 Bloqueos y Decisiones** - Stubs activos
+5. **💬 Próxima Acción** - ¿Qué hacer ahora?
+
+### Regla de Oro
+
+**DESPUÉS de CADA tarea completada, actualizar:**
+
+```markdown
+## 🎯 Sprint Activo
+Sprint: 3
+Fase: 1 - Implementación
+Última actualización: 20 Nov 2025, 18:45
+
+## 📊 Progreso Global
+- Tareas completadas: 3/12
+- Progreso: 25%
+
+## 💬 Próxima Acción
+→ Tarea 3.4: Implementar pre-commit hooks
+```
+
+### Templates de Migajas
+
+#### 1. Al Completar Tarea
+**Archivo:** `SPRINT-STATUS.md`
+
+```markdown
+| 3.3 | Migrar a Go 1.25 | ✅ | Completado 20 Nov, 18:45 |
+| 3.4 | Pre-commit hooks | 🔄 | En progreso |
+
+**Última actualización:** 20 Nov 2025, 18:45
+**Próxima tarea:** 3.4 - Implementar pre-commit hooks
+```
+
+#### 2. Al Iniciar Nueva Fase
+**Archivo:** `SPRINT-STATUS.md`
+
+```markdown
+## 🎯 Sprint Activo
+Sprint: 3
+Fase: 2 - Resolución de Stubs
+Última actualización: 20 Nov 2025, 19:30
+
+## 📊 Progreso Global (Fase 2)
+- Stubs a resolver: 3
+- Stubs resueltos: 0
+- Progreso: 0%
+
+## 💬 Próxima Acción
+→ Resolver stub: Tarea 3.5 - Conexión MongoDB
+```
+
+#### 3. Al Crear Stub
+**Archivo:** `decisions/TASK-X.Y-BLOCKED.md`
+
+```markdown
+# Decisión: Tarea 3.5 Bloqueada
+
+**Fecha:** 20 Nov 2025, 18:45
+**Tarea:** 3.5 - Tests con MongoDB
+**Razón:** MongoDB no está corriendo
+
+## Migaja
+- Marcada como: ✅ (stub)
+- Pendiente para Fase 2
+- Archivo de decisión: decisions/TASK-3.5-BLOCKED.md
+```
+
+#### 3. Al Finalizar Sprint
+**Archivo:** `SPRINT-STATUS.md`
+
+```markdown
+## 🎯 Sprint Activo
+Sprint: 3 - COMPLETADO ✅
+Fase: 3 - Finalizada
+Fecha inicio: 18 Nov 2025
+Fecha fin: 20 Nov 2025
+Duración: 16 horas
+
+## 💬 Próxima Acción
+→ Sprint 3 completado
+→ Siguiente: Sprint 4 (pendiente iniciar)
+- No hay bloqueadores conocidos
+```
+
+#### 4. Al Encontrar Bloqueo
+**Archivo:** `decisions/TASK-X.Y-BLOCKED.md`
+
+```markdown
+# Decisión: Tarea X.Y Bloqueada
+
+**Fecha:** 20 Nov 2025, 18:45
+**Tarea:** X.Y - [Nombre]
+**Razón:** MongoDB no está corriendo
+
+## Contexto
+[Explicar por qué se necesita MongoDB]
+
+## Decisión
+Usar stub con mgo-mock para continuar.
+
+## Implementación del Stub
+\`\`\`go
+// Código del stub
+\`\`\`
+
+## Para Fase 2
+- Verificar MongoDB corriendo
+- Reemplazar stub con conexión real
+- Tests de integración
+
+## Migaja
+- Marcada como: ✅ (stub)
+- Pendiente para Fase 2
+```
+
+### Validación de Migajas
+
+#### Al Iniciar Sesión, Claude DEBE verificar:
+
+```bash
+# 1. ¿Cuál es el sprint activo?
+grep "Sprint activo" SPRINT-STATUS.md
+
+# 2. ¿En qué fase estoy?
+grep "Fase.*EN PROGRESO\|EN CURSO" SPRINT-STATUS.md
+
+# 3. ¿Cuál es la próxima tarea?
+grep "⏳\|🔄" SPRINT-STATUS.md | head -1
+
+# 4. ¿Hay logs de sesión anterior?
+ls -lt logs/ | head -1
+
+# 5. ¿Hay bloqueadores?
+ls -1 decisions/TASK-*-BLOCKED.md 2>/dev/null
+```
+
+#### Si las migajas están desactualizadas o confusas:
+
+1. **Revisar último commit:**
+   ```bash
+   git log -1 --oneline
+   ```
+
+2. **Revisar última sesión:**
+   ```bash
+   cat logs/SESSION-*.md | tail -50
+   ```
+
+3. **Reconstruir estado:**
+   - Contar tareas ✅ en SPRINT-STATUS.md
+   - Verificar branch activo
+   - Preguntar al usuario si hay dudas
+
+4. **Actualizar migajas:**
+   - Marcar estado actual en SPRINT-STATUS.md
+   - Crear log de reconstrucción
+   - Continuar
 
 ---
 

@@ -6,6 +6,13 @@
 **Versión:** 1.0  
 **Estado:** Propuesta para Implementación
 
+⚠️ **UBICACIÓN DE ESTE ARCHIVO:**
+```
+📍 Ruta: 05-worker/README.md (dentro de cicd-analysis)
+📍 Todas las rutas son relativas a: 05-worker/
+⚠️ NO uses archivos de otros proyectos (01-shared, 03-api-mobile, etc.)
+```
+
 ---
 
 ## 📑 Tabla de Contenidos
@@ -411,7 +418,7 @@ Date: 2025-11-19T00:48:39Z
 - test.yml con threshold 33%
 - PR completo con tests pasando
 
-**Archivo:** [SPRINT-3-TASKS.md](./SPRINT-3-TASKS.md)
+**Archivo:** [SPRINT-3-TASKS.md](./sprints/SPRINT-3-TASKS.md)
 
 ---
 
@@ -434,7 +441,7 @@ Date: 2025-11-19T00:48:39Z
 - Workflows reusables en infrastructure
 - PR completo con tests pasando
 
-**Archivo:** [SPRINT-4-TASKS.md](./SPRINT-4-TASKS.md)
+**Archivo:** [SPRINT-4-TASKS.md](./sprints/SPRINT-4-TASKS.md)
 
 ---
 
@@ -628,7 +635,7 @@ Este plan detalla la estandarización y optimización de edugo-worker con enfoqu
 
 **Prioridad máxima:** Sprint 3 Tarea 1 (Consolidación Docker)
 
-**Próximo paso:** Abrir [SPRINT-3-TASKS.md](./SPRINT-3-TASKS.md) y comenzar implementación.
+**Próximo paso:** Abrir [SPRINT-3-TASKS.md](./sprints/SPRINT-3-TASKS.md) y comenzar implementación.
 
 ---
 

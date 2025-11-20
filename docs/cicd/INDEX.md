@@ -2,17 +2,29 @@
 
 **🎯 Punto de Entrada Principal**
 
+⚠️ **UBICACIÓN DE ESTE ARCHIVO:**
+```
+📍 Ruta: 05-worker/INDEX.md (dentro de cicd-analysis)
+📍 Todas las rutas son relativas a: 05-worker/
+⚠️ NO uses archivos de otros proyectos (01-shared, 03-api-mobile, etc.)
+```
+
 ---
 
 ## 🗺️ Navegación Rápida
 
-### Para Empezar
-1. **[README.md](./README.md)** ⭐ - Contexto completo del proyecto (20-25 min)
-2. Este archivo (INDEX.md) - Navegación y resumen (5 min)
+### ⭐ Para Ejecutar Sprints (RECOMENDADO)
+1. **[PROMPTS.md](./PROMPTS.md)** ⭐⭐⭐ - Prompts estándar para Fase 1, 2, 3
+2. **[tracking/SPRINT-STATUS.md](./tracking/SPRINT-STATUS.md)** - Estado actual del sprint
+3. **[START-HERE.md](./START-HERE.md)** - Punto de entrada rápido
+
+### Para Entender el Contexto
+4. **[README.md](./README.md)** ⭐ - Contexto completo del proyecto (20-25 min)
+5. Este archivo (INDEX.md) - Navegación y resumen (5 min)
 
 ### Para Implementar
-3. **[SPRINT-3-TASKS.md](./SPRINT-3-TASKS.md)** ⭐⭐⭐ - Plan detallado Sprint 3 (~2,500 líneas)
-4. **[SPRINT-4-TASKS.md](./SPRINT-4-TASKS.md)** - Plan detallado Sprint 4 (~800 líneas)
+3. **[SPRINT-3-TASKS.md](./sprints/SPRINT-3-TASKS.md)** ⭐⭐⭐ - Plan detallado Sprint 3 (~2,500 líneas)
+4. **[SPRINT-4-TASKS.md](./sprints/SPRINT-4-TASKS.md)** - Plan detallado Sprint 4 (~800 líneas)
 
 ---
 
@@ -64,23 +76,38 @@ Consolidar en 1 solo workflow (manual-release.yml) con control por variables.
 
 ## 🚀 Quick Actions
 
-### Acción 1: Ver el Problema en Detalle
+### ⭐ Acción 1: Ejecutar Sprint con Prompts (RECOMENDADO)
+```
+1. Abre PROMPTS.md
+2. Elige tu fase (1, 2, o 3)
+3. Copia el prompt correspondiente
+4. Reemplaza X con número de sprint
+5. Pégalo en Claude y ejecuta
+```
+
+### Acción 2: Ver Estado Actual
+```bash
+cat tracking/SPRINT-STATUS.md | head -40
+# Ver: Sprint activo, Fase, Progreso, Próxima tarea
+```
+
+### Acción 3: Comenzar Sprint 3 AHORA
+```bash
+open sprints/SPRINT-3-TASKS.md
+# Ir a Tarea 1: Análisis y Consolidación Docker
+# Seguir instrucciones paso a paso
+```
+
+### Acción 4: Ver el Problema Docker en Detalle
 ```bash
 open README.md
 # Ir a sección "Análisis de Duplicación Docker"
 ```
 
-### Acción 2: Comenzar Sprint 3 AHORA
+### Acción 5: Ver Solo Resumen de Tareas
 ```bash
-open SPRINT-3-TASKS.md
-# Ir a Tarea 1: Análisis y Consolidación Docker
-# Seguir instrucciones paso a paso
-```
-
-### Acción 3: Ver Solo Resumen de Tareas
-```bash
-grep "^### Tarea" SPRINT-3-TASKS.md
-grep "^### Tarea" SPRINT-4-TASKS.md
+grep "^### Tarea" sprints/SPRINT-3-TASKS.md
+grep "^### Tarea" sprints/SPRINT-4-TASKS.md
 ```
 
 ---
@@ -91,8 +118,24 @@ grep "^### Tarea" SPRINT-4-TASKS.md
 05-worker/
 ├── INDEX.md                    ← Estás aquí
 ├── README.md                   ← Contexto completo (~350 líneas)
-├── SPRINT-3-TASKS.md           ← ⭐ Sprint 3 detallado (~2,500 líneas)
-└── SPRINT-4-TASKS.md           ← Sprint 4 detallado (~800 líneas)
+├── docs/
+│   ├── RESUMEN.md
+│   └── RESUMEN-ANALISIS.md
+├── sprints/
+│   ├── SPRINT-3-TASKS.md       ← ⭐ Sprint 3 detallado (~2,500 líneas)
+│   ├── SPRINT-4-TASKS.md       ← Sprint 4 detallado (~800 líneas)
+│   ├── SPRINT-ENTITIES-ADAPTATION.md
+│   └── SPRINT-TRACKING.md
+├── tracking/
+│   ├── REGLAS.md
+│   ├── SPRINT-STATUS.md
+│   ├── logs/
+│   ├── errors/
+│   ├── decisions/
+│   └── reviews/
+└── assets/
+    ├── workflows/
+    └── scripts/
 
 Total: ~3,650 líneas de documentación
 ```
@@ -103,7 +146,7 @@ Total: ~3,650 líneas de documentación
 
 ### Soy el Implementador
 → Lee: **README.md** (sección "Análisis de Duplicación Docker")  
-→ Ejecuta: **SPRINT-3-TASKS.md** tarea por tarea  
+→ Ejecuta: **sprints/SPRINT-3-TASKS.md** tarea por tarea  
 → Tiempo: 16-20 horas Sprint 3
 
 ### Soy el Planificador
@@ -131,17 +174,17 @@ Total: ~3,650 líneas de documentación
 
 ### Nivel 2: Entender Problema Docker (30 min)
 1. README.md sección "Análisis de Duplicación Docker" - 20 min
-2. SPRINT-3-TASKS.md Tarea 1 (solo leer) - 10 min
+2. sprints/SPRINT-3-TASKS.md Tarea 1 (solo leer) - 10 min
 
 ### Nivel 3: Contexto Completo (1 hora)
 1. README.md completo - 25 min
-2. SPRINT-3-TASKS.md (solo estructura) - 20 min
-3. SPRINT-4-TASKS.md (solo estructura) - 15 min
+2. sprints/SPRINT-3-TASKS.md (solo estructura) - 20 min
+3. sprints/SPRINT-4-TASKS.md (solo estructura) - 15 min
 
 ### Nivel 4: Detalle Completo para Implementar (4-5 horas)
 1. README.md - 25 min
-2. SPRINT-3-TASKS.md completo - 3-4 horas
-3. SPRINT-4-TASKS.md completo - 1 hora
+2. sprints/SPRINT-3-TASKS.md completo - 3-4 horas
+3. sprints/SPRINT-4-TASKS.md completo - 1 hora
 
 ---
 
@@ -150,27 +193,27 @@ Total: ~3,650 líneas de documentación
 Si solo tienes tiempo limitado, ejecuta estas:
 
 1. **Tarea 1: Consolidar workflows Docker** (3-4 horas) 🔴
-   - Archivo: SPRINT-3-TASKS.md, línea ~50
+   - Archivo: sprints/SPRINT-3-TASKS.md, línea ~50
    - La MÁS CRÍTICA de worker
    - Eliminar build-and-push.yml y docker-only.yml
 
 2. **Tarea 2: Migrar a Go 1.25** (45-60 min) 🟡
-   - Archivo: SPRINT-3-TASKS.md, línea ~800
+   - Archivo: sprints/SPRINT-3-TASKS.md, línea ~800
    - Actualizar go.mod de 1.24.10 → 1.25.3
    - Script incluido
 
 3. **Tarea 4: Pre-commit hooks** (60-90 min) 🟡
-   - Archivo: SPRINT-3-TASKS.md, línea ~1400
+   - Archivo: sprints/SPRINT-3-TASKS.md, línea ~1400
    - 7 validaciones automáticas
    - Copiar de api-mobile
 
 4. **Tarea 5: Coverage threshold 33%** (45 min) 🟡
-   - Archivo: SPRINT-3-TASKS.md, línea ~1800
+   - Archivo: sprints/SPRINT-3-TASKS.md, línea ~1800
    - Estandarizar con apis
    - Script incluido
 
 5. **Tarea 10: Crear PR Sprint 3** (30 min)
-   - Archivo: SPRINT-3-TASKS.md, línea ~2400
+   - Archivo: sprints/SPRINT-3-TASKS.md, línea ~2400
    - Template incluido
 
 **Total:** ~6-8 horas (en lugar de 16-20h)
@@ -262,7 +305,7 @@ Antes de comenzar Sprint 3:
 ## 🆘 Ayuda Rápida
 
 ### Pregunta: ¿Por dónde empiezo?
-**Respuesta:** README.md → SPRINT-3-TASKS.md línea 50 (Tarea 1)
+**Respuesta:** README.md → sprints/SPRINT-3-TASKS.md línea 50 (Tarea 1)
 
 ### Pregunta: ¿Por qué 3 workflows Docker?
 **Respuesta:** README.md sección "Análisis de Duplicación Docker" explica en detalle.
@@ -333,7 +376,7 @@ open README.md
 
 O si ya estás listo:
 ```bash
-open SPRINT-3-TASKS.md
+open sprints/SPRINT-3-TASKS.md
 # Ir a línea 50 y comenzar con Tarea 1: Consolidación Docker
 ```
 
@@ -367,9 +410,9 @@ open SPRINT-3-TASKS.md
 **Nuevo:** Sistema completo de tracking y control de ejecución de sprints.
 
 ### Documentación:
-- **[SPRINT-TRACKING.md](SPRINT-TRACKING.md)** - Punto de entrada, guía de uso
-- **[.sprint-tracking/REGLAS.md](.sprint-tracking/REGLAS.md)** - Reglas completas de ejecución
-- **[.sprint-tracking/SPRINT-STATUS.md](.sprint-tracking/SPRINT-STATUS.md)** - Estado en tiempo real
+- **[SPRINT-TRACKING.md](sprints/SPRINT-TRACKING.md)** - Punto de entrada, guía de uso
+- **[REGLAS.md](tracking/REGLAS.md)** - Reglas completas de ejecución
+- **[SPRINT-STATUS.md](tracking/SPRINT-STATUS.md)** - Estado en tiempo real
 
 ### Características:
 - 🎯 **3 Fases:** Implementación → Resolución Stubs → Validación/CI/CD
@@ -378,5 +421,5 @@ open SPRINT-3-TASKS.md
 - ⏱️ **Control CI/CD:** Timeout de 5 minutos con polling
 - 🤖 **Clasificación Copilot:** Manejo inteligente de comentarios
 
-**Ver:** [SPRINT-TRACKING.md](SPRINT-TRACKING.md) para comenzar.
+**Ver:** [SPRINT-TRACKING.md](sprints/SPRINT-TRACKING.md) para comenzar.
 
