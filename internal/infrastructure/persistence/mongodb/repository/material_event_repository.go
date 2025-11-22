@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/domain/entity"
@@ -97,7 +98,11 @@ func (r *MaterialEventRepository) FindByMaterialID(ctx context.Context, material
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var events []*entity.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
@@ -118,7 +123,11 @@ func (r *MaterialEventRepository) FindByEventType(ctx context.Context, eventType
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var events []*entity.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
@@ -139,7 +148,11 @@ func (r *MaterialEventRepository) FindByStatus(ctx context.Context, status strin
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var events []*entity.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
@@ -163,7 +176,11 @@ func (r *MaterialEventRepository) FindFailedEvents(ctx context.Context, maxRetri
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var events []*entity.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
@@ -184,7 +201,11 @@ func (r *MaterialEventRepository) FindPendingEvents(ctx context.Context, limit i
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var events []*entity.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
@@ -204,7 +225,11 @@ func (r *MaterialEventRepository) FindRecent(ctx context.Context, limit int64) (
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var events []*entity.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
@@ -239,7 +264,11 @@ func (r *MaterialEventRepository) GetEventStatistics(ctx context.Context) (map[s
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	stats := make(map[string]int64)
 	for cursor.Next(ctx) {

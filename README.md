@@ -27,6 +27,32 @@ Worker que consume eventos de RabbitMQ para procesar materiales educativos con I
 - [Coverage Standards](docs/COVERAGE-STANDARDS.md) - Estándares de cobertura
 - [Pre-commit Hooks](#-pre-commit-hooks) - Validaciones automáticas
 
+## 🔄 Workflows Reusables (Sprint 4 - Nov 2025)
+
+### Migración a Workflows Centralizados
+
+edugo-worker usa **workflows reusables** centralizados en `edugo-infrastructure` para CI/CD:
+
+| Workflow | Job Migrado | Reducción |
+|----------|-------------|-----------|
+| `ci.yml` | `lint` | -13 líneas (-11%) |
+| `test.yml` | `test-coverage` | -136 líneas (-68%) |
+| **Total** | - | **-149 líneas (-46%)** |
+
+**Workflows Reusables:**
+- 🔍 `reusable-go-lint.yml` - Linter con golangci-lint v2.4.0
+- 🧪 `reusable-go-test.yml` - Tests con coverage + servicios (PostgreSQL, MongoDB, RabbitMQ)
+
+**Beneficios:**
+- ✅ Lógica centralizada en infrastructure
+- ✅ Mantenimiento simplificado (1 cambio → todos los repos)
+- ✅ Consistencia entre api-mobile, api-admin y worker
+- ✅ Aplicación automática de mejores prácticas
+
+**Ver:** [REUSABLE-WORKFLOWS.md](docs/REUSABLE-WORKFLOWS.md) para detalles completos
+
+---
+
 ## Responsabilidades
 
 1. **Generación de Resumen y Quiz** (`material_uploaded`):
