@@ -1,0 +1,76 @@
+# Pre-commit hooks para edugo-worker
+# Instalación: pip install pre-commit && pre-commit install
+# Ejecutar manual: pre-commit run --all-files
+
+repos:
+  # 1. Validaciones básicas
+  - repo: https://github.com/pre-commit/pre-commit-hooks
+    rev: v4.5.0
+    hooks:
+      # Prevenir commits a main directamente
+      - id: no-commit-to-branch
+        args: ['--branch', 'main']
+
+      # Verificar que archivos terminen con newline
+      - id: end-of-file-fixer
+
+      # Remover espacios en blanco al final de líneas
+      - id: trailing-whitespace
+        args: [--markdown-linebreak-ext=md]
+
+      # Prevenir archivos grandes (>500KB)
+      - id: check-added-large-files
+        args: ['--maxkb=500']
+
+      # Validar YAML
+      - id: check-yaml
+        args: ['--unsafe']  # Permite templates de GitHub Actions
+
+      # Detectar credenciales expuestas
+      - id: detect-private-key
+
+      # Verificar merge conflicts sin resolver
+      - id: check-merge-conflict
+
+  # 2. Go fmt y imports
+  - repo: https://github.com/dnephin/pre-commit-golang
+    rev: v0.5.1
+    hooks:
+      # Formatear código Go
+      - id: go-fmt
+
+      # Organizar imports
+      - id: go-imports
+
+      # Análisis estático
+      - id: go-vet
+
+      # Verificar que go.mod esté actualizado
+      - id: go-mod-tidy
+
+  # 3. Tests unitarios (opcional, puede ser lento)
+  - repo: local
+    hooks:
+      - id: go-test
+        name: go test
+        entry: go test -short ./...
+        language: system
+        pass_filenames: false
+        stages: [commit]
+        # Solo si cambió código Go
+        files: \.go$
+
+# Configuración global
+default_language_version:
+  python: python3
+
+# Stages a ejecutar
+default_stages: [commit]
+
+# Excluir archivos
+exclude: |
+  (?x)^(
+    vendor/|
+    .github/workflows/.*\.yml|
+    docs/workflows-removed-sprint3/
+  )$
