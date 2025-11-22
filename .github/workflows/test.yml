@@ -2,12 +2,12 @@ name: Tests with Coverage
 
 # Manual o en PRs
 on:
-  workflow_dispatch:  # Manual desde GitHub UI
+  workflow_dispatch: # Manual desde GitHub UI
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, dev]
 
 env:
-  GO_VERSION: '1.25'
+  GO_VERSION: "1.25.3"
 
 jobs:
   test-coverage:
@@ -99,6 +99,35 @@ jobs:
             go tool cover -func=coverage/coverage.out | tail -1
           fi
 
+      - name: Verificar umbral de cobertura
+        run: |
+          if [ -f coverage/coverage.out ]; then
+            COVERAGE=$(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $NF}' | sed 's/%//')
+            # THRESHOLD=0.0 temporalmente (sin tests implementados aún)
+            # TODO: Aumentar a 33.0 cuando se implementen tests unitarios
+            THRESHOLD=0.0
+
+            echo "📊 Cobertura actual: ${COVERAGE}%"
+            echo "📊 Umbral mínimo: ${THRESHOLD}%"
+
+            if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
+              echo "❌ Cobertura ${COVERAGE}% está por debajo del umbral ${THRESHOLD}%"
+              exit 1
+            else
+              echo "✅ Cobertura ${COVERAGE}% cumple con el umbral ${THRESHOLD}%"
+            fi
+          else
+            # Verificar si existen archivos *_test.go en el proyecto
+            if ! find . -type f -name '*_test.go' | grep -q .; then
+              echo "⚠️ No se generó archivo de cobertura porque no hay tests implementados aún."
+              echo "ℹ️ Agrega archivos *_test.go para que el umbral de cobertura sea aplicable."
+              exit 1
+            else
+              echo "⚠️ No se generó archivo de cobertura (puede haber un error en los tests o configuración)."
+              exit 1
+            fi
+          fi
+
       - name: Generar reporte HTML
         run: |
           if [ -f coverage/coverage.out ]; then
@@ -140,7 +169,7 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'  # Solo manual
+    if: github.event_name == 'workflow_dispatch' # Solo manual
 
     steps:
       - name: Checkout código

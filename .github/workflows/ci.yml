@@ -3,12 +3,12 @@ name: CI Pipeline
 # Se ejecuta en PRs (flujo ideal) y push a main (red de seguridad)
 on:
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, dev]
   push:
-    branches: [ main ]  # Red de seguridad por si alguien hace push directo
+    branches: [main] # Red de seguridad por si alguien hace push directo
 
 env:
-  GO_VERSION: '1.25'
+  GO_VERSION: "1.25.3"
 
 jobs:
   test:
@@ -69,7 +69,7 @@ jobs:
   lint:
     name: Linter (Optional)
     runs-on: ubuntu-latest
-    continue-on-error: true  # No falla el CI si el linter tiene warnings
+    continue-on-error: true # No falla el CI si el linter tiene warnings
 
     steps:
       - name: Checkout código
