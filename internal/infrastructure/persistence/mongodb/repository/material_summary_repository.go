@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/domain/entity"
@@ -134,7 +135,11 @@ func (r *MaterialSummaryRepository) FindByLanguage(ctx context.Context, language
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var summaries []*entity.MaterialSummary
 	if err := cursor.All(ctx, &summaries); err != nil {
@@ -154,7 +159,11 @@ func (r *MaterialSummaryRepository) FindRecent(ctx context.Context, limit int64)
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var summaries []*entity.MaterialSummary
 	if err := cursor.All(ctx, &summaries); err != nil {

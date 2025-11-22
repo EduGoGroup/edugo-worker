@@ -1,6 +1,6 @@
 module github.com/EduGoGroup/edugo-worker
 
-go 1.24.10
+go 1.25.3
 
 require (
 	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.9.0
