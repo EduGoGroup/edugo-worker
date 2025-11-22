@@ -423,3 +423,41 @@ open sprints/SPRINT-3-TASKS.md
 
 **Ver:** [SPRINT-TRACKING.md](sprints/SPRINT-TRACKING.md) para comenzar.
 
+
+---
+
+## 🎓 Lecciones Aprendidas de api-mobile
+
+**NUEVO:** El proyecto piloto **api-mobile** completó SPRINT-4 FASE 1 y FASE 2, documentando 5 problemas críticos y sus soluciones.
+
+### 📚 Documento Clave
+
+**[SPRINT-4-LESSONS-LEARNED.md](./SPRINT-4-LESSONS-LEARNED.md)** ⭐⭐⭐
+
+**Lee este documento ANTES de empezar Sprint 4 para:**
+- ✅ Evitar 90 minutos de debugging
+- ✅ Aplicar fixes desde el inicio
+- ✅ Migrar en ~50 minutos (vs 105 min de api-mobile)
+
+### Problemas que Evitarás
+
+1. ✅ Permisos de workflows reusables
+2. ✅ Subdirectorio no permitido
+3. ✅ GITHUB_TOKEN reservado
+4. ✅ Incompatibilidad golangci-lint-action
+5. ✅ Incompatibilidad Go 1.25
+
+### Plantilla Correcta
+
+```yaml
+lint:
+  uses: EduGoGroup/edugo-infrastructure/.github/workflows/reusable-go-lint.yml@main
+  with:
+    go-version: "1.25"
+    args: "--timeout=5m"
+```
+
+**Lee el documento completo para detalles y comandos de validación.**
+
+---
+
