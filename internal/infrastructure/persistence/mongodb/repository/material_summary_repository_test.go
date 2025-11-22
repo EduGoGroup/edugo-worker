@@ -7,9 +7,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/migrations"
 	"github.com/EduGoGroup/edugo-shared/testing/containers"
-	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/persistence/mongodb/repository"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/mongo"
