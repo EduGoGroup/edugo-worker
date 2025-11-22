@@ -38,6 +38,9 @@ fi
 
 ## Coverage por Paquete
 
+> ⚠️ **Nota:** Los siguientes comandos requieren que existan archivos `*_test.go` en el proyecto.  
+> Si aún no hay tests implementados, estos comandos fallarán. Primero implementa tests unitarios antes de generar reportes de coverage.
+
 ```bash
 # Ver coverage por paquete
 go tool cover -func=coverage/coverage.out | grep -E "^github.com/EduGoGroup/edugo-worker"

@@ -214,6 +214,9 @@ Ver [RELEASE-WORKFLOW.md](docs/RELEASE-WORKFLOW.md) para guía completa.
 
 **Threshold mínimo:** 33%
 
+> ⚠️ **Nota:** Los comandos de coverage requieren que existan archivos `*_test.go` implementados.  
+> Actualmente el proyecto no tiene tests unitarios. Implementa tests antes de ejecutar estos comandos.
+
 ```bash
 # Generar reporte de coverage
 go test -coverprofile=coverage/coverage.out -covermode=atomic ./...

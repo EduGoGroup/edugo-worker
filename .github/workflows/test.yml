@@ -117,8 +117,15 @@ jobs:
               echo "✅ Cobertura ${COVERAGE}% cumple con el umbral ${THRESHOLD}%"
             fi
           else
-            echo "⚠️ No se generó archivo de cobertura"
-            exit 1
+            # Verificar si existen archivos *_test.go en el proyecto
+            if ! find . -type f -name '*_test.go' | grep -q .; then
+              echo "⚠️ No se generó archivo de cobertura porque no hay tests implementados aún."
+              echo "ℹ️ Agrega archivos *_test.go para que el umbral de cobertura sea aplicable."
+              exit 1
+            else
+              echo "⚠️ No se generó archivo de cobertura (puede haber un error en los tests o configuración)."
+              exit 1
+            fi
           fi
 
       - name: Generar reporte HTML

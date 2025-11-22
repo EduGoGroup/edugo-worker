@@ -9,7 +9,7 @@ repos:
     hooks:
       # Prevenir commits a main directamente
       - id: no-commit-to-branch
-        args: ['--branch', 'main']
+        args: ["--branch", "main"]
 
       # Verificar que archivos terminen con newline
       - id: end-of-file-fixer
@@ -20,11 +20,10 @@ repos:
 
       # Prevenir archivos grandes (>500KB)
       - id: check-added-large-files
-        args: ['--maxkb=500']
+        args: ["--maxkb=500"]
 
       # Validar YAML
       - id: check-yaml
-        args: ['--unsafe']  # Permite templates de GitHub Actions
 
       # Detectar credenciales expuestas
       - id: detect-private-key
