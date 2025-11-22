@@ -1,14 +1,14 @@
 # 🎯 Prompts para Ejecutar Sprints
 
-**Ubicación:** `docs/cid/implementation-plans/05-worker/PROMPTS.md`  
+**Ubicación:** `docs/cicd/PROMPTS.md`  
 **Propósito:** Definir prompts estándar y no ambiguos para cada fase  
 **Fecha:** 20 de Noviembre, 2025
 
 ⚠️ **CONTEXTO DE UBICACIÓN:**
 ```
-📍 Estás en: 00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker/
+📍 Estás en: docs/cicd/
 📍 Todas las rutas mencionadas son relativas a esta carpeta
-⚠️ NO uses archivos fuera de 05-worker/ (pueden ser de otros proyectos)
+⚠️ NO uses archivos fuera de docs/cicd/ (pueden ser de otros proyectos)
 ```
 
 ---
@@ -38,7 +38,7 @@ Completar todas las tareas del sprint. Si una tarea requiere recursos externos (
 Ejecuta FASE 1 del SPRINT-X en edugo-worker.
 
 Contexto:
-- Ubicación: docs/cid/implementation-plans/05-worker/
+- Ubicación: docs/cicd/
 - Sprint: SPRINT-X
 - Fase: 1 - Implementación con Stubs
 - Archivo de tareas: sprints/SPRINT-X-TASKS.md
@@ -62,7 +62,7 @@ Instrucciones:
 9. Al terminar TODAS las tareas, reporta resumen de Fase 1
 
 ⚠️ Reemplaza X con el número de sprint (3, 4, etc.)
-⚠️ Verifica que estés usando archivos en 05-worker/, NO en otros proyectos
+⚠️ Verifica que estés usando archivos en docs/cicd/, NO en otros proyectos
 ```
 
 ---
@@ -78,7 +78,7 @@ Reemplazar todos los stubs con implementación real, verificando que los recurso
 Ejecuta FASE 2 del SPRINT-X en edugo-worker.
 
 Contexto:
-- Ubicación: docs/cid/implementation-plans/05-worker/
+- Ubicación: docs/cicd/
 - Sprint: SPRINT-X
 - Fase: 2 - Resolución de Stubs
 - Tareas con stub: [ver en tracking/SPRINT-STATUS.md]
@@ -119,7 +119,7 @@ Validar todo el código, crear PR a `dev`, monitorear CI/CD, mergear.
 Ejecuta FASE 3 del SPRINT-X en edugo-worker.
 
 Contexto:
-- Ubicación: docs/cid/implementation-plans/05-worker/
+- Ubicación: docs/cicd/
 - Sprint: SPRINT-X
 - Fase: 3 - Validación y PR
 - Reglas: tracking/REGLAS.md
@@ -162,7 +162,7 @@ Instrucciones:
 Continúa el trabajo de CI/CD en edugo-worker desde donde quedó.
 
 Contexto:
-- Ubicación: 00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker/
+- Ubicación: docs/cicd/
 
 Instrucciones:
 1. Lee INDEX.md para orientarte
@@ -175,7 +175,7 @@ Instrucciones:
 4. Continúa desde esa tarea usando las reglas de la fase actual
 5. Si hay dudas, pregunta antes de continuar
 
-⚠️ Verifica que estés usando archivos en 05-worker/
+⚠️ Verifica que estés usando archivos en docs/cicd/
 ```
 
 ### Ver estado actual:
@@ -184,7 +184,7 @@ Instrucciones:
 Muéstrame el estado actual del proyecto edugo-worker CI/CD.
 
 Contexto:
-- Ubicación: 00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker/
+- Ubicación: docs/cicd/
 
 Instrucciones:
 1. Lee INDEX.md
@@ -200,7 +200,7 @@ Instrucciones:
    - Última actividad: [fecha/hora]
    - Branch activo: [nombre]
 
-⚠️ Usa solo archivos dentro de 05-worker/
+⚠️ Usa solo archivos dentro de docs/cicd/
 ```
 
 ### Iniciar nuevo sprint:
@@ -209,7 +209,7 @@ Instrucciones:
 Iniciar SPRINT-X en edugo-worker.
 
 Contexto:
-- Ubicación: 00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker/
+- Ubicación: docs/cicd/
 - Sprint anterior: [estado]
 - Nuevo sprint: SPRINT-X
 - Archivo: sprints/SPRINT-X-TASKS.md
@@ -239,13 +239,13 @@ Instrucciones:
 
 ### ⚠️ Regla #1: Orientación Primero
 **ANTES de ejecutar cualquier fase:**
-1. Verifica ubicación: estás en 05-worker/
+1. Verifica ubicación: estás en docs/cicd/
 2. Lee: `INDEX.md` (3-5 min)
 3. Lee: `tracking/REGLAS.md` (5-10 min)
 4. Lee: `tracking/SPRINT-STATUS.md` (2 min)
 
 ### ⚠️ Regla #2: Contexto de Ubicación
-**TODAS las rutas son relativas a:** `05-worker/`
+**TODAS las rutas son relativas a:** `docs/cicd/`
 
 **Archivos CORRECTOS (usar):**
 - ✅ `sprints/SPRINT-3-TASKS.md`
@@ -346,7 +346,7 @@ Si encuentras:
 - [ ] Leer INDEX.md completo
 - [ ] Leer REGLAS.md (sección de la fase)
 - [ ] Leer SPRINT-STATUS.md
-- [ ] Verificar ubicación (05-worker/)
+- [ ] Verificar ubicación (docs/cicd/)
 - [ ] Verificar que archivo de sprint existe
 - [ ] Confirmar entendimiento con el usuario
 
@@ -361,7 +361,7 @@ Si encuentras:
 | Quiero ver todas las tareas | Abre `sprints/SPRINT-X-TASKS.md` |
 | Necesito las reglas | Lee `tracking/REGLAS.md` |
 | ¿Dónde está el código? | `/Users/jhoanmedina/source/EduGo/repos-separados/edugo-worker` |
-| Claude se confunde con archivos | Verifica que use rutas `05-worker/` |
+| Claude se confunde con archivos | Verifica que use rutas `docs/cicd/` |
 
 ---
 
