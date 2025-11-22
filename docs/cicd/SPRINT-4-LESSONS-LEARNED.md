@@ -637,3 +637,61 @@ git pull origin dev
 Esto asegura que tengas las últimas actualizaciones, incluyendo este documento y cualquier fix de infrastructure.
 
 ---
+
+---
+
+## 📝 FASE 3 Extendida: PR a Main (Opcional)
+
+**Después de mergear a dev exitosamente**
+
+Si quieres llevar los workflows migrados a `main` (producción):
+
+### Paso 1: Crear PR de dev a main
+
+```bash
+gh pr create \
+  --base main \
+  --head dev \
+  --title "Release: Sprint 4 - Workflows Reusables" \
+  --body "Migración de workflows a reusables centralizados (ver detalles en cuerpo del PR)"
+```
+
+### Paso 2: Monitorear CI/CD (máx 5 min)
+
+```bash
+# Esperar que checks ejecuten
+sleep 120
+
+# Verificar checks
+gh pr checks <PR_NUMBER>
+
+# Resultado esperado:
+# ✓ Lint & Format Check / Run Linter (workflow reusable)
+# ✓ Unit Tests  
+# ✓ Integration Tests (si aplica)
+# ✓ Security Scan (si aplica)
+# ✓ PR Summary
+```
+
+### Paso 3: Mergear a main
+
+```bash
+gh pr merge <PR_NUMBER> --merge
+```
+
+### Paso 4: Sincronizar main local
+
+```bash
+git checkout main
+git pull origin main
+
+echo "✅ Workflows reusables activos en main"
+```
+
+---
+
+**⏱️ Tiempo FASE 3 Extendida:** +10 minutos adicionales
+
+**🎯 Beneficio:** Workflows reusables en producción (main)
+
+---
