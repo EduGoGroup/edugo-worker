@@ -1,8 +1,8 @@
 # Estado del Sprint Actual
 
 **Proyecto:** edugo-worker
-**Sprint:** SPRINT-3
-**Fase Actual:** FASE 3 - Validación y CI/CD (PR Creado)
+**Sprint:** SPRINT-4
+**Fase Actual:** FASE 1 - Implementación con Stubs
 **Última Actualización:** 2025-11-22
 
 ⚠️ **UBICACIÓN DE ESTE ARCHIVO:**
@@ -16,42 +16,41 @@
 
 ## 🎯 Sprint Activo
 
-**Sprint:** SPRINT-3 - Consolidación Docker + Go 1.25
+**Sprint:** SPRINT-4 - Workflows Reusables
 **Inicio:** 2025-11-22
-**Objetivo:** Consolidar workflows Docker, migrar a Go 1.25.3, implementar pre-commit hooks y establecer coverage threshold 33%
+**Objetivo:** Migrar workflows CI/CD a workflows reusables centralizados en infrastructure
 
 ### Objetivos Principales:
-- ✅ Eliminar build-and-push.yml (desperdicio de recursos)
-- ✅ Eliminar docker-only.yml (duplicación)
-- ✅ Migrar funcionalidad y eliminar release.yml (fallando)
-- ✅ Migrar a Go 1.25.3 (consistencia)
-- ✅ Implementar pre-commit hooks (calidad)
-- ✅ Establecer coverage threshold 33% (calidad)
+- ⏳ Crear workflows reusables en infrastructure
+- ⏳ Migrar ci.yml a workflow reusable
+- ⏳ Migrar test.yml a workflow reusable
+- ⏳ Actualizar documentación
+- ⏳ Reducir ~240 líneas de workflows (-80%)
+- ⏳ Centralizar lógica CI/CD
 
 ---
 
 ## 💬 Próxima Acción
 
 ```
-→ SPRINT-3 FASE 3 en progreso
-→ PR #21 creado: https://github.com/EduGoGroup/edugo-worker/pull/21
-→ Estado: Esperando decisión del usuario sobre workflows
+→ SPRINT-4 FASE 1 iniciando
+→ Tarea 1: Preparar Infrastructure para Workflows Reusables
+→ Duración estimada: 2-3 horas
 ```
 
 **¿Dónde estás?**
-- Sprint: SPRINT-3
-- Fase: FASE 3 - Validación y CI/CD
-- PR: #21 (Sprint 3: Consolidación Docker + Go 1.25.3)
-- Validaciones locales: 5/6 pasadas (83%)
+- Sprint: SPRINT-4
+- Fase: FASE 1 - Implementación con Stubs
+- Branch: claude/sprint-4-phase-1-stubs-01QvT5w6jHgvnKFL9FadvQKi
+- Progreso: 0/8 tareas
 
 **¿Qué sigue?**
-- ⚠️ DECISIÓN REQUERIDA: Workflows no se ejecutan automáticamente (ver decisions/WORKFLOWS-BRANCH-MISMATCH.md)
-- Opciones: a) Corregir workflows ahora, b) Ejecutar manualmente, c) Mergear sin CI/CD automático
-- Documentación final completada
-- Merge pendiente de decisión del usuario
+- Tarea 1: Crear workflows reusables en infrastructure
+- Aplicar lecciones aprendidas de api-mobile
+- Evitar problemas conocidos (subdirectorio, GITHUB_TOKEN, etc.)
 
 **Bloqueadores:**
-- ⚠️ Workflows configurados para "develop" pero branch es "dev" (no bloqueante, ver decisión)
+- Ninguno conocido
 
 ---
 
@@ -60,11 +59,11 @@
 | Métrica | Valor |
 |---------|-------|
 | **Fase actual** | FASE 1 - Implementación |
-| **Tareas totales** | 12 |
-| **Tareas completadas** | 6 |
+| **Tareas totales** | 8 |
+| **Tareas completadas** | 0 |
 | **Tareas en progreso** | 0 |
-| **Tareas pendientes** | 6 |
-| **Progreso** | 50% |
+| **Tareas pendientes** | 8 |
+| **Progreso** | 0% |
 
 ---
 
@@ -74,23 +73,19 @@
 
 | # | Tarea | Duración | Prioridad | Estado | Notas |
 |---|-------|----------|-----------|--------|-------|
-| 1 | Análisis y Consolidación de Workflows Docker | 3-4h | 🔴 Crítica | ✅ Completado | 3 workflows eliminados + docs + backups |
-| 2 | Migrar a Go 1.25.3 | 45-60min | 🟡 Alta | ✅ Completado | go.mod + 3 workflows actualizados |
-| 3 | Actualizar .gitignore y Archivos de Configuración | 15-20min | 🟢 Media | ✅ Completado | Coverage, cache, bak agregados |
-| 4 | Implementar Pre-commit Hooks | 60-90min | 🟡 Alta | ✅ Completado | 12 hooks (.pre-commit-config.yaml) |
-| 5 | Establecer Coverage Threshold 33% | 45min | 🟡 Alta | ✅ Completado | test.yml + COVERAGE-STANDARDS.md |
-| 6 | Actualizar Documentación General | 30-45min | 🟢 Media | ✅ Completado | README + badges + guías completas |
-| 7 | Verificar Workflows en GitHub Actions | 30-45min | 🟡 Alta | ⏳ Pendiente | Validar workflows en GitHub UI |
-| 8 | Review y Ajustes | 1-2h | 🟡 Alta | ⏳ Pendiente | Incorporar feedback |
-| 9 | Merge a Dev | 30min | 🟡 Alta | ⏳ Pendiente | Crear y mergear PR |
-| 10 | Crear Release Notes | 30-45min | 🟢 Media | ⏳ Pendiente | Documentar cambios |
-| 11 | Validación Final del Sprint | 30min | 🟡 Alta | ⏳ Pendiente | Verificar métricas |
-| 12 | Preparar para Sprint 4 | 15-20min | 🟢 Baja | ⏳ Pendiente | Sprint 4 planning |
+| 1 | Preparar Infrastructure para Workflows Reusables | 2-3h | 🔴 Crítica | ⏳ Pendiente | Crear workflows reusables (aplicar lecciones aprendidas) |
+| 2 | Migrar ci.yml a Workflow Reusable | 2-3h | 🟡 Alta | ⏳ Pendiente | Backup + migración + commit |
+| 3 | Migrar test.yml a Workflow Reusable | 2-3h | 🟡 Alta | ⏳ Pendiente | Backup + migración + commit |
+| 4 | Actualizar Documentación | 30-45min | 🟢 Media | ⏳ Pendiente | REUSABLE-WORKFLOWS.md + README |
+| 5 | Testing y Validación | 1-2h | 🔴 Crítica | ⏳ Pendiente | PR + verificar workflows funcionan |
+| 6 | Review y Merge | 30-60min | 🟡 Alta | ⏳ Pendiente | Incorporar feedback + merge |
+| 7 | Cleanup y Documentación Final | 30min | 🟢 Media | ⏳ Pendiente | CHANGELOG + release notes |
+| 8 | Validación Final y Cierre | 30min | 🔴 Crítica | ⏳ Pendiente | Verificar métricas + celebrar |
 
-**Progreso Fase 1:** 6/12 (50%)
+**Progreso Fase 1:** 0/8 (0%)
 
-**Tiempo Estimado Total:** 16-20 horas
-**Tiempo Usado:** ~6-8 horas (tareas críticas)
+**Tiempo Estimado Total:** 12-16 horas
+**Tiempo Usado:** 0 horas
 
 ---
 
