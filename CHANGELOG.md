@@ -5,6 +5,34 @@ Todos los cambios notables en edugo-worker serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.5.0] - 2025-11-22
+
+### Tipo de Release: minor
+
+- Release: Sprint Entities Adaptation v0.5.0 (#25)
+- fix: corregir 2 errores finales de errcheck en material_summary_repository.go
+- fix: corregir 7 errores adicionales de errcheck en material_event_repository.go
+- fix: corregir 10 errores de errcheck (verificación de valores de retorno de error)
+- test: re-ejecutar workflows después de fix en infrastructure
+- docs(sprint-4): agregar sección PR a main (FASE 3 extendida)
+- feat(sprint-4): completar FASE 1 - workflows reusables con stubs
+- docs(sprint-4): agregar sección FASE 3 a lecciones aprendidas
+- docs(sprint-4): completar Tarea 5 - plan de testing (stub)
+- docs(sprint-4): completar Tarea 4 - documentación workflows reusables
+- docs(sprint-4): actualizar SPRINT-STATUS tras Tarea 3
+- refactor(sprint-4): completar Tarea 3 - migrar job test-coverage
+- refactor(sprint-4): completar Tarea 2 - migrar job lint de ci.yml
+- feat(sprint-4): completar Tarea 1 con stub - workflows reusables
+- docs(sprint-4): inicializar SPRINT-4 FASE 1
+- docs(sprint-4): agregar lecciones aprendidas de api-mobile
+- docs: completar documentación FASE 3
+- fix: resolver 4 comentarios de Copilot
+- fix: ajustar threshold de coverage a 0% temporalmente (sin tests)
+- fix: corregir branches en workflows (develop → dev)
+
+
+---
+
 ## [0.4.2] - 2025-11-19
 
 ### Tipo de Release: patch
