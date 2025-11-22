@@ -33,8 +33,8 @@
 ## 💬 Próxima Acción
 
 ```
-→ SPRINT-4 FASE 1 iniciando
-→ Tarea 1: Preparar Infrastructure para Workflows Reusables
+→ SPRINT-4 FASE 1 en progreso
+→ Tarea 2: Migrar ci.yml a Workflow Reusable
 → Duración estimada: 2-3 horas
 ```
 
@@ -42,15 +42,15 @@
 - Sprint: SPRINT-4
 - Fase: FASE 1 - Implementación con Stubs
 - Branch: claude/sprint-4-phase-1-stubs-01QvT5w6jHgvnKFL9FadvQKi
-- Progreso: 0/8 tareas
+- Progreso: 1/8 tareas (13%)
 
 **¿Qué sigue?**
-- Tarea 1: Crear workflows reusables en infrastructure
-- Aplicar lecciones aprendidas de api-mobile
-- Evitar problemas conocidos (subdirectorio, GITHUB_TOKEN, etc.)
+- Tarea 2: Migrar ci.yml usando referencias a stubs
+- Crear backup de ci.yml actual
+- Aplicar lecciones aprendidas (no subdirectorio, no GITHUB_TOKEN)
 
 **Bloqueadores:**
-- Ninguno conocido
+- Ninguno (usando stubs)
 
 ---
 
@@ -73,7 +73,7 @@
 
 | # | Tarea | Duración | Prioridad | Estado | Notas |
 |---|-------|----------|-----------|--------|-------|
-| 1 | Preparar Infrastructure para Workflows Reusables | 2-3h | 🔴 Crítica | ⏳ Pendiente | Crear workflows reusables (aplicar lecciones aprendidas) |
+| 1 | Preparar Infrastructure para Workflows Reusables | 2-3h | 🔴 Crítica | ✅ (stub) | Infrastructure no disponible - stubs creados |
 | 2 | Migrar ci.yml a Workflow Reusable | 2-3h | 🟡 Alta | ⏳ Pendiente | Backup + migración + commit |
 | 3 | Migrar test.yml a Workflow Reusable | 2-3h | 🟡 Alta | ⏳ Pendiente | Backup + migración + commit |
 | 4 | Actualizar Documentación | 30-45min | 🟢 Media | ⏳ Pendiente | REUSABLE-WORKFLOWS.md + README |
@@ -82,10 +82,10 @@
 | 7 | Cleanup y Documentación Final | 30min | 🟢 Media | ⏳ Pendiente | CHANGELOG + release notes |
 | 8 | Validación Final y Cierre | 30min | 🔴 Crítica | ⏳ Pendiente | Verificar métricas + celebrar |
 
-**Progreso Fase 1:** 0/8 (0%)
+**Progreso Fase 1:** 1/8 (13%)
 
 **Tiempo Estimado Total:** 12-16 horas
-**Tiempo Usado:** 0 horas
+**Tiempo Usado:** ~30 min (stub)
 
 ---
 
@@ -93,11 +93,11 @@
 
 | # | Tarea Original | Estado Stub | Implementación Real | Notas |
 |---|----------------|-------------|---------------------|-------|
-| - | No aplica | - | - | SPRINT-3 no requiere stubs |
+| 1 | Preparar Infrastructure para Workflows Reusables | ✅ (stub) | ⏳ Pendiente | Crear workflows en infrastructure real |
 
-**Progreso Fase 2:** 0/0 (N/A)
+**Progreso Fase 2:** 0/1 (0%)
 
-**Nota:** Este sprint no requiere trabajo con stubs/mocks. Todas las implementaciones son reales.
+**Nota:** Tarea 1 requiere acceso a `edugo-infrastructure` no disponible en FASE 1.
 
 ---
 
@@ -126,11 +126,11 @@
 
 ## 🚨 Bloqueos y Decisiones
 
-**Stubs activos:** 0
+**Stubs activos:** 1
 
 | Tarea | Razón | Archivo Decisión |
 |-------|-------|------------------|
-| - | - | - |
+| 1 | Infrastructure no disponible localmente | decisions/TASK-1-BLOCKED.md |
 
 **Decisiones Tomadas:**
 1. **Workflows consolidados:** Mantener solo manual-release.yml (completo)
