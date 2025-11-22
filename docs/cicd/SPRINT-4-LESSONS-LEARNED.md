@@ -504,3 +504,136 @@ gh pr checks <PR_NUMBER>
 **Generado por:** Claude Code (desde api-mobile)  
 **Fecha:** 2025-11-21  
 **Versión:** 1.0
+
+---
+
+## 🎯 FASE 3: Merge a Dev (IMPORTANTE)
+
+**⚠️ DESPUÉS DE COMPLETAR FASE 2 (Validación Exitosa)**
+
+Una vez que hayas validado que los workflows reusables funcionan correctamente en tu PR de prueba, **DEBES hacer merge a dev** para que los cambios queden permanentes.
+
+---
+
+### ❌ Error Común: Cerrar PR sin Merge
+
+**Lo que NO debes hacer:**
+```bash
+# ❌ NO HACER ESTO
+gh pr close <PR_NUMBER> --delete-branch
+
+# Esto elimina el branch SIN mergear los cambios
+# Los workflows migrados se pierden
+```
+
+**Resultado:** Workflows migrados NO quedan en dev, se pierden.
+
+---
+
+### ✅ Proceso Correcto de FASE 3
+
+#### Paso 1: Validar que PR está exitoso
+
+```bash
+# Verificar que todos los checks pasaron
+gh pr checks <PR_NUMBER>
+
+# Resultado esperado:
+# ✓ Lint & Format Check / Run Linter
+# ✓ Unit Tests
+# ✓ PR Summary (u otros checks custom)
+```
+
+#### Paso 2: Hacer Merge a Dev
+
+```bash
+# Opción A: Usando gh CLI (recomendado)
+gh pr merge <PR_NUMBER> --merge --delete-branch
+
+# Opción B: Desde GitHub UI
+# Ir al PR y click en "Merge pull request"
+```
+
+#### Paso 3: Sincronizar dev local
+
+```bash
+git checkout dev
+git pull origin dev
+
+echo "✅ dev sincronizado con workflows migrados"
+```
+
+#### Paso 4: Verificar workflows en dev
+
+```bash
+# Verificar que workflows tienen referencias correctas
+grep "uses: EduGo" .github/workflows/pr-to-dev.yml
+grep "uses: EduGo" .github/workflows/pr-to-main.yml
+
+# Resultado esperado:
+# uses: EduGoGroup/edugo-infrastructure/.github/workflows/reusable-go-lint.yml@main
+```
+
+#### Paso 5: Actualizar tracking
+
+Marcar en tu `SPRINT-STATUS.md`:
+```markdown
+✅ FASE 3: COMPLETADA
+- PR mergeado a dev
+- Workflows migrados activos
+- CI/CD post-merge: exitoso
+```
+
+---
+
+### 📊 Checklist de FASE 3
+
+Antes de dar por completado Sprint 4:
+
+- [ ] PR de validación creado
+- [ ] Todos los checks pasaron
+- [ ] **PR mergeado a dev** (NO solo cerrado)
+- [ ] dev local sincronizado
+- [ ] Workflows verificados en dev
+- [ ] Documentación actualizada
+- [ ] SPRINT-STATUS.md marcado como completado
+
+---
+
+### ⏱️ Tiempo FASE 3
+
+- Validación: Ya hecho en FASE 2
+- Merge: ~5 minutos
+- Sincronización: ~2 minutos
+- Verificación: ~3 minutos
+
+**Total FASE 3:** ~10 minutos
+
+---
+
+### 🔄 Flujo Completo (Resumen)
+
+```
+FASE 1: Migrar workflows
+   ↓
+FASE 2: Validar con PR de prueba
+   ↓ (SI todos los checks pasan)
+   ↓
+FASE 3: MERGE a dev ← NO OLVIDAR ESTE PASO
+   ↓
+✅ SPRINT-4 COMPLETADO
+```
+
+---
+
+**⚠️ RECORDATORIO CRÍTICO:**
+
+Antes de empezar tu FASE 2, haz:
+```bash
+git checkout dev
+git pull origin dev
+```
+
+Esto asegura que tengas las últimas actualizaciones, incluyendo este documento y cualquier fix de infrastructure.
+
+---
