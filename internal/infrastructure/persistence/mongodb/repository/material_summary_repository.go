@@ -6,7 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/EduGoGroup/edugo-worker/internal/domain/entity"
+	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
+	"github.com/EduGoGroup/edugo-worker/internal/domain/service"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -21,18 +22,20 @@ var (
 // MaterialSummaryRepository maneja la persistencia de resúmenes de materiales en MongoDB
 type MaterialSummaryRepository struct {
 	collection *mongo.Collection
+	validator  *service.SummaryValidator
 }
 
 // NewMaterialSummaryRepository crea una nueva instancia del repositorio
 func NewMaterialSummaryRepository(db *mongo.Database) *MaterialSummaryRepository {
 	return &MaterialSummaryRepository{
 		collection: db.Collection("material_summary"),
+		validator:  service.NewSummaryValidator(),
 	}
 }
 
 // Create crea un nuevo resumen en MongoDB
-func (r *MaterialSummaryRepository) Create(ctx context.Context, summary *entity.MaterialSummary) error {
-	if !summary.IsValid() {
+func (r *MaterialSummaryRepository) Create(ctx context.Context, summary *entities.MaterialSummary) error {
+	if !r.validator.IsValid(summary) {
 		return errors.New("invalid material summary")
 	}
 
@@ -52,8 +55,8 @@ func (r *MaterialSummaryRepository) Create(ctx context.Context, summary *entity.
 }
 
 // FindByMaterialID busca un resumen por material_id
-func (r *MaterialSummaryRepository) FindByMaterialID(ctx context.Context, materialID string) (*entity.MaterialSummary, error) {
-	var summary entity.MaterialSummary
+func (r *MaterialSummaryRepository) FindByMaterialID(ctx context.Context, materialID string) (*entities.MaterialSummary, error) {
+	var summary entities.MaterialSummary
 
 	filter := bson.M{"material_id": materialID}
 	err := r.collection.FindOne(ctx, filter).Decode(&summary)
@@ -69,8 +72,8 @@ func (r *MaterialSummaryRepository) FindByMaterialID(ctx context.Context, materi
 }
 
 // FindByID busca un resumen por su ObjectID
-func (r *MaterialSummaryRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entity.MaterialSummary, error) {
-	var summary entity.MaterialSummary
+func (r *MaterialSummaryRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialSummary, error) {
+	var summary entities.MaterialSummary
 
 	filter := bson.M{"_id": id}
 	err := r.collection.FindOne(ctx, filter).Decode(&summary)
@@ -86,8 +89,8 @@ func (r *MaterialSummaryRepository) FindByID(ctx context.Context, id primitive.O
 }
 
 // Update actualiza un resumen existente
-func (r *MaterialSummaryRepository) Update(ctx context.Context, summary *entity.MaterialSummary) error {
-	if !summary.IsValid() {
+func (r *MaterialSummaryRepository) Update(ctx context.Context, summary *entities.MaterialSummary) error {
+	if !r.validator.IsValid(summary) {
 		return errors.New("invalid material summary")
 	}
 
@@ -125,7 +128,7 @@ func (r *MaterialSummaryRepository) Delete(ctx context.Context, materialID strin
 }
 
 // FindByLanguage busca resúmenes por idioma
-func (r *MaterialSummaryRepository) FindByLanguage(ctx context.Context, language string, limit int64) ([]*entity.MaterialSummary, error) {
+func (r *MaterialSummaryRepository) FindByLanguage(ctx context.Context, language string, limit int64) ([]*entities.MaterialSummary, error) {
 	filter := bson.M{"language": language}
 	opts := options.Find().
 		SetLimit(limit).
@@ -141,7 +144,7 @@ func (r *MaterialSummaryRepository) FindByLanguage(ctx context.Context, language
 		}
 	}()
 
-	var summaries []*entity.MaterialSummary
+	var summaries []*entities.MaterialSummary
 	if err := cursor.All(ctx, &summaries); err != nil {
 		return nil, err
 	}
@@ -150,7 +153,7 @@ func (r *MaterialSummaryRepository) FindByLanguage(ctx context.Context, language
 }
 
 // FindRecent busca los resúmenes más recientes
-func (r *MaterialSummaryRepository) FindRecent(ctx context.Context, limit int64) ([]*entity.MaterialSummary, error) {
+func (r *MaterialSummaryRepository) FindRecent(ctx context.Context, limit int64) ([]*entities.MaterialSummary, error) {
 	opts := options.Find().
 		SetLimit(limit).
 		SetSort(bson.D{{Key: "created_at", Value: -1}})
@@ -165,7 +168,7 @@ func (r *MaterialSummaryRepository) FindRecent(ctx context.Context, limit int64)
 		}
 	}()
 
-	var summaries []*entity.MaterialSummary
+	var summaries []*entities.MaterialSummary
 	if err := cursor.All(ctx, &summaries); err != nil {
 		return nil, err
 	}

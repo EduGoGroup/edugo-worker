@@ -6,7 +6,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/EduGoGroup/edugo-worker/internal/domain/entity"
+	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/persistence/mongodb/repository"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -21,8 +21,8 @@ func TestMaterialEventRepository_Create(t *testing.T) {
 	ctx := context.Background()
 
 	// Test
-	event := entity.NewMaterialEventWithMaterialID(
-		entity.EventTypeMaterialUploaded,
+	event := entities.NewMaterialEventWithMaterialID(
+		entities.EventTypeMaterialUploaded,
 		uuid.New().String(),
 		primitive.M{"file": "test.pdf", "size": 1024},
 	)
@@ -42,11 +42,11 @@ func TestMaterialEventRepository_Create(t *testing.T) {
 		t.Fatalf("Failed to find event: %v", err)
 	}
 
-	if found.EventType != entity.EventTypeMaterialUploaded {
-		t.Errorf("Expected event_type %s, got %s", entity.EventTypeMaterialUploaded, found.EventType)
+	if found.EventType != entities.EventTypeMaterialUploaded {
+		t.Errorf("Expected event_type %s, got %s", entities.EventTypeMaterialUploaded, found.EventType)
 	}
-	if found.Status != entity.EventStatusPending {
-		t.Errorf("Expected status %s, got %s", entity.EventStatusPending, found.Status)
+	if found.Status != entities.EventStatusPending {
+		t.Errorf("Expected status %s, got %s", entities.EventStatusPending, found.Status)
 	}
 }
 
@@ -60,15 +60,15 @@ func TestMaterialEventRepository_FindByStatus(t *testing.T) {
 
 	// Create test events
 	for i := 0; i < 2; i++ {
-		event := entity.NewMaterialEvent(
-			entity.EventTypeAssessmentAttempt,
+		event := entities.NewMaterialEvent(
+			entities.EventTypeAssessmentAttempt,
 			primitive.M{"student_id": uuid.New().String()},
 		)
 		_ = repo.Create(ctx, event)
 	}
 
 	// Test
-	events, err := repo.FindByStatus(ctx, entity.EventStatusPending, 10)
+	events, err := repo.FindByStatus(ctx, entities.EventStatusPending, 10)
 	if err != nil {
 		t.Fatalf("Failed to find events: %v", err)
 	}
@@ -78,8 +78,8 @@ func TestMaterialEventRepository_FindByStatus(t *testing.T) {
 	}
 
 	for _, e := range events {
-		if e.Status != entity.EventStatusPending {
-			t.Errorf("Expected status %s, got %s", entity.EventStatusPending, e.Status)
+		if e.Status != entities.EventStatusPending {
+			t.Errorf("Expected status %s, got %s", entities.EventStatusPending, e.Status)
 		}
 	}
 }
@@ -92,8 +92,8 @@ func TestMaterialEventRepository_MarkAsCompleted(t *testing.T) {
 	repo := repository.NewMaterialEventRepository(db)
 	ctx := context.Background()
 
-	event := entity.NewMaterialEvent(
-		entity.EventTypeMaterialUploaded,
+	event := entities.NewMaterialEvent(
+		entities.EventTypeMaterialUploaded,
 		primitive.M{"test": "data"},
 	)
 	_ = repo.Create(ctx, event)
@@ -107,8 +107,8 @@ func TestMaterialEventRepository_MarkAsCompleted(t *testing.T) {
 
 	// Verify
 	found, _ := repo.FindByID(ctx, event.ID)
-	if found.Status != entity.EventStatusCompleted {
-		t.Errorf("Expected status %s, got %s", entity.EventStatusCompleted, found.Status)
+	if found.Status != entities.EventStatusCompleted {
+		t.Errorf("Expected status %s, got %s", entities.EventStatusCompleted, found.Status)
 	}
 	if found.ProcessedAt == nil {
 		t.Error("Expected ProcessedAt to be set")
@@ -124,10 +124,10 @@ func TestMaterialEventRepository_GetEventStatistics(t *testing.T) {
 	ctx := context.Background()
 
 	// Create events with different statuses
-	event1 := entity.NewMaterialEvent(entity.EventTypeMaterialUploaded, primitive.M{})
+	event1 := entities.NewMaterialEvent(entities.EventTypeMaterialUploaded, primitive.M{})
 	_ = repo.Create(ctx, event1)
 
-	event2 := entity.NewMaterialEvent(entity.EventTypeMaterialUploaded, primitive.M{})
+	event2 := entities.NewMaterialEvent(entities.EventTypeMaterialUploaded, primitive.M{})
 	event2.MarkAsCompleted()
 	_ = repo.Create(ctx, event2)
 
@@ -137,10 +137,10 @@ func TestMaterialEventRepository_GetEventStatistics(t *testing.T) {
 		t.Fatalf("Failed to get statistics: %v", err)
 	}
 
-	if stats[entity.EventStatusPending] < 1 {
-		t.Errorf("Expected at least 1 pending event, got %d", stats[entity.EventStatusPending])
+	if stats[entities.EventStatusPending] < 1 {
+		t.Errorf("Expected at least 1 pending event, got %d", stats[entities.EventStatusPending])
 	}
-	if stats[entity.EventStatusCompleted] < 1 {
-		t.Errorf("Expected at least 1 completed event, got %d", stats[entity.EventStatusCompleted])
+	if stats[entities.EventStatusCompleted] < 1 {
+		t.Errorf("Expected at least 1 completed event, got %d", stats[entities.EventStatusCompleted])
 	}
 }

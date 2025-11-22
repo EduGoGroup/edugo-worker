@@ -9,7 +9,7 @@ import (
 
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/migrations"
 	"github.com/EduGoGroup/edugo-shared/testing/containers"
-	"github.com/EduGoGroup/edugo-worker/internal/domain/entity"
+	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/persistence/mongodb/repository"
 	"github.com/google/uuid"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -68,7 +68,7 @@ func TestMaterialSummaryRepository_Create(t *testing.T) {
 	ctx := context.Background()
 
 	// Test
-	summary := entity.NewMaterialSummary(
+	summary := entities.NewMaterialSummary(
 		uuid.New().String(),
 		"Este es un resumen de prueba del material educativo",
 		[]string{"Punto 1", "Punto 2", "Punto 3"},
@@ -112,7 +112,7 @@ func TestMaterialSummaryRepository_FindByMaterialID(t *testing.T) {
 	ctx := context.Background()
 
 	materialID := uuid.New().String()
-	summary := entity.NewMaterialSummary(
+	summary := entities.NewMaterialSummary(
 		materialID,
 		"Resumen de prueba",
 		[]string{"Punto A", "Punto B"},
@@ -142,7 +142,7 @@ func TestMaterialSummaryRepository_Update(t *testing.T) {
 	repo := repository.NewMaterialSummaryRepository(db)
 	ctx := context.Background()
 
-	summary := entity.NewMaterialSummary(
+	summary := entities.NewMaterialSummary(
 		uuid.New().String(),
 		"Resumen original",
 		[]string{"Original 1"},
@@ -180,7 +180,7 @@ func TestMaterialSummaryRepository_Delete(t *testing.T) {
 	ctx := context.Background()
 
 	materialID := uuid.New().String()
-	summary := entity.NewMaterialSummary(
+	summary := entities.NewMaterialSummary(
 		materialID,
 		"Resumen a eliminar",
 		[]string{"Delete 1"},
@@ -213,7 +213,7 @@ func TestMaterialSummaryRepository_FindByLanguage(t *testing.T) {
 
 	// Create test data
 	for i := 0; i < 3; i++ {
-		summary := entity.NewMaterialSummary(
+		summary := entities.NewMaterialSummary(
 			uuid.New().String(),
 			"Resumen en español",
 			[]string{"Punto"},
