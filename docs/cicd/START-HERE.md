@@ -153,7 +153,7 @@ readlink -f sprints/SPRINT-3-TASKS.md
 
 ### Ver estado actual:
 ```bash
-cd /Users/jhoanmedina/source/EduGo/Analisys/00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker
+cd docs/cicd
 cat tracking/SPRINT-STATUS.md | head -40
 ```
 

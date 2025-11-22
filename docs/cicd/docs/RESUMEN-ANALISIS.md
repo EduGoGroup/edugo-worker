@@ -138,6 +138,6 @@
 
 ---
 
-**Documento generado:** `/Users/jhoanmedina/source/EduGo/Analisys/00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker/SPRINT-ENTITIES-ADAPTATION.md`
+**Documento generado:** `docs/cicd/sprints/SPRINT-ENTITIES-ADAPTATION.md`
 
 **Próximo paso:** Ejecutar Sprint de Infrastructure para crear entities MongoDB centralizadas.

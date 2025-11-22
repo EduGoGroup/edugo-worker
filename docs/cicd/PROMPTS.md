@@ -1,6 +1,6 @@
 # 🎯 Prompts para Ejecutar Sprints
 
-**Ubicación:** `00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker/PROMPTS.md`  
+**Ubicación:** `docs/cid/implementation-plans/05-worker/PROMPTS.md`  
 **Propósito:** Definir prompts estándar y no ambiguos para cada fase  
 **Fecha:** 20 de Noviembre, 2025
 
@@ -38,7 +38,7 @@ Completar todas las tareas del sprint. Si una tarea requiere recursos externos (
 Ejecuta FASE 1 del SPRINT-X en edugo-worker.
 
 Contexto:
-- Ubicación: 00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker/
+- Ubicación: docs/cid/implementation-plans/05-worker/
 - Sprint: SPRINT-X
 - Fase: 1 - Implementación con Stubs
 - Archivo de tareas: sprints/SPRINT-X-TASKS.md
@@ -78,7 +78,7 @@ Reemplazar todos los stubs con implementación real, verificando que los recurso
 Ejecuta FASE 2 del SPRINT-X en edugo-worker.
 
 Contexto:
-- Ubicación: 00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker/
+- Ubicación: docs/cid/implementation-plans/05-worker/
 - Sprint: SPRINT-X
 - Fase: 2 - Resolución de Stubs
 - Tareas con stub: [ver en tracking/SPRINT-STATUS.md]
@@ -119,7 +119,7 @@ Validar todo el código, crear PR a `dev`, monitorear CI/CD, mergear.
 Ejecuta FASE 3 del SPRINT-X en edugo-worker.
 
 Contexto:
-- Ubicación: 00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker/
+- Ubicación: docs/cid/implementation-plans/05-worker/
 - Sprint: SPRINT-X
 - Fase: 3 - Validación y PR
 - Reglas: tracking/REGLAS.md
@@ -260,7 +260,7 @@ Instrucciones:
 ### ⚠️ Regla #3: Validar Antes de Ejecutar
 ```bash
 # Antes de abrir un archivo de sprint:
-ls -la /Users/jhoanmedina/source/EduGo/Analisys/00-Projects-Isolated/cicd-analysis/implementation-plans/05-worker/sprints/SPRINT-X-TASKS.md
+ls -la docs/cicd/sprints/SPRINT-X-TASKS.md
 
 # Debe existir. Si no existe, reportar error.
 ```
