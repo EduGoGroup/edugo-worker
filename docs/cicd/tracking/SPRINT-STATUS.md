@@ -1,13 +1,13 @@
 # Estado del Sprint Actual
 
-**Proyecto:** edugo-worker  
-**Sprint:** Pendiente  
-**Fase Actual:** Ninguna  
-**Última Actualización:** Pendiente
+**Proyecto:** edugo-worker
+**Sprint:** SPRINT-3
+**Fase Actual:** Inicialización
+**Última Actualización:** 2025-11-22
 
 ⚠️ **UBICACIÓN DE ESTE ARCHIVO:**
 ```
-📍 Ruta: 05-worker/tracking/SPRINT-STATUS.md
+📍 Ruta: docs/cicd/tracking/SPRINT-STATUS.md
 📍 Este archivo se actualiza después de CADA tarea completada
 📍 "Las migajas de pan guían el camino"
 ```
@@ -16,27 +16,36 @@
 
 ## 🎯 Sprint Activo
 
-**Sprint:** N/A  
-**Inicio:** N/A  
-**Objetivo:** N/A
+**Sprint:** SPRINT-3 - Consolidación Docker + Go 1.25
+**Inicio:** 2025-11-22
+**Objetivo:** Consolidar workflows Docker, migrar a Go 1.25.3, implementar pre-commit hooks y establecer coverage threshold 33%
+
+### Objetivos Principales:
+- 🔴 Eliminar build-and-push.yml (desperdicio de recursos)
+- 🔴 Eliminar docker-only.yml (duplicación)
+- 🔴 Migrar funcionalidad y eliminar release.yml (fallando)
+- 🟡 Migrar a Go 1.25.3 (consistencia)
+- 🟡 Implementar pre-commit hooks (calidad)
+- 🟡 Establecer coverage threshold 33% (calidad)
 
 ---
 
 ## 💬 Próxima Acción
 
 ```
-→ No hay sprint activo
-→ Para iniciar: Ver sprints/SPRINT-3-TASKS.md o SPRINT-4-TASKS.md
-→ Usar PROMPTS.md para ejecutar con sistema de 3 fases
+→ SPRINT-3 Iniciado
+→ Fase: Inicialización
+→ Esperando confirmación para iniciar FASE 1: Implementación
 ```
 
 **¿Dónde estás?**
-- Sprint: N/A
-- Fase: N/A
-- Tarea actual: N/A
+- Sprint: SPRINT-3
+- Fase: Inicialización
+- Tarea actual: Ninguna (esperando confirmación)
 
 **¿Qué sigue?**
-- Iniciar nuevo sprint (ver INDEX.md)
+- Confirmar inicio de FASE 1
+- Comenzar con Tarea 1: Análisis y Consolidación de Workflows Docker
 
 **Bloqueadores:**
 - Ninguno
@@ -47,11 +56,11 @@
 
 | Métrica | Valor |
 |---------|-------|
-| **Fase actual** | - |
-| **Tareas totales** | 0 |
+| **Fase actual** | Inicialización |
+| **Tareas totales** | 12 |
 | **Tareas completadas** | 0 |
 | **Tareas en progreso** | 0 |
-| **Tareas pendientes** | 0 |
+| **Tareas pendientes** | 12 |
 | **Progreso** | 0% |
 
 ---
@@ -60,11 +69,24 @@
 
 ### FASE 1: Implementación
 
-| # | Tarea | Estado | Notas |
-|---|-------|--------|-------|
-| - | No iniciado | - | - |
+| # | Tarea | Duración | Prioridad | Estado | Notas |
+|---|-------|----------|-----------|--------|-------|
+| 1 | Análisis y Consolidación de Workflows Docker | 3-4h | 🔴 Crítica | ⏳ Pendiente | Eliminar 3 workflows duplicados |
+| 2 | Migrar a Go 1.25.3 | 45-60min | 🟡 Alta | ⏳ Pendiente | Actualizar go.mod y workflows |
+| 3 | Actualizar .gitignore y Archivos de Configuración | 15-20min | 🟢 Media | ⏳ Pendiente | Agregar exclusiones |
+| 4 | Implementar Pre-commit Hooks | 60-90min | 🟡 Alta | ⏳ Pendiente | 7 hooks de validación |
+| 5 | Establecer Coverage Threshold 33% | 45min | 🟡 Alta | ⏳ Pendiente | Alinear con api-mobile |
+| 6 | Actualizar Documentación General | 30-45min | 🟢 Media | ⏳ Pendiente | README y guías |
+| 7 | Verificar Workflows en GitHub Actions | 30-45min | 🟡 Alta | ⏳ Pendiente | Push y validar CI/CD |
+| 8 | Review y Ajustes | 1-2h | 🟡 Alta | ⏳ Pendiente | Incorporar feedback |
+| 9 | Merge a Dev | 30min | 🟡 Alta | ⏳ Pendiente | Mergear PR aprobado |
+| 10 | Crear Release Notes | 30-45min | 🟢 Media | ⏳ Pendiente | Documentar cambios |
+| 11 | Validación Final del Sprint | 30min | 🟡 Alta | ⏳ Pendiente | Verificar objetivos |
+| 12 | Preparar para Sprint 4 | 15-20min | 🟢 Baja | ⏳ Pendiente | Setup siguiente sprint |
 
-**Progreso Fase 1:** 0/0 (0%)
+**Progreso Fase 1:** 0/12 (0%)
+
+**Tiempo Estimado Total:** 16-20 horas
 
 ---
 
@@ -72,9 +94,11 @@
 
 | # | Tarea Original | Estado Stub | Implementación Real | Notas |
 |---|----------------|-------------|---------------------|-------|
-| - | No iniciado | - | - | - |
+| - | No iniciado | - | - | SPRINT-3 no requiere stubs |
 
-**Progreso Fase 2:** 0/0 (0%)
+**Progreso Fase 2:** 0/0 (N/A)
+
+**Nota:** Este sprint no requiere trabajo con stubs/mocks. Todas las implementaciones son reales.
 
 ---
 
@@ -82,16 +106,19 @@
 
 | Validación | Estado | Resultado |
 |------------|--------|-----------|
-| Build | ⏳ | Pendiente |
-| Tests Unitarios | ⏳ | Pendiente |
-| Tests Integración | ⏳ | Pendiente |
-| Linter | ⏳ | Pendiente |
-| Coverage | ⏳ | Pendiente |
+| Build Local | ⏳ | Pendiente |
+| Tests Unitarios Locales | ⏳ | Pendiente |
+| Pre-commit Hooks | ⏳ | Pendiente |
+| Linter (go fmt, go vet) | ⏳ | Pendiente |
+| Coverage >= 33% | ⏳ | Pendiente |
+| Push a Branch Feature | ⏳ | Pendiente |
 | PR Creado | ⏳ | Pendiente |
-| CI/CD Checks | ⏳ | Pendiente |
-| Copilot Review | ⏳ | Pendiente |
+| CI Workflow | ⏳ | Pendiente |
+| Test Workflow | ⏳ | Pendiente |
+| Manual Release Workflow | ⏳ | Pendiente |
+| Review Aprobado | ⏳ | Pendiente |
 | Merge a dev | ⏳ | Pendiente |
-| CI/CD Post-Merge | ⏳ | Pendiente |
+| CI/CD Post-Merge en dev | ⏳ | Pendiente |
 
 ---
 
@@ -103,14 +130,30 @@
 |-------|-------|------------------|
 | - | - | - |
 
+**Decisiones Pendientes:**
+- Ninguna
+
+---
+
+## 📊 Métricas de Éxito del Sprint
+
+| Métrica | Antes | Después | Objetivo |
+|---------|-------|---------|----------|
+| Workflows Docker | 3 | ? | 1 (-66%) |
+| Líneas workflows Docker | ~441 | ? | ~340 (-23%) |
+| Go version consistente | No | ? | ✅ |
+| Coverage threshold | No | ? | 33% |
+| Pre-commit hooks | 0 | ? | 7+ |
+| Success rate | 70% | ? | 85%+ |
+
 ---
 
 ## 📝 Cómo Usar Este Archivo
 
 ### Al Iniciar un Sprint:
-1. Actualizar sección "Sprint Activo"
-2. Llenar tabla de "FASE 1" con todas las tareas del sprint
-3. Inicializar contadores
+1. ✅ Actualizar sección "Sprint Activo"
+2. ✅ Llenar tabla de "FASE 1" con todas las tareas del sprint
+3. ✅ Inicializar contadores
 
 ### Durante Ejecución:
 1. Actualizar estado de tareas en tiempo real
@@ -132,22 +175,34 @@
 
 ## 💬 Preguntas Rápidas
 
-**P: ¿Cuál es el sprint actual?**  
-R: Ver sección "Sprint Activo"
+**P: ¿Cuál es el sprint actual?**
+R: SPRINT-3 - Consolidación Docker + Go 1.25
 
-**P: ¿En qué tarea estoy?**  
-R: Buscar primera tarea con estado `🔄 En progreso`
+**P: ¿En qué tarea estoy?**
+R: Ninguna - Sprint iniciado, esperando confirmación para FASE 1
 
-**P: ¿Cuál es la siguiente tarea?**  
-R: Buscar primera tarea con estado `⏳ Pendiente` después de la actual
+**P: ¿Cuál es la siguiente tarea?**
+R: Tarea 1 - Análisis y Consolidación de Workflows Docker (3-4h, 🔴 Crítica)
 
-**P: ¿Cuántas tareas faltan?**  
-R: Ver "Progreso Global" → Tareas pendientes
+**P: ¿Cuántas tareas faltan?**
+R: 12 tareas pendientes
 
-**P: ¿Tengo stubs pendientes?**  
-R: Ver sección "Bloqueos y Decisiones"
+**P: ¿Tengo stubs pendientes?**
+R: No - Este sprint no requiere stubs
 
 ---
 
-**Última actualización:** Pendiente  
+## 🎯 Checklist Pre-Implementación
+
+- [x] Leer INDEX.md
+- [x] Leer SPRINT-3-TASKS.md
+- [x] Verificar branch correcto (claude/start-sprint-3-01Rbn5p78mT73Q3C5qoN8wwF)
+- [x] Inicializar tracking/SPRINT-STATUS.md
+- [ ] Documentar inicio en tracking/logs/
+- [ ] Confirmar inicio de FASE 1
+
+---
+
+**Última actualización:** 2025-11-22 - Inicialización del Sprint
 **Generado por:** Claude Code
+**Siguiente paso:** Documentar inicio en logs y esperar confirmación para FASE 1
