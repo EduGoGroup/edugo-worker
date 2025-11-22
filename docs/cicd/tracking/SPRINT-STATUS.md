@@ -34,7 +34,7 @@
 
 ```
 → SPRINT-4 FASE 1 en progreso
-→ Tarea 2: Migrar ci.yml a Workflow Reusable
+→ Tarea 3: Migrar test.yml a Workflow Reusable
 → Duración estimada: 2-3 horas
 ```
 
@@ -42,12 +42,12 @@
 - Sprint: SPRINT-4
 - Fase: FASE 1 - Implementación con Stubs
 - Branch: claude/sprint-4-phase-1-stubs-01QvT5w6jHgvnKFL9FadvQKi
-- Progreso: 1/8 tareas (13%)
+- Progreso: 2/8 tareas (25%)
 
 **¿Qué sigue?**
-- Tarea 2: Migrar ci.yml usando referencias a stubs
-- Crear backup de ci.yml actual
-- Aplicar lecciones aprendidas (no subdirectorio, no GITHUB_TOKEN)
+- Tarea 3: Migrar test.yml usando referencias a stubs
+- Crear backup de test.yml actual
+- Aplicar lecciones aprendidas
 
 **Bloqueadores:**
 - Ninguno (usando stubs)
@@ -74,7 +74,7 @@
 | # | Tarea | Duración | Prioridad | Estado | Notas |
 |---|-------|----------|-----------|--------|-------|
 | 1 | Preparar Infrastructure para Workflows Reusables | 2-3h | 🔴 Crítica | ✅ (stub) | Infrastructure no disponible - stubs creados |
-| 2 | Migrar ci.yml a Workflow Reusable | 2-3h | 🟡 Alta | ⏳ Pendiente | Backup + migración + commit |
+| 2 | Migrar ci.yml a Workflow Reusable | 2-3h | 🟡 Alta | ✅ (stub) | Job lint migrado - 13 líneas reducidas |
 | 3 | Migrar test.yml a Workflow Reusable | 2-3h | 🟡 Alta | ⏳ Pendiente | Backup + migración + commit |
 | 4 | Actualizar Documentación | 30-45min | 🟢 Media | ⏳ Pendiente | REUSABLE-WORKFLOWS.md + README |
 | 5 | Testing y Validación | 1-2h | 🔴 Crítica | ⏳ Pendiente | PR + verificar workflows funcionan |
@@ -82,10 +82,10 @@
 | 7 | Cleanup y Documentación Final | 30min | 🟢 Media | ⏳ Pendiente | CHANGELOG + release notes |
 | 8 | Validación Final y Cierre | 30min | 🔴 Crítica | ⏳ Pendiente | Verificar métricas + celebrar |
 
-**Progreso Fase 1:** 1/8 (13%)
+**Progreso Fase 1:** 2/8 (25%)
 
 **Tiempo Estimado Total:** 12-16 horas
-**Tiempo Usado:** ~30 min (stub)
+**Tiempo Usado:** ~1 hora (stubs)
 
 ---
 
