@@ -99,6 +99,26 @@ jobs:
             go tool cover -func=coverage/coverage.out | tail -1
           fi
 
+      - name: Verificar umbral de cobertura
+        run: |
+          if [ -f coverage/coverage.out ]; then
+            COVERAGE=$(go tool cover -func=coverage/coverage.out | tail -1 | awk '{print $NF}' | sed 's/%//')
+            THRESHOLD=33.0
+
+            echo "📊 Cobertura actual: ${COVERAGE}%"
+            echo "📊 Umbral mínimo: ${THRESHOLD}%"
+
+            if (( $(echo "$COVERAGE < $THRESHOLD" | bc -l) )); then
+              echo "❌ Cobertura ${COVERAGE}% está por debajo del umbral ${THRESHOLD}%"
+              exit 1
+            else
+              echo "✅ Cobertura ${COVERAGE}% cumple con el umbral ${THRESHOLD}%"
+            fi
+          else
+            echo "⚠️ No se generó archivo de cobertura"
+            exit 1
+          fi
+
       - name: Generar reporte HTML
         run: |
           if [ -f coverage/coverage.out ]; then
