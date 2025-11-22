@@ -6,7 +6,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/EduGoGroup/edugo-worker/internal/domain/entity"
+	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
+	"github.com/EduGoGroup/edugo-worker/internal/domain/service"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -21,18 +22,20 @@ var (
 // MaterialAssessmentRepository maneja la persistencia de evaluaciones en MongoDB
 type MaterialAssessmentRepository struct {
 	collection *mongo.Collection
+	validator  *service.AssessmentValidator
 }
 
 // NewMaterialAssessmentRepository crea una nueva instancia del repositorio
 func NewMaterialAssessmentRepository(db *mongo.Database) *MaterialAssessmentRepository {
 	return &MaterialAssessmentRepository{
-		collection: db.Collection("material_assessment"),
+		collection: db.Collection("material_assessment_worker"),
+		validator:  service.NewAssessmentValidator(),
 	}
 }
 
 // Create crea una nueva evaluación en MongoDB
-func (r *MaterialAssessmentRepository) Create(ctx context.Context, assessment *entity.MaterialAssessment) error {
-	if !assessment.IsValid() {
+func (r *MaterialAssessmentRepository) Create(ctx context.Context, assessment *entities.MaterialAssessment) error {
+	if !r.validator.IsValid(assessment) {
 		return errors.New("invalid material assessment")
 	}
 
@@ -52,8 +55,8 @@ func (r *MaterialAssessmentRepository) Create(ctx context.Context, assessment *e
 }
 
 // FindByMaterialID busca una evaluación por material_id
-func (r *MaterialAssessmentRepository) FindByMaterialID(ctx context.Context, materialID string) (*entity.MaterialAssessment, error) {
-	var assessment entity.MaterialAssessment
+func (r *MaterialAssessmentRepository) FindByMaterialID(ctx context.Context, materialID string) (*entities.MaterialAssessment, error) {
+	var assessment entities.MaterialAssessment
 
 	filter := bson.M{"material_id": materialID}
 	err := r.collection.FindOne(ctx, filter).Decode(&assessment)
@@ -69,8 +72,8 @@ func (r *MaterialAssessmentRepository) FindByMaterialID(ctx context.Context, mat
 }
 
 // FindByID busca una evaluación por su ObjectID
-func (r *MaterialAssessmentRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entity.MaterialAssessment, error) {
-	var assessment entity.MaterialAssessment
+func (r *MaterialAssessmentRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialAssessment, error) {
+	var assessment entities.MaterialAssessment
 
 	filter := bson.M{"_id": id}
 	err := r.collection.FindOne(ctx, filter).Decode(&assessment)
@@ -86,8 +89,8 @@ func (r *MaterialAssessmentRepository) FindByID(ctx context.Context, id primitiv
 }
 
 // Update actualiza una evaluación existente
-func (r *MaterialAssessmentRepository) Update(ctx context.Context, assessment *entity.MaterialAssessment) error {
-	if !assessment.IsValid() {
+func (r *MaterialAssessmentRepository) Update(ctx context.Context, assessment *entities.MaterialAssessment) error {
+	if !r.validator.IsValid(assessment) {
 		return errors.New("invalid material assessment")
 	}
 
@@ -125,7 +128,7 @@ func (r *MaterialAssessmentRepository) Delete(ctx context.Context, materialID st
 }
 
 // FindByDifficulty busca evaluaciones por dificultad de preguntas
-func (r *MaterialAssessmentRepository) FindByDifficulty(ctx context.Context, difficulty string, limit int64) ([]*entity.MaterialAssessment, error) {
+func (r *MaterialAssessmentRepository) FindByDifficulty(ctx context.Context, difficulty string, limit int64) ([]*entities.MaterialAssessment, error) {
 	filter := bson.M{"questions.difficulty": difficulty}
 	opts := options.Find().
 		SetLimit(limit).
@@ -141,7 +144,7 @@ func (r *MaterialAssessmentRepository) FindByDifficulty(ctx context.Context, dif
 		}
 	}()
 
-	var assessments []*entity.MaterialAssessment
+	var assessments []*entities.MaterialAssessment
 	if err := cursor.All(ctx, &assessments); err != nil {
 		return nil, err
 	}
@@ -150,7 +153,7 @@ func (r *MaterialAssessmentRepository) FindByDifficulty(ctx context.Context, dif
 }
 
 // FindByTotalQuestions busca evaluaciones por número total de preguntas
-func (r *MaterialAssessmentRepository) FindByTotalQuestions(ctx context.Context, minQuestions, maxQuestions int, limit int64) ([]*entity.MaterialAssessment, error) {
+func (r *MaterialAssessmentRepository) FindByTotalQuestions(ctx context.Context, minQuestions, maxQuestions int, limit int64) ([]*entities.MaterialAssessment, error) {
 	filter := bson.M{
 		"total_questions": bson.M{
 			"$gte": minQuestions,
@@ -171,7 +174,7 @@ func (r *MaterialAssessmentRepository) FindByTotalQuestions(ctx context.Context,
 		}
 	}()
 
-	var assessments []*entity.MaterialAssessment
+	var assessments []*entities.MaterialAssessment
 	if err := cursor.All(ctx, &assessments); err != nil {
 		return nil, err
 	}
@@ -180,7 +183,7 @@ func (r *MaterialAssessmentRepository) FindByTotalQuestions(ctx context.Context,
 }
 
 // FindRecent busca las evaluaciones más recientes
-func (r *MaterialAssessmentRepository) FindRecent(ctx context.Context, limit int64) ([]*entity.MaterialAssessment, error) {
+func (r *MaterialAssessmentRepository) FindRecent(ctx context.Context, limit int64) ([]*entities.MaterialAssessment, error) {
 	opts := options.Find().
 		SetLimit(limit).
 		SetSort(bson.D{{Key: "created_at", Value: -1}})
@@ -195,7 +198,7 @@ func (r *MaterialAssessmentRepository) FindRecent(ctx context.Context, limit int
 		}
 	}()
 
-	var assessments []*entity.MaterialAssessment
+	var assessments []*entities.MaterialAssessment
 	if err := cursor.All(ctx, &assessments); err != nil {
 		return nil, err
 	}

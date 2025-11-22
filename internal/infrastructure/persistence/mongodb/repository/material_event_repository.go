@@ -6,7 +6,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/EduGoGroup/edugo-worker/internal/domain/entity"
+	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
+	"github.com/EduGoGroup/edugo-worker/internal/domain/constants"
+	"github.com/EduGoGroup/edugo-worker/internal/domain/service"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -19,19 +21,21 @@ var (
 
 // MaterialEventRepository maneja la persistencia de eventos de auditoría en MongoDB
 type MaterialEventRepository struct {
-	collection *mongo.Collection
+	collection   *mongo.Collection
+	stateMachine *service.EventStateMachine
 }
 
 // NewMaterialEventRepository crea una nueva instancia del repositorio
 func NewMaterialEventRepository(db *mongo.Database) *MaterialEventRepository {
 	return &MaterialEventRepository{
-		collection: db.Collection("material_event"),
+		collection:   db.Collection("material_event"),
+		stateMachine: service.NewEventStateMachine(3), // max 3 retries
 	}
 }
 
 // Create crea un nuevo evento en MongoDB
-func (r *MaterialEventRepository) Create(ctx context.Context, event *entity.MaterialEvent) error {
-	if !event.IsValid() {
+func (r *MaterialEventRepository) Create(ctx context.Context, event *entities.MaterialEvent) error {
+	if !r.stateMachine.IsValid(event) {
 		return errors.New("invalid material event")
 	}
 
@@ -48,8 +52,8 @@ func (r *MaterialEventRepository) Create(ctx context.Context, event *entity.Mate
 }
 
 // FindByID busca un evento por su ObjectID
-func (r *MaterialEventRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entity.MaterialEvent, error) {
-	var event entity.MaterialEvent
+func (r *MaterialEventRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialEvent, error) {
+	var event entities.MaterialEvent
 
 	filter := bson.M{"_id": id}
 	err := r.collection.FindOne(ctx, filter).Decode(&event)
@@ -65,8 +69,8 @@ func (r *MaterialEventRepository) FindByID(ctx context.Context, id primitive.Obj
 }
 
 // Update actualiza un evento existente
-func (r *MaterialEventRepository) Update(ctx context.Context, event *entity.MaterialEvent) error {
-	if !event.IsValid() {
+func (r *MaterialEventRepository) Update(ctx context.Context, event *entities.MaterialEvent) error {
+	if !r.stateMachine.IsValid(event) {
 		return errors.New("invalid material event")
 	}
 
@@ -88,7 +92,7 @@ func (r *MaterialEventRepository) Update(ctx context.Context, event *entity.Mate
 }
 
 // FindByMaterialID busca eventos por material_id
-func (r *MaterialEventRepository) FindByMaterialID(ctx context.Context, materialID string, limit int64) ([]*entity.MaterialEvent, error) {
+func (r *MaterialEventRepository) FindByMaterialID(ctx context.Context, materialID string, limit int64) ([]*entities.MaterialEvent, error) {
 	filter := bson.M{"material_id": materialID}
 	opts := options.Find().
 		SetLimit(limit).
@@ -104,7 +108,7 @@ func (r *MaterialEventRepository) FindByMaterialID(ctx context.Context, material
 		}
 	}()
 
-	var events []*entity.MaterialEvent
+	var events []*entities.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err
 	}
@@ -113,7 +117,7 @@ func (r *MaterialEventRepository) FindByMaterialID(ctx context.Context, material
 }
 
 // FindByEventType busca eventos por tipo
-func (r *MaterialEventRepository) FindByEventType(ctx context.Context, eventType string, limit int64) ([]*entity.MaterialEvent, error) {
+func (r *MaterialEventRepository) FindByEventType(ctx context.Context, eventType string, limit int64) ([]*entities.MaterialEvent, error) {
 	filter := bson.M{"event_type": eventType}
 	opts := options.Find().
 		SetLimit(limit).
@@ -129,7 +133,7 @@ func (r *MaterialEventRepository) FindByEventType(ctx context.Context, eventType
 		}
 	}()
 
-	var events []*entity.MaterialEvent
+	var events []*entities.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err
 	}
@@ -138,7 +142,7 @@ func (r *MaterialEventRepository) FindByEventType(ctx context.Context, eventType
 }
 
 // FindByStatus busca eventos por estado
-func (r *MaterialEventRepository) FindByStatus(ctx context.Context, status string, limit int64) ([]*entity.MaterialEvent, error) {
+func (r *MaterialEventRepository) FindByStatus(ctx context.Context, status string, limit int64) ([]*entities.MaterialEvent, error) {
 	filter := bson.M{"status": status}
 	opts := options.Find().
 		SetLimit(limit).
@@ -154,7 +158,7 @@ func (r *MaterialEventRepository) FindByStatus(ctx context.Context, status strin
 		}
 	}()
 
-	var events []*entity.MaterialEvent
+	var events []*entities.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err
 	}
@@ -163,9 +167,9 @@ func (r *MaterialEventRepository) FindByStatus(ctx context.Context, status strin
 }
 
 // FindFailedEvents busca eventos fallidos que pueden reintentarse
-func (r *MaterialEventRepository) FindFailedEvents(ctx context.Context, maxRetries int, limit int64) ([]*entity.MaterialEvent, error) {
+func (r *MaterialEventRepository) FindFailedEvents(ctx context.Context, maxRetries int, limit int64) ([]*entities.MaterialEvent, error) {
 	filter := bson.M{
-		"status":      entity.EventStatusFailed,
+		"status":      constants.EventStatusFailed,
 		"retry_count": bson.M{"$lt": maxRetries},
 	}
 	opts := options.Find().
@@ -182,7 +186,7 @@ func (r *MaterialEventRepository) FindFailedEvents(ctx context.Context, maxRetri
 		}
 	}()
 
-	var events []*entity.MaterialEvent
+	var events []*entities.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err
 	}
@@ -191,8 +195,8 @@ func (r *MaterialEventRepository) FindFailedEvents(ctx context.Context, maxRetri
 }
 
 // FindPendingEvents busca eventos pendientes de procesar
-func (r *MaterialEventRepository) FindPendingEvents(ctx context.Context, limit int64) ([]*entity.MaterialEvent, error) {
-	filter := bson.M{"status": entity.EventStatusPending}
+func (r *MaterialEventRepository) FindPendingEvents(ctx context.Context, limit int64) ([]*entities.MaterialEvent, error) {
+	filter := bson.M{"status": constants.EventStatusPending}
 	opts := options.Find().
 		SetLimit(limit).
 		SetSort(bson.D{{Key: "created_at", Value: 1}}) // FIFO: más antiguos primero
@@ -207,7 +211,7 @@ func (r *MaterialEventRepository) FindPendingEvents(ctx context.Context, limit i
 		}
 	}()
 
-	var events []*entity.MaterialEvent
+	var events []*entities.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err
 	}
@@ -216,7 +220,7 @@ func (r *MaterialEventRepository) FindPendingEvents(ctx context.Context, limit i
 }
 
 // FindRecent busca los eventos más recientes
-func (r *MaterialEventRepository) FindRecent(ctx context.Context, limit int64) ([]*entity.MaterialEvent, error) {
+func (r *MaterialEventRepository) FindRecent(ctx context.Context, limit int64) ([]*entities.MaterialEvent, error) {
 	opts := options.Find().
 		SetLimit(limit).
 		SetSort(bson.D{{Key: "created_at", Value: -1}})
@@ -231,7 +235,7 @@ func (r *MaterialEventRepository) FindRecent(ctx context.Context, limit int64) (
 		}
 	}()
 
-	var events []*entity.MaterialEvent
+	var events []*entities.MaterialEvent
 	if err := cursor.All(ctx, &events); err != nil {
 		return nil, err
 	}
