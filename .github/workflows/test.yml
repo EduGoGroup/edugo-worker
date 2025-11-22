@@ -2,12 +2,12 @@ name: Tests with Coverage
 
 # Manual o en PRs
 on:
-  workflow_dispatch:  # Manual desde GitHub UI
+  workflow_dispatch: # Manual desde GitHub UI
   pull_request:
-    branches: [ main, develop ]
+    branches: [main, dev]
 
 env:
-  GO_VERSION: '1.25.3'
+  GO_VERSION: "1.25.3"
 
 jobs:
   test-coverage:
@@ -160,7 +160,7 @@ jobs:
   integration-tests:
     name: Integration Tests
     runs-on: ubuntu-latest
-    if: github.event_name == 'workflow_dispatch'  # Solo manual
+    if: github.event_name == 'workflow_dispatch' # Solo manual
 
     steps:
       - name: Checkout código
