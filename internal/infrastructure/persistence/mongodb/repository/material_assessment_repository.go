@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"errors"
+	"log"
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/domain/entity"
@@ -134,7 +135,11 @@ func (r *MaterialAssessmentRepository) FindByDifficulty(ctx context.Context, dif
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var assessments []*entity.MaterialAssessment
 	if err := cursor.All(ctx, &assessments); err != nil {
@@ -160,7 +165,11 @@ func (r *MaterialAssessmentRepository) FindByTotalQuestions(ctx context.Context,
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var assessments []*entity.MaterialAssessment
 	if err := cursor.All(ctx, &assessments); err != nil {
@@ -180,7 +189,11 @@ func (r *MaterialAssessmentRepository) FindRecent(ctx context.Context, limit int
 	if err != nil {
 		return nil, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var assessments []*entity.MaterialAssessment
 	if err := cursor.All(ctx, &assessments); err != nil {
@@ -224,7 +237,11 @@ func (r *MaterialAssessmentRepository) GetAverageQuestionCount(ctx context.Conte
 	if err != nil {
 		return 0, err
 	}
-	defer cursor.Close(ctx)
+	defer func() {
+		if err := cursor.Close(ctx); err != nil {
+			log.Printf("Error cerrando cursor: %v", err)
+		}
+	}()
 
 	var result []bson.M
 	if err := cursor.All(ctx, &result); err != nil {

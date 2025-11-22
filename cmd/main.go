@@ -30,7 +30,11 @@ func main() {
 	if err != nil {
 		log.Fatal("❌ Error inicializando infraestructura:", err)
 	}
-	defer cleanup()
+	defer func() {
+		if err := cleanup(); err != nil {
+			log.Printf("Error en cleanup: %v", err)
+		}
+	}()
 
 	resources.Logger.Info("✅ Worker iniciado correctamente")
 
@@ -63,9 +67,13 @@ func main() {
 		for msg := range msgs {
 			if err := processMessage(msg, resources, cfg); err != nil {
 				resources.Logger.Error("Error procesando mensaje", "error", err.Error())
-				msg.Nack(false, true) // requeue
+				if err := msg.Nack(false, true); err != nil {
+					log.Printf("Error en Nack: %v", err)
+				}
 			} else {
-				msg.Ack(false)
+				if err := msg.Ack(false); err != nil {
+					log.Printf("Error en Ack: %v", err)
+				}
 			}
 		}
 	}()

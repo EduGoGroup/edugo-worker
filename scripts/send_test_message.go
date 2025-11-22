@@ -27,13 +27,21 @@ func main() {
 	if err != nil {
 		log.Fatal("Error conectando a RabbitMQ:", err)
 	}
-	defer conn.Close()
+	defer func() {
+		if err := conn.Close(); err != nil {
+			log.Printf("Error cerrando conexión: %v", err)
+		}
+	}()
 
 	ch, err := conn.Channel()
 	if err != nil {
 		log.Fatal("Error abriendo canal:", err)
 	}
-	defer ch.Close()
+	defer func() {
+		if err := ch.Close(); err != nil {
+			log.Printf("Error cerrando canal: %v", err)
+		}
+	}()
 
 	// Crear evento de prueba
 	event := MaterialUploadedEvent{

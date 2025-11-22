@@ -2,6 +2,7 @@ package container
 
 import (
 	"database/sql"
+	"log"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
@@ -56,7 +57,9 @@ func NewContainer(db *sql.DB, mongodb *mongo.Database, logger logger.Logger) *Co
 
 func (c *Container) Close() error {
 	if c.DB != nil {
-		c.DB.Close()
+		if err := c.DB.Close(); err != nil {
+			log.Printf("Error cerrando DB: %v", err)
+		}
 	}
 	return nil
 }
