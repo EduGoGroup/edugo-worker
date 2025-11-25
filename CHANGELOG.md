@@ -5,6 +5,15 @@ Todos los cambios notables en edugo-worker serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [0.6.0] - 2025-11-25
+
+### Tipo de Release: patch
+
+- release: Auth centralizada Sprint 4 con WorkerAuthClient (#27)
+- chore: actualizar infraestructura a v0.10.1
+
+---
+
 ## [0.5.0] - 2025-11-22
 
 ### Tipo de Release: minor
