@@ -5,7 +5,7 @@ database:
   postgres:
     host: "qa-postgres.edugo.internal"
     max_connections: 50
-  
+
   mongodb:
     # URI desde ENV: MONGODB_URI
 
@@ -16,3 +16,11 @@ messaging:
 logging:
   level: "info"
   format: "json"
+
+# Autenticación centralizada con api-admin
+api_admin:
+  base_url: "http://api-admin.qa.edugo.internal:8081"
+  timeout: "5s"
+  cache_ttl: "60s"
+  cache_enabled: true
+  max_bulk_size: 50

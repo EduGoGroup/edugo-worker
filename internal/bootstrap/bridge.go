@@ -9,6 +9,7 @@ import (
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/bootstrap/adapter"
+	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -21,6 +22,7 @@ type Resources struct {
 	PostgreSQL       *sql.DB
 	MongoDB          *mongo.Database
 	RabbitMQChannel  *amqp.Channel
+	AuthClient       *client.AuthClient
 	LifecycleManager *lifecycle.Manager
 }
 
@@ -97,16 +99,27 @@ func bridgeToSharedBootstrap(
 	// 8. Crear lifecycle con logger
 	lifecycleWithLogger := lifecycle.NewManager(loggerAdapter)
 
-	// 9. Construir Resources
+	// 9. Crear AuthClient para validación de tokens con api-admin
+	apiAdminCfg := cfg.GetAPIAdminConfigWithDefaults()
+	authClient := client.NewAuthClient(client.AuthClientConfig{
+		BaseURL:      apiAdminCfg.BaseURL,
+		Timeout:      apiAdminCfg.Timeout,
+		CacheTTL:     apiAdminCfg.CacheTTL,
+		CacheEnabled: apiAdminCfg.CacheEnabled,
+		MaxBulkSize:  apiAdminCfg.MaxBulkSize,
+	})
+
+	// 10. Construir Resources
 	resources := &Resources{
 		Logger:           loggerAdapter,
 		PostgreSQL:       wrapper.sqlDB,
 		MongoDB:          wrapper.mongoClient.Database(cfg.Database.MongoDB.Database),
 		RabbitMQChannel:  wrapper.rabbitChannel,
+		AuthClient:       authClient,
 		LifecycleManager: lifecycleWithLogger,
 	}
 
-	// 10. Cleanup
+	// 11. Cleanup
 	cleanup := func() error {
 		resources.Logger.Info("starting worker cleanup")
 		err := lifecycleWithLogger.Cleanup()
