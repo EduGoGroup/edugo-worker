@@ -15,3 +15,11 @@ nlp:
 logging:
   level: "debug"
   format: "text"
+
+# Autenticación centralizada con api-admin
+api_admin:
+  base_url: "http://localhost:8081"
+  timeout: "5s"
+  cache_ttl: "60s"
+  cache_enabled: true
+  max_bulk_size: 50

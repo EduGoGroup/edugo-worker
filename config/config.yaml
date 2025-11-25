@@ -7,7 +7,7 @@ database:
     user: "edugo_user"
     max_connections: 10
     ssl_mode: "disable"
-  
+
   mongodb:
     database: "edugo"
     timeout: 10s
@@ -30,3 +30,11 @@ nlp:
 logging:
   level: "info"
   format: "json"
+
+# Autenticación centralizada con api-admin
+api_admin:
+  base_url: "http://api-admin:8081"
+  timeout: "5s"
+  cache_ttl: "60s"
+  cache_enabled: true
+  max_bulk_size: 50

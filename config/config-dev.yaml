@@ -4,7 +4,7 @@
 database:
   postgres:
     host: "dev-postgres.edugo.internal"
-  
+
   mongodb:
     # URI completa desde ENV: MONGODB_URI
 
@@ -15,3 +15,11 @@ messaging:
 logging:
   level: "debug"
   format: "json"
+
+# Autenticación centralizada con api-admin
+api_admin:
+  base_url: "http://api-admin.dev.edugo.internal:8081"
+  timeout: "5s"
+  cache_ttl: "60s"
+  cache_enabled: true
+  max_bulk_size: 50

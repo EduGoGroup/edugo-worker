@@ -11,7 +11,7 @@ database:
     max_connections: 100
     ssl_mode: "require"
     # Password desde ENV: POSTGRES_PASSWORD (obligatorio)
-  
+
   mongodb:
     # URI desde ENV: MONGODB_URI (obligatorio)
 
@@ -23,3 +23,11 @@ messaging:
 logging:
   level: "warn"
   format: "json"
+
+# Autenticación centralizada con api-admin
+api_admin:
+  base_url: "http://api-admin.edugo.internal:8081"
+  timeout: "10s"
+  cache_ttl: "120s"
+  cache_enabled: true
+  max_bulk_size: 100

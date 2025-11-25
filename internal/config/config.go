@@ -10,6 +10,7 @@ type Config struct {
 	Messaging MessagingConfig `mapstructure:"messaging"`
 	NLP       NLPConfig       `mapstructure:"nlp"`
 	Logging   LoggingConfig   `mapstructure:"logging"`
+	APIAdmin  APIAdminConfig  `mapstructure:"api_admin"`
 }
 
 type DatabaseConfig struct {
@@ -66,6 +67,15 @@ type LoggingConfig struct {
 	Format string `mapstructure:"format"`
 }
 
+// APIAdminConfig configuración para conexión con api-admin (autenticación centralizada)
+type APIAdminConfig struct {
+	BaseURL      string        `mapstructure:"base_url"`
+	Timeout      time.Duration `mapstructure:"timeout"`
+	CacheTTL     time.Duration `mapstructure:"cache_ttl"`
+	CacheEnabled bool          `mapstructure:"cache_enabled"`
+	MaxBulkSize  int           `mapstructure:"max_bulk_size"`
+}
+
 func (c *Config) Validate() error {
 	if c.Database.Postgres.Password == "" {
 		return fmt.Errorf("POSTGRES_PASSWORD is required")
@@ -80,4 +90,22 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("OPENAI_API_KEY is required")
 	}
 	return nil
+}
+
+// GetAPIAdminConfigWithDefaults retorna la configuración de api-admin con valores por defecto
+func (c *Config) GetAPIAdminConfigWithDefaults() APIAdminConfig {
+	cfg := c.APIAdmin
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = "http://localhost:8081"
+	}
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 5 * time.Second
+	}
+	if cfg.CacheTTL == 0 {
+		cfg.CacheTTL = 60 * time.Second
+	}
+	if cfg.MaxBulkSize == 0 {
+		cfg.MaxBulkSize = 50
+	}
+	return cfg
 }
