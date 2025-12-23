@@ -207,7 +207,9 @@ func (b *ResourceBuilder) WithRabbitMQ() *ResourceBuilder {
 	// Crear channel
 	channel, err := rabbitFactory.CreateChannel(conn)
 	if err != nil {
-		conn.Close()
+		if closeErr := conn.Close(); closeErr != nil {
+			b.logger.Error("failed to close RabbitMQ connection after channel error", "error", closeErr.Error())
+		}
 		b.err = fmt.Errorf("failed to create RabbitMQ channel: %w", err)
 		return b
 	}
@@ -307,7 +309,10 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 	// Verificar si hubo errores durante la construcción
 	if b.err != nil {
 		// Ejecutar cleanup de recursos parcialmente inicializados
-		b.cleanup()
+		if cleanupErr := b.cleanup(); cleanupErr != nil {
+			// Log cleanup error pero retornar el error original
+			return nil, nil, fmt.Errorf("%w (cleanup also failed: %v)", b.err, cleanupErr)
+		}
 		return nil, nil, b.err
 	}
 

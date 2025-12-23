@@ -24,8 +24,16 @@ func main() {
 		log.Fatal("❌ Error cargando configuración:", err)
 	}
 
-	// 2. Inicializar infraestructura con shared/bootstrap
-	resources, cleanup, err := bootstrap.Initialize(ctx, cfg)
+	// 2. Inicializar infraestructura usando ResourceBuilder
+	resources, cleanup, err := bootstrap.NewResourceBuilder(ctx, cfg).
+		WithLogger().
+		WithPostgreSQL().
+		WithMongoDB().
+		WithRabbitMQ().
+		WithAuthClient().
+		WithProcessors().
+		Build()
+
 	if err != nil {
 		log.Fatal("❌ Error inicializando infraestructura:", err)
 	}
