@@ -8,6 +8,7 @@ import (
 	sharedBootstrap "github.com/EduGoGroup/edugo-shared/bootstrap"
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
 	"github.com/EduGoGroup/edugo-shared/logger"
+	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
 	"github.com/EduGoGroup/edugo-worker/internal/bootstrap/adapter"
 	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
@@ -18,12 +19,13 @@ import (
 
 // Resources contiene todos los recursos inicializados para el worker
 type Resources struct {
-	Logger           logger.Logger
-	PostgreSQL       *sql.DB
-	MongoDB          *mongo.Database
-	RabbitMQChannel  *amqp.Channel
-	AuthClient       *client.AuthClient
-	LifecycleManager *lifecycle.Manager
+	Logger            logger.Logger
+	PostgreSQL        *sql.DB
+	MongoDB           *mongo.Database
+	RabbitMQChannel   *amqp.Channel
+	AuthClient        *client.AuthClient
+	LifecycleManager  *lifecycle.Manager
+	ProcessorRegistry *processor.Registry
 }
 
 // bridgeToSharedBootstrap conecta shared/bootstrap con worker
@@ -109,17 +111,34 @@ func bridgeToSharedBootstrap(
 		MaxBulkSize:  apiAdminCfg.MaxBulkSize,
 	})
 
-	// 10. Construir Resources
+	// 10. Crear MongoDB database
+	mongoDB := wrapper.mongoClient.Database(cfg.Database.MongoDB.Database)
+
+	// 11. Crear processors
+	materialUploadedProcessor := processor.NewMaterialUploadedProcessor(wrapper.sqlDB, mongoDB, loggerAdapter)
+	materialDeletedProcessor := processor.NewMaterialDeletedProcessor(mongoDB, loggerAdapter)
+	assessmentAttemptProcessor := processor.NewAssessmentAttemptProcessor(loggerAdapter)
+	studentEnrolledProcessor := processor.NewStudentEnrolledProcessor(loggerAdapter)
+
+	// 12. Crear y configurar ProcessorRegistry
+	processorRegistry := processor.NewRegistry(loggerAdapter)
+	processorRegistry.Register(materialUploadedProcessor)
+	processorRegistry.Register(materialDeletedProcessor)
+	processorRegistry.Register(assessmentAttemptProcessor)
+	processorRegistry.Register(studentEnrolledProcessor)
+
+	// 13. Construir Resources
 	resources := &Resources{
-		Logger:           loggerAdapter,
-		PostgreSQL:       wrapper.sqlDB,
-		MongoDB:          wrapper.mongoClient.Database(cfg.Database.MongoDB.Database),
-		RabbitMQChannel:  wrapper.rabbitChannel,
-		AuthClient:       authClient,
-		LifecycleManager: lifecycleWithLogger,
+		Logger:            loggerAdapter,
+		PostgreSQL:        wrapper.sqlDB,
+		MongoDB:           mongoDB,
+		RabbitMQChannel:   wrapper.rabbitChannel,
+		AuthClient:        authClient,
+		LifecycleManager:  lifecycleWithLogger,
+		ProcessorRegistry: processorRegistry,
 	}
 
-	// 11. Cleanup
+	// 14. Cleanup
 	cleanup := func() error {
 		resources.Logger.Info("starting worker cleanup")
 		err := lifecycleWithLogger.Cleanup()

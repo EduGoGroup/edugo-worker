@@ -19,12 +19,8 @@ type Container struct {
 	Logger     logger.Logger
 	AuthClient *client.AuthClient
 
-	// Processors
-	MaterialUploadedProc  *processor.MaterialUploadedProcessor
-	MaterialReprocessProc *processor.MaterialReprocessProcessor
-	MaterialDeletedProc   *processor.MaterialDeletedProcessor
-	AssessmentAttemptProc *processor.AssessmentAttemptProcessor
-	StudentEnrolledProc   *processor.StudentEnrolledProcessor
+	// Processor Registry
+	ProcessorRegistry *processor.Registry
 
 	// Consumer
 	EventConsumer *consumer.EventConsumer
@@ -47,20 +43,23 @@ func NewContainer(cfg ContainerConfig) *Container {
 		AuthClient: cfg.AuthClient,
 	}
 
-	// Inicializar processors
-	c.MaterialUploadedProc = processor.NewMaterialUploadedProcessor(cfg.DB, cfg.MongoDB, cfg.Logger)
-	c.MaterialDeletedProc = processor.NewMaterialDeletedProcessor(cfg.MongoDB, cfg.Logger)
-	c.AssessmentAttemptProc = processor.NewAssessmentAttemptProcessor(cfg.Logger)
-	c.StudentEnrolledProc = processor.NewStudentEnrolledProcessor(cfg.Logger)
-	c.MaterialReprocessProc = processor.NewMaterialReprocessProcessor(c.MaterialUploadedProc, cfg.Logger)
+	// Crear processors individuales
+	materialUploadedProc := processor.NewMaterialUploadedProcessor(cfg.DB, cfg.MongoDB, cfg.Logger)
+	materialDeletedProc := processor.NewMaterialDeletedProcessor(cfg.MongoDB, cfg.Logger)
+	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(cfg.Logger)
+	studentEnrolledProc := processor.NewStudentEnrolledProcessor(cfg.Logger)
 
-	// Inicializar consumer con routing
+	// Crear ProcessorRegistry y registrar todos los processors
+	c.ProcessorRegistry = processor.NewRegistry(cfg.Logger)
+	c.ProcessorRegistry.Register(materialUploadedProc)
+	c.ProcessorRegistry.Register(processor.NewMaterialReprocessProcessor(materialUploadedProc, cfg.Logger))
+	c.ProcessorRegistry.Register(materialDeletedProc)
+	c.ProcessorRegistry.Register(assessmentAttemptProc)
+	c.ProcessorRegistry.Register(studentEnrolledProc)
+
+	// Inicializar consumer con registry
 	c.EventConsumer = consumer.NewEventConsumer(
-		c.MaterialUploadedProc,
-		c.MaterialReprocessProc,
-		c.MaterialDeletedProc,
-		c.AssessmentAttemptProc,
-		c.StudentEnrolledProc,
+		c.ProcessorRegistry,
 		cfg.Logger,
 	)
 

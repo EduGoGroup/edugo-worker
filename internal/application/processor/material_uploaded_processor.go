@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/common/types/enum"
@@ -29,7 +30,7 @@ func NewMaterialUploadedProcessor(db *sql.DB, mongodb *mongo.Database, logger lo
 	}
 }
 
-func (p *MaterialUploadedProcessor) Process(ctx context.Context, event dto.MaterialUploadedEvent) error {
+func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.MaterialUploadedEvent) error {
 	p.logger.Info("processing material uploaded",
 		"material_id", event.MaterialID,
 		"s3_key", event.S3Key,
@@ -116,4 +117,19 @@ func (p *MaterialUploadedProcessor) Process(ctx context.Context, event dto.Mater
 
 	p.logger.Info("material processing completed", "material_id", event.MaterialID)
 	return nil
+}
+
+// EventType implementa la interfaz Processor
+func (p *MaterialUploadedProcessor) EventType() string {
+	return "material_uploaded"
+}
+
+// Process implementa la interfaz Processor
+// Deserializa el payload JSON y llama al método interno processEvent
+func (p *MaterialUploadedProcessor) Process(ctx context.Context, payload []byte) error {
+	var event dto.MaterialUploadedEvent
+	if err := json.Unmarshal(payload, &event); err != nil {
+		return errors.NewValidationError("invalid event payload")
+	}
+	return p.processEvent(ctx, event)
 }
