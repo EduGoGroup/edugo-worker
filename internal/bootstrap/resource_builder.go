@@ -18,6 +18,17 @@ import (
 	gormLogger "gorm.io/gorm/logger"
 )
 
+// Resources contiene todos los recursos inicializados para el worker
+type Resources struct {
+	Logger            logger.Logger
+	PostgreSQL        *sql.DB
+	MongoDB           *mongo.Database
+	RabbitMQChannel   *amqp.Channel
+	AuthClient        *client.AuthClient
+	LifecycleManager  *lifecycle.Manager
+	ProcessorRegistry *processor.Registry
+}
+
 // ResourceBuilder construye Resources de forma incremental usando el patrón Builder
 type ResourceBuilder struct {
 	config *config.Config
