@@ -12,12 +12,12 @@ import (
 // nopLogger es un logger que no hace nada (para tests)
 type nopLogger struct{}
 
-func (l *nopLogger) Debug(msg string, keysAndValues ...interface{}) {}
-func (l *nopLogger) Info(msg string, keysAndValues ...interface{})  {}
-func (l *nopLogger) Warn(msg string, keysAndValues ...interface{})  {}
-func (l *nopLogger) Error(msg string, keysAndValues ...interface{}) {}
-func (l *nopLogger) Fatal(msg string, keysAndValues ...interface{}) {}
-func (l *nopLogger) Sync() error                                    { return nil }
+func (l *nopLogger) Debug(msg string, keysAndValues ...interface{})  {}
+func (l *nopLogger) Info(msg string, keysAndValues ...interface{})   {}
+func (l *nopLogger) Warn(msg string, keysAndValues ...interface{})   {}
+func (l *nopLogger) Error(msg string, keysAndValues ...interface{})  {}
+func (l *nopLogger) Fatal(msg string, keysAndValues ...interface{})  {}
+func (l *nopLogger) Sync() error                                     { return nil }
 func (l *nopLogger) With(keysAndValues ...interface{}) logger.Logger { return l }
 
 func newTestLogger() logger.Logger {
@@ -26,7 +26,7 @@ func newTestLogger() logger.Logger {
 
 // mockProcessor es un processor de prueba
 type mockProcessor struct {
-	eventType   string
+	eventType     string
 	processCalled bool
 	processError  error
 	lastPayload   []byte
@@ -123,7 +123,7 @@ func TestRegistry_Process_ValidMessage(t *testing.T) {
 
 	// Crear mensaje de prueba
 	message := map[string]interface{}{
-		"event_type": "material_uploaded",
+		"event_type":  "material_uploaded",
 		"material_id": "123",
 	}
 	payload, _ := json.Marshal(message)
@@ -154,7 +154,7 @@ func TestRegistry_Process_UnknownEventType(t *testing.T) {
 	// Crear mensaje con event_type desconocido
 	message := map[string]interface{}{
 		"event_type": "unknown_event",
-		"data": "test",
+		"data":       "test",
 	}
 	payload, _ := json.Marshal(message)
 
