@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -133,19 +132,16 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 
 // processMessage procesa un mensaje de RabbitMQ
 func processMessage(msg amqp.Delivery, resources *bootstrap.Resources, cfg *config.Config) error {
+	ctx := context.Background()
+
 	resources.Logger.Info("📥 Mensaje recibido", "size", len(msg.Body))
 
-	var event map[string]interface{}
-	if err := json.Unmarshal(msg.Body, &event); err != nil {
-		resources.Logger.Error("Error parseando evento", "error", err.Error())
+	// Usar el ProcessorRegistry para procesar el evento
+	if err := resources.ProcessorRegistry.Process(ctx, msg.Body); err != nil {
+		resources.Logger.Error("Error procesando evento", "error", err.Error())
 		return err
 	}
 
-	resources.Logger.Info("✅ Evento procesado", "type", event["event_type"])
-
-	// TODO: Implementar procesamiento real con processors
-	// processor := container.GetProcessor(event["event_type"])
-	// return processor.Process(ctx, event)
-
+	resources.Logger.Info("✅ Evento procesado exitosamente")
 	return nil
 }
