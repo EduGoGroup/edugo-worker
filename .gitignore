@@ -23,6 +23,8 @@ go.work.sum
 /main
 /edugo-worker
 *.bin
+bin/worker
+bin/
 
 # IDE specific files
 .idea/
