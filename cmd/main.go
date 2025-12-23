@@ -24,14 +24,27 @@ func main() {
 		log.Fatal("❌ Error cargando configuración:", err)
 	}
 
-	// 2. Inicializar infraestructura con shared/bootstrap
-	resources, cleanup, err := bootstrap.Initialize(ctx, cfg)
+	// 2. Inicializar infraestructura usando ResourceBuilder
+	resources, cleanup, err := bootstrap.NewResourceBuilder(ctx, cfg).
+		WithLogger().
+		WithPostgreSQL().
+		WithMongoDB().
+		WithRabbitMQ().
+		WithAuthClient().
+		WithProcessors().
+		Build()
+
 	if err != nil {
 		log.Fatal("❌ Error inicializando infraestructura:", err)
 	}
 	defer func() {
 		if err := cleanup(); err != nil {
-			log.Printf("Error en cleanup: %v", err)
+			// Usar logger si está disponible, sino usar log estándar
+			if resources != nil && resources.Logger != nil {
+				resources.Logger.Error("Error en cleanup", "error", err.Error())
+			} else {
+				log.Printf("Error en cleanup: %v", err)
+			}
 		}
 	}()
 
@@ -67,11 +80,11 @@ func main() {
 			if err := processMessage(msg, resources, cfg); err != nil {
 				resources.Logger.Error("Error procesando mensaje", "error", err.Error())
 				if err := msg.Nack(false, true); err != nil {
-					log.Printf("Error en Nack: %v", err)
+					resources.Logger.Error("Error en Nack", "error", err.Error())
 				}
 			} else {
 				if err := msg.Ack(false); err != nil {
-					log.Printf("Error en Ack: %v", err)
+					resources.Logger.Error("Error en Ack", "error", err.Error())
 				}
 			}
 		}
