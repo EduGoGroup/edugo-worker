@@ -3,13 +3,13 @@ module github.com/EduGoGroup/edugo-worker
 go 1.25.3
 
 require (
-	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.10.1
+	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.11.0
 	github.com/EduGoGroup/edugo-shared/bootstrap v0.9.0
-	github.com/EduGoGroup/edugo-shared/common v0.7.0
-	github.com/EduGoGroup/edugo-shared/database/postgres v0.7.0
-	github.com/EduGoGroup/edugo-shared/lifecycle v0.7.0
-	github.com/EduGoGroup/edugo-shared/logger v0.7.0
-	github.com/EduGoGroup/edugo-shared/testing v0.7.0
+	github.com/EduGoGroup/edugo-shared/common v0.9.0
+	github.com/EduGoGroup/edugo-shared/database/postgres v0.9.0
+	github.com/EduGoGroup/edugo-shared/lifecycle v0.9.0
+	github.com/EduGoGroup/edugo-shared/logger v0.9.0
+	github.com/EduGoGroup/edugo-shared/testing v0.9.0
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.68.0
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.10.9
