@@ -72,6 +72,7 @@ func (b *ResourceBuilder) WithLogger() *ResourceBuilder {
 
 	// Crear logger usando shared/bootstrap
 	loggerFactory := sharedBootstrap.NewDefaultLoggerFactory()
+
 	logrusLogger, err := loggerFactory.CreateLogger(
 		b.ctx,
 		"production",
@@ -183,7 +184,7 @@ func (b *ResourceBuilder) WithMongoDB() *ResourceBuilder {
 	// Registrar cleanup
 	b.addCleanup(func() error {
 		b.logger.Info("closing MongoDB connection")
-		return b.mongoClient.Disconnect(context.Background())
+		return b.mongoClient.Disconnect(b.ctx)
 	})
 
 	b.logger.Info("✅ MongoDB connected successfully")

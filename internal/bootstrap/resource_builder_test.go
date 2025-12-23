@@ -8,6 +8,7 @@ import (
 )
 
 func TestNewResourceBuilder(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	cfg := &config.Config{}
 
@@ -31,6 +32,7 @@ func TestNewResourceBuilder(t *testing.T) {
 }
 
 func TestResourceBuilder_ErrorHandling(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	cfg := &config.Config{}
 
@@ -53,6 +55,7 @@ func TestResourceBuilder_ErrorHandling(t *testing.T) {
 }
 
 func TestResourceBuilder_DependencyValidation(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	cfg := &config.Config{}
 
@@ -70,10 +73,11 @@ func TestResourceBuilder_DependencyValidation(t *testing.T) {
 }
 
 func TestResourceBuilder_Chaining(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	cfg := &config.Config{}
 
-	// Test que el chainning funciona
+	// Test que el chaining funciona
 	builder := NewResourceBuilder(ctx, cfg)
 
 	result := builder.
@@ -86,6 +90,7 @@ func TestResourceBuilder_Chaining(t *testing.T) {
 }
 
 func TestResourceBuilder_CleanupRegistration(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	cfg := &config.Config{
 		Logging: config.LoggingConfig{
@@ -103,6 +108,7 @@ func TestResourceBuilder_CleanupRegistration(t *testing.T) {
 }
 
 func TestResourceBuilder_BuildRequiresLogger(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	cfg := &config.Config{}
 
@@ -120,6 +126,7 @@ func TestResourceBuilder_BuildRequiresLogger(t *testing.T) {
 }
 
 func TestResourceBuilder_CleanupOrder(t *testing.T) {
+	t.Parallel()
 	ctx := context.Background()
 	cfg := &config.Config{}
 
