@@ -9,6 +9,8 @@ type Config struct {
 	Database  DatabaseConfig  `mapstructure:"database"`
 	Messaging MessagingConfig `mapstructure:"messaging"`
 	NLP       NLPConfig       `mapstructure:"nlp"`
+	Storage   StorageConfig   `mapstructure:"storage"`
+	PDF       PDFConfig       `mapstructure:"pdf"`
 	Logging   LoggingConfig   `mapstructure:"logging"`
 	APIAdmin  APIAdminConfig  `mapstructure:"api_admin"`
 }
@@ -55,11 +57,34 @@ type ExchangeConfig struct {
 }
 
 type NLPConfig struct {
-	Provider    string  `mapstructure:"provider"`
-	APIKey      string  `mapstructure:"api_key"`
-	Model       string  `mapstructure:"model"`
-	MaxTokens   int     `mapstructure:"max_tokens"`
-	Temperature float64 `mapstructure:"temperature"`
+	Provider    string        `mapstructure:"provider"`
+	APIKey      string        `mapstructure:"api_key"`
+	Model       string        `mapstructure:"model"`
+	MaxTokens   int           `mapstructure:"max_tokens"`
+	Temperature float64       `mapstructure:"temperature"`
+	Timeout     time.Duration `mapstructure:"timeout"`
+}
+
+type StorageConfig struct {
+	Provider string        `mapstructure:"provider"`
+	S3       S3Config      `mapstructure:"s3"`
+	Timeout  time.Duration `mapstructure:"timeout"`
+}
+
+type S3Config struct {
+	Region          string        `mapstructure:"region"`
+	Bucket          string        `mapstructure:"bucket"`
+	Endpoint        string        `mapstructure:"endpoint"` // Para MinIO
+	AccessKeyID     string        `mapstructure:"access_key_id"`
+	SecretAccessKey string        `mapstructure:"secret_access_key"`
+	UsePathStyle    bool          `mapstructure:"use_path_style"` // Para MinIO
+	Timeout         time.Duration `mapstructure:"timeout"`
+}
+
+type PDFConfig struct {
+	MaxSizeMB    int           `mapstructure:"max_size_mb"`
+	AllowedTypes []string      `mapstructure:"allowed_types"`
+	Timeout      time.Duration `mapstructure:"timeout"`
 }
 
 type LoggingConfig struct {
@@ -86,9 +111,7 @@ func (c *Config) Validate() error {
 	if c.Messaging.RabbitMQ.URL == "" {
 		return fmt.Errorf("RABBITMQ_URL is required")
 	}
-	if c.NLP.APIKey == "" {
-		return fmt.Errorf("OPENAI_API_KEY is required")
-	}
+	// NLP.APIKey es opcional - si no está, usamos SmartFallback
 	return nil
 }
 
