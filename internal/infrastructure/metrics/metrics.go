@@ -209,17 +209,36 @@ func RecordDBOperation(dbType string, operation string, status string, durationS
 	DBOperationDuration.WithLabelValues(dbType, operation).Observe(durationSeconds)
 }
 
-// SetCircuitBreakerState actualiza el estado del circuit breaker
+// SetCircuitBreakerState actualiza el estado del circuit breaker.
+//
+// Valores esperados para el parámetro service:
+// - "nlp": Cliente de procesamiento de lenguaje natural (OpenAI/Fallback)
+// - "storage": Cliente de almacenamiento (S3/MinIO)
+//
+// IMPORTANTE: No usar sufijos como "-test" en producción. Los sufijos solo
+// deben usarse en tests unitarios para aislar las métricas de prueba.
 func SetCircuitBreakerState(service string, state int) {
 	CircuitBreakerState.WithLabelValues(service).Set(float64(state))
 }
 
-// RecordCircuitBreakerTransition registra una transición de estado del circuit breaker
+// RecordCircuitBreakerTransition registra una transición de estado del circuit breaker.
+//
+// Valores esperados para el parámetro service:
+// - "nlp": Cliente de procesamiento de lenguaje natural (OpenAI/Fallback)
+// - "storage": Cliente de almacenamiento (S3/MinIO)
+//
+// IMPORTANTE: No usar sufijos como "-test" en producción. Los sufijos solo
+// deben usarse en tests unitarios para aislar las métricas de prueba.
 func RecordCircuitBreakerTransition(service string, fromState string, toState string) {
 	CircuitBreakerTransitions.WithLabelValues(service, fromState, toState).Inc()
 }
 
-// RecordEventProcessed registra un evento procesado con su estado
+// RecordEventProcessed registra un evento procesado con su estado.
+//
+// Deprecated: usar RecordEventProcessing cuando se disponga de la duración
+// del procesamiento. No debe llamarse junto con RecordEventProcessing para
+// el mismo evento, ya que produciría un doble conteo en la métrica
+// worker_events_processed_total.
 func RecordEventProcessed(eventType string, status string) {
 	EventsProcessedTotal.WithLabelValues(eventType, status).Inc()
 }

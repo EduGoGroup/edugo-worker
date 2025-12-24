@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	sharedBootstrap "github.com/EduGoGroup/edugo-shared/bootstrap"
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
@@ -479,7 +480,7 @@ func (b *ResourceBuilder) WithMetricsServer() *ResourceBuilder {
 	// Registrar cleanup
 	b.addCleanup(func() error {
 		b.logger.Info("shutting down metrics server")
-		ctx, cancel := context.WithTimeout(context.Background(), 5*b.config.Database.MongoDB.Timeout)
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		return b.metricsServer.Shutdown(ctx)
 	})

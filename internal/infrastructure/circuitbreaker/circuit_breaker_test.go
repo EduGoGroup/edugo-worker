@@ -9,6 +9,15 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+const (
+	// testCircuitBreakerTimeout es el timeout configurado para el circuit breaker en tests
+	testCircuitBreakerTimeout = 100 * time.Millisecond
+
+	// testWaitForTimeout es el tiempo de espera para asegurar que el timeout del circuit breaker haya expirado
+	// Debe ser mayor que testCircuitBreakerTimeout para garantizar la expiración
+	testWaitForTimeout = testCircuitBreakerTimeout + 50*time.Millisecond
+)
+
 func TestNew(t *testing.T) {
 	// Arrange
 	config := DefaultConfig("test")
@@ -103,7 +112,7 @@ func TestCircuitBreaker_TransitionsToHalfOpen(t *testing.T) {
 	// Arrange
 	config := DefaultConfig("test")
 	config.MaxFailures = 1
-	config.Timeout = 100 * time.Millisecond
+	config.Timeout = testCircuitBreakerTimeout
 	cb := New(config)
 	ctx := context.Background()
 
@@ -115,7 +124,7 @@ func TestCircuitBreaker_TransitionsToHalfOpen(t *testing.T) {
 	assert.Equal(t, StateOpen, cb.State())
 
 	// Esperar a que pase el timeout
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(testWaitForTimeout)
 
 	// Act - Ejecutar después del timeout
 	err := cb.Execute(ctx, func(ctx context.Context) error {
@@ -131,7 +140,7 @@ func TestCircuitBreaker_ClosesAfterSuccessesInHalfOpen(t *testing.T) {
 	// Arrange
 	config := DefaultConfig("test")
 	config.MaxFailures = 1
-	config.Timeout = 100 * time.Millisecond
+	config.Timeout = testCircuitBreakerTimeout
 	config.SuccessThreshold = 2
 	config.MaxRequests = 5
 	cb := New(config)
@@ -143,7 +152,7 @@ func TestCircuitBreaker_ClosesAfterSuccessesInHalfOpen(t *testing.T) {
 	})
 
 	// Esperar a que pase el timeout
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(testWaitForTimeout)
 
 	// Act - Ejecutar con éxito en half-open
 	for i := 0; i < 2; i++ {
@@ -162,7 +171,7 @@ func TestCircuitBreaker_ReopensOnFailureInHalfOpen(t *testing.T) {
 	// Arrange
 	config := DefaultConfig("test")
 	config.MaxFailures = 1
-	config.Timeout = 100 * time.Millisecond
+	config.Timeout = testCircuitBreakerTimeout
 	config.MaxRequests = 2 // Permitir 2 peticiones en half-open para este test
 	cb := New(config)
 	ctx := context.Background()
@@ -173,7 +182,7 @@ func TestCircuitBreaker_ReopensOnFailureInHalfOpen(t *testing.T) {
 	})
 
 	// Esperar a que pase el timeout
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(testWaitForTimeout)
 
 	// Transicionar a half-open con una ejecución exitosa
 	_ = cb.Execute(ctx, func(ctx context.Context) error {
@@ -194,7 +203,7 @@ func TestCircuitBreaker_LimitsRequestsInHalfOpen(t *testing.T) {
 	// Arrange
 	config := DefaultConfig("test")
 	config.MaxFailures = 1
-	config.Timeout = 100 * time.Millisecond
+	config.Timeout = testCircuitBreakerTimeout
 	config.MaxRequests = 1
 	config.SuccessThreshold = 10 // Alto para que no se cierre inmediatamente
 	cb := New(config)
@@ -206,7 +215,7 @@ func TestCircuitBreaker_LimitsRequestsInHalfOpen(t *testing.T) {
 	})
 
 	// Esperar a que pase el timeout
-	time.Sleep(150 * time.Millisecond)
+	time.Sleep(testWaitForTimeout)
 
 	// Transicionar a half-open con primera petición
 	err1 := cb.Execute(ctx, func(ctx context.Context) error {

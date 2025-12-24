@@ -126,12 +126,13 @@ func (cb *CircuitBreaker) beforeRequest() error {
 		return ErrCircuitOpen
 
 	case StateHalfOpen:
-		// Limitar el número de peticiones
-		if cb.requests >= cb.config.MaxRequests {
-			return ErrTooManyRequests
+		// Limitar el número de peticiones de forma atómica
+		// Verificar e incrementar en el mismo paso para evitar race conditions
+		if cb.requests < cb.config.MaxRequests {
+			cb.requests++
+			return nil
 		}
-		cb.requests++
-		return nil
+		return ErrTooManyRequests
 
 	default:
 		return ErrCircuitOpen

@@ -11,6 +11,25 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// waitForServerReady espera a que el servidor esté listo usando retry con backoff
+func waitForServerReady(t *testing.T, url string, maxAttempts int, interval time.Duration) {
+	t.Helper()
+
+	for i := 0; i < maxAttempts; i++ {
+		resp, err := http.Get(url)
+		if err == nil {
+			_ = resp.Body.Close()
+			return
+		}
+
+		if i < maxAttempts-1 {
+			time.Sleep(interval)
+		}
+	}
+
+	t.Fatalf("servidor no estuvo listo después de %d intentos", maxAttempts)
+}
+
 func TestNewMetricsServer(t *testing.T) {
 	// Arrange & Act
 	server := NewMetricsServer(9090)
@@ -33,8 +52,8 @@ func TestMetricsServer_MetricsEndpoint(t *testing.T) {
 		_ = server.Shutdown(ctx)
 	}()
 
-	// Esperar a que el servidor inicie
-	time.Sleep(100 * time.Millisecond)
+	// Esperar a que el servidor esté listo con retry
+	waitForServerReady(t, "http://localhost:19090/health", 10, 50*time.Millisecond)
 
 	// Act
 	resp, err := http.Get("http://localhost:19090/metrics")
@@ -67,8 +86,8 @@ func TestMetricsServer_HealthEndpoint(t *testing.T) {
 		_ = server.Shutdown(ctx)
 	}()
 
-	// Esperar a que el servidor inicie
-	time.Sleep(100 * time.Millisecond)
+	// Esperar a que el servidor esté listo con retry
+	waitForServerReady(t, "http://localhost:19091/health", 10, 50*time.Millisecond)
 
 	// Act
 	resp, err := http.Get("http://localhost:19091/health")
@@ -92,8 +111,8 @@ func TestMetricsServer_Shutdown(t *testing.T) {
 		_ = server.Start()
 	}()
 
-	// Esperar a que el servidor inicie
-	time.Sleep(100 * time.Millisecond)
+	// Esperar a que el servidor esté listo con retry
+	waitForServerReady(t, "http://localhost:19092/health", 10, 50*time.Millisecond)
 
 	// Act
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
