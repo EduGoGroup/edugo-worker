@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"io"
 	"time"
 
 	"github.com/EduGoGroup/edugo-shared/common/errors"
@@ -78,18 +79,31 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		return errors.NewInternalError("failed to update status", err)
 	}
 
-	// 2. Descargar PDF desde S3
+	// 2. Descargar PDF desde S3 con retry logic
 	p.logger.Debug("descargando PDF de S3", "s3_key", event.S3Key)
 	s3Start := time.Now()
-	pdfReader, err := p.storageClient.Download(ctx, event.S3Key)
+
+	var pdfReader io.ReadCloser
+	retryCfg := DefaultRetryConfig(p.logger)
+	err = WithRetry(ctx, retryCfg, func() error {
+		var downloadErr error
+		pdfReader, downloadErr = p.storageClient.Download(ctx, event.S3Key)
+		return downloadErr
+	})
+
 	s3Status := "success"
 	if err != nil {
 		s3Status = "error"
 	}
 	metrics.RecordS3Operation("download", s3Status, time.Since(s3Start).Seconds())
+
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
-		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
+		p.logger.Error("error descargando PDF de S3 después de reintentos",
+			"error", err,
+			"s3_key", event.S3Key,
+			"errorType", classifyError(err),
+		)
 		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "s3_error")
 		return errors.NewInternalError("failed to download PDF", err)
@@ -100,10 +114,20 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		}
 	}()
 
-	// 3. Extraer texto del PDF
+	// 3. Extraer texto del PDF con retry logic
+	// NOTA: La extracción de PDF normalmente no necesita retry porque los errores
+	// suelen ser permanentes (PDF corrupto, escaneado, etc). Sin embargo, mantenemos
+	// el retry para casos edge de errores transitorios de I/O.
 	p.logger.Debug("extrayendo texto del PDF")
 	pdfStart := time.Now()
-	extractionResult, err := p.pdfExtractor.ExtractWithMetadata(ctx, pdfReader)
+
+	var extractionResult *pdf.ExtractionResult
+	err = WithRetry(ctx, retryCfg, func() error {
+		var extractErr error
+		extractionResult, extractErr = p.pdfExtractor.ExtractWithMetadata(ctx, pdfReader)
+		return extractErr
+	})
+
 	pdfStatus := "success"
 	if err != nil {
 		pdfStatus = "error"
@@ -113,9 +137,13 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		pageCount = extractionResult.PageCount
 	}
 	metrics.RecordPDFExtraction(pdfStatus, time.Since(pdfStart).Seconds(), pageCount)
+
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
-		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
+		p.logger.Error("error extrayendo texto del PDF",
+			"error", err,
+			"errorType", classifyError(err),
+		)
 		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "pdf_error")
 		return errors.NewInternalError("failed to extract PDF text", err)
@@ -124,10 +152,17 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	extractedText := extractionResult.Text
 	p.logger.Info("texto extraído", "pages", extractionResult.PageCount, "words", extractionResult.WordCount)
 
-	// 4. Generar resumen con NLP
+	// 4. Generar resumen con NLP con retry logic
 	p.logger.Debug("generando resumen con NLP")
 	nlpSummaryStart := time.Now()
-	summary, err := p.nlpClient.GenerateSummary(ctx, extractedText)
+
+	var summary *nlp.Summary
+	err = WithRetry(ctx, retryCfg, func() error {
+		var summaryErr error
+		summary, summaryErr = p.nlpClient.GenerateSummary(ctx, extractedText)
+		return summaryErr
+	})
+
 	nlpSummaryStatus := "success"
 	if err != nil {
 		nlpSummaryStatus = "error"
@@ -135,17 +170,30 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	// Estimar tokens: aproximadamente 1 palabra = 1.33 tokens (para inglés/español)
 	estimatedTokens := estimateTokens(extractedText)
 	metrics.RecordOpenAIRequest(nlpSummaryStatus, time.Since(nlpSummaryStart).Seconds(), estimatedTokens)
+
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
+		p.logger.Error("error generando resumen con NLP",
+			"error", err,
+			"errorType", classifyError(err),
+			"textLength", len(extractedText),
+		)
 		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "nlp_summary_error")
 		return errors.NewInternalError("failed to generate summary", err)
 	}
 
-	// 5. Generar quiz con NLP
+	// 5. Generar quiz con NLP con retry logic
 	p.logger.Debug("generando quiz con NLP")
 	nlpQuizStart := time.Now()
-	quiz, err := p.nlpClient.GenerateQuiz(ctx, extractedText, 10)
+
+	var quiz *nlp.Quiz
+	err = WithRetry(ctx, retryCfg, func() error {
+		var quizErr error
+		quiz, quizErr = p.nlpClient.GenerateQuiz(ctx, extractedText, 10)
+		return quizErr
+	})
+
 	nlpQuizStatus := "success"
 	if err != nil {
 		nlpQuizStatus = "error"
@@ -153,8 +201,14 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	// Estimar tokens para la generación del quiz
 	estimatedQuizTokens := estimateTokens(extractedText)
 	metrics.RecordOpenAIRequest(nlpQuizStatus, time.Since(nlpQuizStart).Seconds(), estimatedQuizTokens)
+
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
+		p.logger.Error("error generando quiz con NLP",
+			"error", err,
+			"errorType", classifyError(err),
+			"textLength", len(extractedText),
+		)
 		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "nlp_quiz_error")
 		return errors.NewInternalError("failed to generate quiz", err)
