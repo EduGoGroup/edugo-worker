@@ -342,5 +342,3 @@ func TestMaterialUploadedProcessor_NewMaterialUploadedProcessor(t *testing.T) {
 	assert.Equal(t, pdfExtractor, processor.pdfExtractor)
 	assert.Equal(t, nlpClient, processor.nlpClient)
 }
-
-

@@ -21,7 +21,7 @@ const (
 
 	// Límites de tamaño de archivo
 	maxFileSize = 100 * 1024 * 1024 // 100MB
-	minFileSize = 1024               // 1KB
+	minFileSize = 1024              // 1KB
 
 	// Tipos de contenido permitidos
 	contentTypePDF = "application/pdf"
@@ -33,12 +33,12 @@ var (
 )
 
 type Client struct {
-	s3Client       *s3.Client
-	bucket         string
-	logger         logger.Logger
-	maxFileSize    int64
-	minFileSize    int64
-	allowedTypes   []string
+	s3Client        *s3.Client
+	bucket          string
+	logger          logger.Logger
+	maxFileSize     int64
+	minFileSize     int64
+	allowedTypes    []string
 	downloadTimeout time.Duration
 }
 

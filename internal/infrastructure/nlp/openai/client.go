@@ -43,16 +43,16 @@ var (
 
 const (
 	// Modelos soportados de OpenAI
-	ModelGPT4Turbo    = "gpt-4-turbo-preview"
-	ModelGPT4         = "gpt-4"
-	ModelGPT35Turbo   = "gpt-3.5-turbo"
+	ModelGPT4Turbo     = "gpt-4-turbo-preview"
+	ModelGPT4          = "gpt-4"
+	ModelGPT35Turbo    = "gpt-3.5-turbo"
 	ModelGPT35Turbo16k = "gpt-3.5-turbo-16k"
 
 	// Límites de texto
-	maxTextLength     = 50000 // ~50k caracteres
-	minTextLength     = 50    // mínimo 50 caracteres
-	maxQuestionCount  = 50
-	minQuestionCount  = 1
+	maxTextLength    = 50000 // ~50k caracteres
+	minTextLength    = 50    // mínimo 50 caracteres
+	maxQuestionCount = 50
+	minQuestionCount = 1
 
 	// Configuración por defecto
 	defaultMaxTokens   = 2000

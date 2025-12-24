@@ -163,11 +163,12 @@ func TestCreateMockQuiz(t *testing.T) {
 		assert.Greater(t, len(q.Options), 0)
 
 		// Verificar que la dificultad varía según el índice
-		if i%3 == 0 {
+		switch i % 3 {
+		case 0:
 			assert.Equal(t, "easy", q.Difficulty)
-		} else if i%3 == 1 {
+		case 1:
 			assert.Equal(t, "medium", q.Difficulty)
-		} else {
+		case 2:
 			assert.Equal(t, "hard", q.Difficulty)
 		}
 	}

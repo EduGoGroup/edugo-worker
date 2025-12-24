@@ -87,8 +87,8 @@ func (e *PDFExtractor) ExtractWithMetadata(ctx context.Context, reader io.Reader
 		e.logger.Error("error leyendo contexto PDF", "error", err)
 		// Distinguir entre PDF corrupto y otros errores
 		if strings.Contains(err.Error(), "not a PDF file") ||
-		   strings.Contains(err.Error(), "malformed") ||
-		   strings.Contains(err.Error(), "invalid") {
+			strings.Contains(err.Error(), "malformed") ||
+			strings.Contains(err.Error(), "invalid") {
 			return nil, fmt.Errorf("%w: %v", ErrPDFCorrupt, err)
 		}
 		return nil, fmt.Errorf("error procesando PDF: %w", err)

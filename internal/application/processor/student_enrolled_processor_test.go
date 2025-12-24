@@ -10,6 +10,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// contextKey es un tipo personalizado para las keys del contexto
+// para evitar colisiones con otras librerías (SA1029)
+type contextKey string
+
+const testContextKey contextKey = "test_key"
+
 func TestStudentEnrolledProcessor_EventType(t *testing.T) {
 	logger := createTestLogger()
 	processor := NewStudentEnrolledProcessor(logger)
@@ -84,7 +90,7 @@ func TestStudentEnrolledProcessor_Process_WithContext(t *testing.T) {
 	require.NoError(t, err)
 
 	// Crear contexto con valores
-	ctx := context.WithValue(context.Background(), "test_key", "test_value")
+	ctx := context.WithValue(context.Background(), testContextKey, "test_value")
 
 	// Act
 	err = processor.Process(ctx, payload)

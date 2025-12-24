@@ -149,11 +149,14 @@ func CreateMockQuiz(questionCount int) *nlp.Quiz {
 	questions := make([]nlp.Question, questionCount)
 
 	for i := 0; i < questionCount; i++ {
-		difficulty := "easy"
-		if i%3 == 1 {
+		var difficulty string
+		switch i % 3 {
+		case 1:
 			difficulty = "medium"
-		} else if i%3 == 2 {
+		case 2:
 			difficulty = "hard"
+		default:
+			difficulty = "easy"
 		}
 
 		questions[i] = nlp.Question{
