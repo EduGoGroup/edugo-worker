@@ -32,7 +32,7 @@ func TestMaterialUploadedProcessor_Process_InvalidJSON(t *testing.T) {
 	// Arrange
 	db, _, err := sqlmock.New()
 	assert.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	processor := &MaterialUploadedProcessor{
 		db:     db,
@@ -53,7 +53,7 @@ func TestMaterialUploadedProcessor_Process_InvalidMaterialID(t *testing.T) {
 	// Arrange
 	db, _, err := sqlmock.New()
 	assert.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	processor := &MaterialUploadedProcessor{
 		db:     db,
@@ -78,7 +78,7 @@ func TestMaterialUploadedProcessor_Process_StorageDownloadError(t *testing.T) {
 	// Arrange
 	db, dbMock, err := sqlmock.New()
 	assert.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Mock para actualizar estado a processing
 	dbMock.ExpectExec("UPDATE materials SET processing_status").
@@ -120,7 +120,7 @@ func TestMaterialUploadedProcessor_Process_PDFExtractionError(t *testing.T) {
 	// Arrange
 	db, dbMock, err := sqlmock.New()
 	assert.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Mock para actualizar estado a processing
 	dbMock.ExpectExec("UPDATE materials SET processing_status").
@@ -171,7 +171,7 @@ func TestMaterialUploadedProcessor_Process_NLPSummaryError(t *testing.T) {
 	// Arrange
 	db, dbMock, err := sqlmock.New()
 	assert.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Mock para actualizar estado a processing
 	dbMock.ExpectExec("UPDATE materials SET processing_status").
@@ -229,7 +229,7 @@ func TestMaterialUploadedProcessor_Process_NLPQuizError(t *testing.T) {
 	// Arrange
 	db, dbMock, err := sqlmock.New()
 	assert.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Mock para actualizar estado a processing
 	dbMock.ExpectExec("UPDATE materials SET processing_status").
@@ -302,7 +302,7 @@ func TestMaterialUploadedProcessor_NewMaterialUploadedProcessor(t *testing.T) {
 	// Arrange
 	db, _, err := sqlmock.New()
 	assert.NoError(t, err)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Crear un cliente MongoDB de prueba (puede ser nil para este test)
 	clientOpts := options.Client().ApplyURI("mongodb://localhost:27017")
