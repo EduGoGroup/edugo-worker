@@ -61,6 +61,8 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 
 	materialID, err := valueobject.MaterialIDFromString(event.MaterialID)
 	if err != nil {
+		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
+  //nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "validation_error")
 		return errors.NewValidationError("invalid material_id")
 	}
@@ -87,6 +89,8 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	metrics.RecordS3Operation("download", s3Status, time.Since(s3Start).Seconds())
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
+		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
+  //nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "s3_error")
 		return errors.NewInternalError("failed to download PDF", err)
 	}
@@ -111,6 +115,8 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	metrics.RecordPDFExtraction(pdfStatus, time.Since(pdfStart).Seconds(), pageCount)
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
+		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
+  //nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "pdf_error")
 		return errors.NewInternalError("failed to extract PDF text", err)
 	}
@@ -131,6 +137,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	metrics.RecordOpenAIRequest(nlpSummaryStatus, time.Since(nlpSummaryStart).Seconds(), estimatedTokens)
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
+  //nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "nlp_summary_error")
 		return errors.NewInternalError("failed to generate summary", err)
 	}
@@ -148,6 +155,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	metrics.RecordOpenAIRequest(nlpQuizStatus, time.Since(nlpQuizStart).Seconds(), estimatedQuizTokens)
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
+  //nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "nlp_quiz_error")
 		return errors.NewInternalError("failed to generate quiz", err)
 	}
@@ -205,11 +213,13 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
 		p.logger.Error("processing failed", "error", err, "material_id", event.MaterialID)
+  //nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "database_error")
 		return errors.NewInternalError("processing failed", err)
 	}
 
 	// Registrar evento completado exitosamente
+ //nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 	metrics.RecordEventProcessed("material_uploaded", "success")
 	metrics.RecordProcessingDuration("material_uploaded", time.Since(startTime).Seconds())
 

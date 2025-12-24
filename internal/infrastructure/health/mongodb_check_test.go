@@ -11,7 +11,8 @@ import (
 )
 
 func TestMongoDBCheck_Name(t *testing.T) {
-	client, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	ctx := context.Background()
+	client, _ := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://localhost:27017"))
 	check := NewMongoDBCheck(client, 5*time.Second)
 
 	assert.Equal(t, "mongodb", check.Name())
@@ -54,9 +55,10 @@ func TestMongoDBCheck_Check_Timeout(t *testing.T) {
 
 	ctx := context.Background()
 	// Intentar conectar a un host que no existe para forzar timeout
-	client, err := mongo.NewClient(options.Client().ApplyURI("mongodb://invalid-host:27017"))
+	client, err := mongo.Connect(ctx, options.Client().ApplyURI("mongodb://invalid-host:27017").SetServerSelectionTimeout(1*time.Second))
 	if err != nil {
-		t.Fatalf("Error creando cliente: %v", err)
+		// Si falla al conectar, crear un check con un cliente que sabemos fallará
+		client, _ = mongo.Connect(ctx, options.Client().ApplyURI("mongodb://invalid-host:27017"))
 	}
 
 	check := NewMongoDBCheck(client, 1*time.Second)
@@ -74,10 +76,11 @@ func TestMongoDBCheck_Check_ContextCanceled(t *testing.T) {
 		t.Skip("Skipping integration test")
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
+	bgCtx := context.Background()
+	ctx, cancel := context.WithCancel(bgCtx)
 	cancel() // Cancelar inmediatamente
 
-	client, _ := mongo.NewClient(options.Client().ApplyURI("mongodb://localhost:27017"))
+	client, _ := mongo.Connect(bgCtx, options.Client().ApplyURI("mongodb://localhost:27017"))
 	check := NewMongoDBCheck(client, 5*time.Second)
 	result := check.Check(ctx)
 

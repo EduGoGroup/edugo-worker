@@ -66,7 +66,7 @@ func TestRabbitMQCheck_Check_ChannelClosed(t *testing.T) {
 	}
 
 	// Cerrar el canal antes del check
-	channel.Close()
+	_ = channel.Close()
 
 	check := NewRabbitMQCheck(channel, 3*time.Second)
 	result := check.Check(ctx)
@@ -95,7 +95,7 @@ func TestRabbitMQCheck_Check_ConnectionLost(t *testing.T) {
 	}
 
 	// Cerrar la conexión, lo que cerrará el canal
-	conn.Close()
+	_ = conn.Close()
 
 	check := NewRabbitMQCheck(channel, 3*time.Second)
 	result := check.Check(ctx)
