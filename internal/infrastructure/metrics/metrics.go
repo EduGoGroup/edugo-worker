@@ -168,6 +168,46 @@ var (
 	)
 )
 
+// Métricas de rate limiter
+var (
+	// RateLimiterWaits cuenta las veces que se esperó por rate limiter
+	RateLimiterWaits = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "worker_rate_limiter_waits_total",
+			Help: "Total number of times rate limiter caused waiting by event type",
+		},
+		[]string{"event_type"},
+	)
+
+	// RateLimiterWaitDuration mide el tiempo de espera por rate limiter
+	RateLimiterWaitDuration = promauto.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "worker_rate_limiter_wait_duration_seconds",
+			Help:    "Duration of rate limiter waits in seconds by event type",
+			Buckets: []float64{0.001, 0.005, 0.01, 0.05, 0.1, 0.5, 1},
+		},
+		[]string{"event_type"},
+	)
+
+	// RateLimiterTokens indica tokens disponibles por tipo de evento
+	RateLimiterTokens = promauto.NewGaugeVec(
+		prometheus.GaugeOpts{
+			Name: "worker_rate_limiter_tokens_available",
+			Help: "Number of tokens currently available by event type",
+		},
+		[]string{"event_type"},
+	)
+
+	// RateLimiterAllowed cuenta requests permitidos por tipo de evento
+	RateLimiterAllowed = promauto.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "worker_rate_limiter_allowed_total",
+			Help: "Total number of requests allowed by rate limiter by event type",
+		},
+		[]string{"event_type"},
+	)
+)
+
 // RecordEventProcessing registra una métrica de procesamiento de evento
 func RecordEventProcessing(eventType string, status string, durationSeconds float64) {
 	EventsProcessedTotal.WithLabelValues(eventType, status).Inc()
@@ -255,4 +295,20 @@ func RecordDatabaseOperation(dbType string, operation string, durationSeconds fl
 		status = "success"
 	}
 	RecordDBOperation(dbType, operation, status, durationSeconds)
+}
+
+// RecordRateLimiterWait registra una espera causada por rate limiter
+func RecordRateLimiterWait(eventType string, durationSeconds float64) {
+	RateLimiterWaits.WithLabelValues(eventType).Inc()
+	RateLimiterWaitDuration.WithLabelValues(eventType).Observe(durationSeconds)
+}
+
+// RecordRateLimiterAllowed registra un request permitido por rate limiter
+func RecordRateLimiterAllowed(eventType string) {
+	RateLimiterAllowed.WithLabelValues(eventType).Inc()
+}
+
+// UpdateRateLimiterTokens actualiza la métrica de tokens disponibles
+func UpdateRateLimiterTokens(eventType string, tokens float64) {
+	RateLimiterTokens.WithLabelValues(eventType).Set(tokens)
 }

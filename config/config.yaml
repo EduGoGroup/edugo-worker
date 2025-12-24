@@ -58,3 +58,31 @@ circuit_breakers:
     timeout: "60s"
     max_requests: 1
     success_threshold: 2
+
+# Rate Limiter
+rate_limiter:
+  enabled: true
+
+  # Configuración por tipo de evento
+  by_event_type:
+    material.uploaded:
+      requests_per_second: 5.0 # Procesamiento PDF es costoso
+      burst_size: 10.0
+
+    material.updated:
+      requests_per_second: 10.0 # Actualizaciones son más ligeras
+      burst_size: 20.0
+
+    assessment.attempt:
+      requests_per_second: 15.0 # Mayor throughput para quizzes
+      burst_size: 30.0
+
+  # Configuración por defecto para eventos no especificados
+  default:
+    requests_per_second: 10.0
+    burst_size: 20.0
+
+# Graceful Shutdown
+shutdown:
+  timeout: "30s" # Tiempo máximo para completar shutdown
+  wait_for_messages: true # Esperar a que terminen los mensajes en proceso

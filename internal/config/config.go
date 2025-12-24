@@ -16,6 +16,8 @@ type Config struct {
 	Metrics         MetricsConfig         `mapstructure:"metrics"`
 	Health          HealthConfig          `mapstructure:"health"`
 	CircuitBreakers CircuitBreakersConfig `mapstructure:"circuit_breakers"`
+	RateLimiter     RateLimiterConfig     `mapstructure:"rate_limiter"`
+	Shutdown        ShutdownConfig        `mapstructure:"shutdown"`
 }
 
 type DatabaseConfig struct {
@@ -202,5 +204,53 @@ func (c *CircuitBreakerConfig) GetWithDefaults() CircuitBreakerConfig {
 	if cfg.SuccessThreshold == 0 {
 		cfg.SuccessThreshold = 2
 	}
+	return cfg
+}
+
+// RateLimiterConfig configuración del rate limiter
+type RateLimiterConfig struct {
+	Enabled     bool                            `mapstructure:"enabled"`
+	ByEventType map[string]EventRateLimitConfig `mapstructure:"by_event_type"`
+	Default     EventRateLimitConfig            `mapstructure:"default"`
+}
+
+// EventRateLimitConfig configuración de rate limiting para un tipo de evento
+type EventRateLimitConfig struct {
+	RequestsPerSecond float64 `mapstructure:"requests_per_second"`
+	BurstSize         float64 `mapstructure:"burst_size"`
+}
+
+// GetRateLimiterConfigWithDefaults retorna la configuración del rate limiter con valores por defecto
+func (c *Config) GetRateLimiterConfigWithDefaults() RateLimiterConfig {
+	cfg := c.RateLimiter
+
+	// Si no hay configuración por defecto, establecer una razonable
+	if cfg.Default.RequestsPerSecond == 0 {
+		cfg.Default.RequestsPerSecond = 10
+	}
+	if cfg.Default.BurstSize == 0 {
+		cfg.Default.BurstSize = 20
+	}
+
+	return cfg
+}
+
+// ShutdownConfig configuración del graceful shutdown
+type ShutdownConfig struct {
+	Timeout         time.Duration `mapstructure:"timeout"`
+	WaitForMessages bool          `mapstructure:"wait_for_messages"`
+}
+
+// GetShutdownConfigWithDefaults retorna la configuración de shutdown con valores por defecto
+func (c *Config) GetShutdownConfigWithDefaults() ShutdownConfig {
+	cfg := c.Shutdown
+
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 30 * time.Second
+	}
+
+	// WaitForMessages viene directamente de la configuración sin defaults
+	// El valor en config.yaml define el comportamiento
+
 	return cfg
 }
