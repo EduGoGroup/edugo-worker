@@ -12,6 +12,10 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/bootstrap/adapter"
 	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/sirupsen/logrus"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -34,7 +38,7 @@ type ResourceBuilder struct {
 	config *config.Config
 	ctx    context.Context
 
-	// Recursos de infraestructura
+	// Recursos de infraestructura base
 	logger        logger.Logger
 	logrusLogger  *logrus.Logger
 	sqlDB         *sql.DB
@@ -42,6 +46,11 @@ type ResourceBuilder struct {
 	mongodb       *mongo.Database
 	rabbitConn    *amqp.Connection
 	rabbitChannel *amqp.Channel
+
+	// Servicios de infraestructura externa
+	storageClient storage.Client
+	pdfExtractor  pdf.Extractor
+	nlpClient     nlp.Client
 
 	// Recursos de aplicación
 	authClient        *client.AuthClient
@@ -272,26 +281,79 @@ func (b *ResourceBuilder) WithAuthClient() *ResourceBuilder {
 	return b
 }
 
+// WithInfrastructure configura los servicios de infraestructura externa (S3, PDF, NLP)
+func (b *ResourceBuilder) WithInfrastructure() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+
+	if b.logger == nil {
+		b.err = fmt.Errorf("logger required before infrastructure")
+		return b
+	}
+
+	b.logger.Info("initializing infrastructure services")
+
+	// Crear factory
+	factory := infrastructure.NewFactory(*b.config, b.logger)
+
+	// Crear cliente de almacenamiento (S3/MinIO)
+	storageClient, err := factory.CreateStorageClient(b.ctx)
+	if err != nil {
+		b.err = fmt.Errorf("failed to create storage client: %w", err)
+		return b
+	}
+	b.storageClient = storageClient
+
+	// Crear extractor PDF
+	pdfExtractor, err := factory.CreatePDFExtractor()
+	if err != nil {
+		b.err = fmt.Errorf("failed to create PDF extractor: %w", err)
+		return b
+	}
+	b.pdfExtractor = pdfExtractor
+
+	// Crear cliente NLP
+	nlpClient, err := factory.CreateNLPClient()
+	if err != nil {
+		b.err = fmt.Errorf("failed to create NLP client: %w", err)
+		return b
+	}
+	b.nlpClient = nlpClient
+
+	b.logger.Info("✅ Infrastructure services initialized successfully")
+	return b
+}
+
 // WithProcessors configura el registry de processors
 func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	if b.err != nil {
 		return b
 	}
 
-	// Verificar dependencias
+	// Verificar dependencias base
 	if b.logger == nil || b.sqlDB == nil || b.mongodb == nil {
 		b.err = fmt.Errorf("logger, PostgreSQL and MongoDB required before processors")
+		return b
+	}
+
+	// Verificar dependencias de infraestructura
+	if b.storageClient == nil || b.pdfExtractor == nil || b.nlpClient == nil {
+		b.err = fmt.Errorf("infrastructure services required before processors (call WithInfrastructure first)")
 		return b
 	}
 
 	b.logger.Info("initializing processors")
 
 	// Crear processors individuales
-	materialUploadedProc := processor.NewMaterialUploadedProcessor(
-		b.sqlDB,
-		b.mongodb,
-		b.logger,
-	)
+	materialUploadedProc := processor.NewMaterialUploadedProcessor(processor.MaterialUploadedProcessorConfig{
+		DB:            b.sqlDB,
+		MongoDB:       b.mongodb,
+		Logger:        b.logger,
+		StorageClient: b.storageClient,
+		PDFExtractor:  b.pdfExtractor,
+		NLPClient:     b.nlpClient,
+	})
 	materialDeletedProc := processor.NewMaterialDeletedProcessor(
 		b.mongodb,
 		b.logger,

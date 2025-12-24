@@ -7,6 +7,9 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
 	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/messaging/consumer"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
 	"go.mongodb.org/mongo-driver/mongo"
 )
 
@@ -18,6 +21,11 @@ type Container struct {
 	Logger     logger.Logger
 	AuthClient *client.AuthClient
 
+	// Infrastructure Services
+	StorageClient storage.Client
+	PDFExtractor  pdf.Extractor
+	NLPClient     nlp.Client
+
 	// Processor Registry
 	ProcessorRegistry *processor.Registry
 
@@ -27,23 +35,36 @@ type Container struct {
 
 // ContainerConfig configuración para crear el container
 type ContainerConfig struct {
-	DB         *sql.DB
-	MongoDB    *mongo.Database
-	Logger     logger.Logger
-	AuthClient *client.AuthClient
+	DB            *sql.DB
+	MongoDB       *mongo.Database
+	Logger        logger.Logger
+	AuthClient    *client.AuthClient
+	StorageClient storage.Client
+	PDFExtractor  pdf.Extractor
+	NLPClient     nlp.Client
 }
 
 // NewContainer crea un nuevo container con todas las dependencias
 func NewContainer(cfg ContainerConfig) *Container {
 	c := &Container{
-		DB:         cfg.DB,
-		MongoDB:    cfg.MongoDB,
-		Logger:     cfg.Logger,
-		AuthClient: cfg.AuthClient,
+		DB:            cfg.DB,
+		MongoDB:       cfg.MongoDB,
+		Logger:        cfg.Logger,
+		AuthClient:    cfg.AuthClient,
+		StorageClient: cfg.StorageClient,
+		PDFExtractor:  cfg.PDFExtractor,
+		NLPClient:     cfg.NLPClient,
 	}
 
 	// Crear processors individuales
-	materialUploadedProc := processor.NewMaterialUploadedProcessor(cfg.DB, cfg.MongoDB, cfg.Logger)
+	materialUploadedProc := processor.NewMaterialUploadedProcessor(processor.MaterialUploadedProcessorConfig{
+		DB:            cfg.DB,
+		MongoDB:       cfg.MongoDB,
+		Logger:        cfg.Logger,
+		StorageClient: cfg.StorageClient,
+		PDFExtractor:  cfg.PDFExtractor,
+		NLPClient:     cfg.NLPClient,
+	})
 	materialDeletedProc := processor.NewMaterialDeletedProcessor(cfg.MongoDB, cfg.Logger)
 	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(cfg.Logger)
 	studentEnrolledProc := processor.NewStudentEnrolledProcessor(cfg.Logger)
