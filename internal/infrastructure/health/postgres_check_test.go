@@ -29,7 +29,7 @@ func TestPostgreSQLCheck_Check_Success(t *testing.T) {
 	if err != nil {
 		t.Skipf("PostgreSQL no disponible: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Verificar que la conexión funciona
 	if err := db.PingContext(ctx); err != nil {
@@ -61,7 +61,7 @@ func TestPostgreSQLCheck_Check_ConnectionPoolDegraded(t *testing.T) {
 	if err != nil {
 		t.Skipf("PostgreSQL no disponible: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	// Verificar que la conexión funciona
 	if err := db.PingContext(ctx); err != nil {
@@ -76,7 +76,7 @@ func TestPostgreSQLCheck_Check_ConnectionPoolDegraded(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error abriendo conexión: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	check := NewPostgreSQLCheck(db, 3*time.Second)
 
@@ -104,7 +104,7 @@ func TestPostgreSQLCheck_Check_Timeout(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Error creando conexión: %v", err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	check := NewPostgreSQLCheck(db, 1*time.Second)
 	result := check.Check(ctx)
@@ -125,7 +125,7 @@ func TestPostgreSQLCheck_Check_ContextCanceled(t *testing.T) {
 	cancel() // Cancelar inmediatamente
 
 	db, _ := sql.Open("postgres", "host=localhost port=5432 user=test dbname=test sslmode=disable")
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	check := NewPostgreSQLCheck(db, 3*time.Second)
 	result := check.Check(ctx)

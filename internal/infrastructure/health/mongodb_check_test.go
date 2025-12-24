@@ -29,7 +29,11 @@ func TestMongoDBCheck_Check_Success(t *testing.T) {
 	if err != nil {
 		t.Skipf("MongoDB no disponible: %v", err)
 	}
-	defer client.Disconnect(ctx)
+	defer func() {
+		if err := client.Disconnect(ctx); err != nil {
+			t.Logf("Error desconectando MongoDB: %v", err)
+		}
+	}()
 
 	check := NewMongoDBCheck(client, 5*time.Second)
 	result := check.Check(ctx)

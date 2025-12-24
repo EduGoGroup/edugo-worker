@@ -28,13 +28,13 @@ func TestRabbitMQCheck_Check_Success(t *testing.T) {
 	if err != nil {
 		t.Skipf("RabbitMQ no disponible: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	channel, err := conn.Channel()
 	if err != nil {
 		t.Fatalf("Error creando canal: %v", err)
 	}
-	defer channel.Close()
+	defer func() { _ = channel.Close() }()
 
 	check := NewRabbitMQCheck(channel, 3*time.Second)
 	result := check.Check(ctx)
@@ -58,7 +58,7 @@ func TestRabbitMQCheck_Check_ChannelClosed(t *testing.T) {
 	if err != nil {
 		t.Skipf("RabbitMQ no disponible: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	channel, err := conn.Channel()
 	if err != nil {
@@ -117,13 +117,13 @@ func TestRabbitMQCheck_Check_QuickResponse(t *testing.T) {
 	if err != nil {
 		t.Skipf("RabbitMQ no disponible: %v", err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	channel, err := conn.Channel()
 	if err != nil {
 		t.Fatalf("Error creando canal: %v", err)
 	}
-	defer channel.Close()
+	defer func() { _ = channel.Close() }()
 
 	check := NewRabbitMQCheck(channel, 3*time.Second)
 
