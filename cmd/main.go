@@ -152,11 +152,9 @@ func main() {
 						return
 					}
 
-					// Registrar métricas de rate limiting
+					// Registrar métricas de rate limiting (siempre registramos la espera para no perder precisión)
 					waitDuration := time.Since(start).Seconds()
-					if waitDuration > 0 {
-						metrics.RecordRateLimiterWait(eventType, waitDuration)
-					}
+					metrics.RecordRateLimiterWait(eventType, waitDuration)
 					metrics.RecordRateLimiterAllowed(eventType)
 
 					// Actualizar tokens disponibles
