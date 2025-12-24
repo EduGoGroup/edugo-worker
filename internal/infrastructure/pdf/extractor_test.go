@@ -13,9 +13,9 @@ import (
 
 // MockCleaner es un mock del Cleaner para testing
 type MockCleaner struct {
-	CleanFunc            func(text string) string
-	RemoveHeadersFunc    func(text string) string
-	NormalizeSpacesFunc  func(text string) string
+	CleanFunc           func(text string) string
+	RemoveHeadersFunc   func(text string) string
+	NormalizeSpacesFunc func(text string) string
 }
 
 func (m *MockCleaner) Clean(text string) string {
@@ -42,11 +42,11 @@ func (m *MockCleaner) NormalizeSpaces(text string) string {
 // MockLogger es un mock del logger para testing
 type MockLogger struct{}
 
-func (m *MockLogger) Debug(msg string, fields ...interface{}) {}
-func (m *MockLogger) Info(msg string, fields ...interface{})  {}
-func (m *MockLogger) Warn(msg string, fields ...interface{})  {}
-func (m *MockLogger) Error(msg string, fields ...interface{}) {}
-func (m *MockLogger) Fatal(msg string, fields ...interface{}) {}
+func (m *MockLogger) Debug(msg string, fields ...interface{})  {}
+func (m *MockLogger) Info(msg string, fields ...interface{})   {}
+func (m *MockLogger) Warn(msg string, fields ...interface{})   {}
+func (m *MockLogger) Error(msg string, fields ...interface{})  {}
+func (m *MockLogger) Fatal(msg string, fields ...interface{})  {}
 func (m *MockLogger) With(fields ...interface{}) logger.Logger { return m }
 func (m *MockLogger) Sync() error                              { return nil }
 
@@ -285,8 +285,8 @@ func TestTextCleaner_Clean(t *testing.T) {
 			expected: "Texto con espacios múltiples",
 		},
 		{
-			name:     "texto con múltiples saltos de línea",
-			input:    "Línea 1\n\n\n\n\nLínea 2",
+			name:  "texto con múltiples saltos de línea",
+			input: "Línea 1\n\n\n\n\nLínea 2",
 			// RemoveHeaders elimina líneas vacías, dejando solo las con contenido
 			expected: "Línea 1\nLínea 2",
 		},
@@ -306,8 +306,8 @@ func TestTextCleaner_Clean(t *testing.T) {
 			expected: "Texto con espacios",
 		},
 		{
-			name:     "combinación de problemas",
-			input:    "  Página 1  \n\n\n  Contenido   real  \n\n\n\n  Pág. 2  \n  Más   contenido  ",
+			name:  "combinación de problemas",
+			input: "  Página 1  \n\n\n  Contenido   real  \n\n\n\n  Pág. 2  \n  Más   contenido  ",
 			// RemoveHeaders elimina headers y líneas vacías, NormalizeSpaces normaliza espacios
 			expected: "Contenido real \n Más contenido",
 		},

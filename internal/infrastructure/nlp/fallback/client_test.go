@@ -13,11 +13,11 @@ import (
 // mockLogger implementa logger.Logger para testing
 type mockLogger struct{}
 
-func (m *mockLogger) Debug(msg string, fields ...interface{}) {}
-func (m *mockLogger) Info(msg string, fields ...interface{})  {}
-func (m *mockLogger) Warn(msg string, fields ...interface{})  {}
-func (m *mockLogger) Error(msg string, fields ...interface{}) {}
-func (m *mockLogger) Fatal(msg string, fields ...interface{}) {}
+func (m *mockLogger) Debug(msg string, fields ...interface{})  {}
+func (m *mockLogger) Info(msg string, fields ...interface{})   {}
+func (m *mockLogger) Warn(msg string, fields ...interface{})   {}
+func (m *mockLogger) Error(msg string, fields ...interface{})  {}
+func (m *mockLogger) Fatal(msg string, fields ...interface{})  {}
 func (m *mockLogger) With(fields ...interface{}) logger.Logger { return m }
 func (m *mockLogger) Sync() error                              { return nil }
 

@@ -66,8 +66,8 @@ type NLPConfig struct {
 }
 
 type StorageConfig struct {
-	Provider string    `mapstructure:"provider"`
-	S3       S3Config  `mapstructure:"s3"`
+	Provider string        `mapstructure:"provider"`
+	S3       S3Config      `mapstructure:"s3"`
 	Timeout  time.Duration `mapstructure:"timeout"`
 }
 
@@ -82,9 +82,9 @@ type S3Config struct {
 }
 
 type PDFConfig struct {
-	MaxSizeMB     int      `mapstructure:"max_size_mb"`
-	AllowedTypes  []string `mapstructure:"allowed_types"`
-	Timeout       time.Duration `mapstructure:"timeout"`
+	MaxSizeMB    int           `mapstructure:"max_size_mb"`
+	AllowedTypes []string      `mapstructure:"allowed_types"`
+	Timeout      time.Duration `mapstructure:"timeout"`
 }
 
 type LoggingConfig struct {

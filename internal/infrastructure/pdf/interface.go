@@ -17,13 +17,13 @@ type Extractor interface {
 
 // ExtractionResult contiene el resultado de la extracción
 type ExtractionResult struct {
-	Text         string            // Texto extraído y limpiado
-	RawText      string            // Texto sin procesar
-	PageCount    int               // Número de páginas
-	WordCount    int               // Número de palabras
-	Metadata     map[string]string // Metadatos del PDF (autor, título, etc.)
-	HasImages    bool              // Si el PDF contiene imágenes
-	IsScanned    bool              // Si es un PDF escaneado (sin texto)
+	Text      string            // Texto extraído y limpiado
+	RawText   string            // Texto sin procesar
+	PageCount int               // Número de páginas
+	WordCount int               // Número de palabras
+	Metadata  map[string]string // Metadatos del PDF (autor, título, etc.)
+	HasImages bool              // Si el PDF contiene imágenes
+	IsScanned bool              // Si es un PDF escaneado (sin texto)
 }
 
 // Cleaner define la interfaz para limpiadores de texto

@@ -6,17 +6,17 @@ import (
 	"io"
 	"time"
 
+	"github.com/EduGoGroup/edugo-shared/logger"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
 	"github.com/aws/aws-sdk-go-v2/aws"
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
-	"github.com/EduGoGroup/edugo-shared/logger"
-	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
 )
 
 const (
-	maxRetries    = 3
-	baseBackoff   = 100 * time.Millisecond
+	maxRetries  = 3
+	baseBackoff = 100 * time.Millisecond
 )
 
 type Client struct {

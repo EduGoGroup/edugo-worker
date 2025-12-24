@@ -19,14 +19,14 @@ func createTestLogger() logger.Logger {
 
 func TestNewClient(t *testing.T) {
 	tests := []struct {
-		name          string
-		region        string
-		bucket        string
-		endpoint      string
-		accessKey     string
-		secretKey     string
-		usePathStyle  bool
-		expectError   bool
+		name         string
+		region       string
+		bucket       string
+		endpoint     string
+		accessKey    string
+		secretKey    string
+		usePathStyle bool
+		expectError  bool
 	}{
 		{
 			name:         "configuración válida para MinIO",
