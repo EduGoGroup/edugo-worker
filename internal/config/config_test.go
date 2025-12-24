@@ -323,3 +323,204 @@ func TestValidate_SinRabbitMQURL(t *testing.T) {
 	assert.Error(t, err, "Debería fallar sin RABBITMQ_URL")
 	assert.Contains(t, err.Error(), "RABBITMQ_URL is required")
 }
+
+// Tests para GetActiveNLPConfig
+
+func TestGetActiveNLPConfig_OpenAI_ConfiguracionEspecifica(t *testing.T) {
+	cfg := &Config{
+		NLP: NLPConfig{
+			Provider: "openai",
+			OpenAI: OpenAIConfig{
+				APIKey:      "sk-openai-test-key",
+				Model:       "gpt-4-turbo-preview",
+				MaxTokens:   8000,
+				Temperature: 0.5,
+				Timeout:     45 * time.Second,
+				BaseURL:     "https://api.openai.com/v1",
+			},
+		},
+	}
+
+	apiKey, model, maxTokens, temperature, timeout, baseURL := cfg.GetActiveNLPConfig()
+
+	assert.Equal(t, "sk-openai-test-key", apiKey)
+	assert.Equal(t, "gpt-4-turbo-preview", model)
+	assert.Equal(t, 8000, maxTokens)
+	assert.Equal(t, 0.5, temperature)
+	assert.Equal(t, 45*time.Second, timeout)
+	assert.Equal(t, "https://api.openai.com/v1", baseURL)
+}
+
+func TestGetActiveNLPConfig_OpenAI_FallbackConfiguracionGeneral(t *testing.T) {
+	cfg := &Config{
+		NLP: NLPConfig{
+			Provider: "openai",
+			// Configuración específica vacía, usa fallback
+			APIKey:      "sk-fallback-key",
+			Model:       "gpt-4",
+			MaxTokens:   4000,
+			Temperature: 0.7,
+			Timeout:     30 * time.Second,
+		},
+	}
+
+	apiKey, model, maxTokens, temperature, timeout, baseURL := cfg.GetActiveNLPConfig()
+
+	assert.Equal(t, "sk-fallback-key", apiKey)
+	assert.Equal(t, "gpt-4", model)
+	assert.Equal(t, 4000, maxTokens)
+	assert.Equal(t, 0.7, temperature)
+	assert.Equal(t, 30*time.Second, timeout)
+	assert.Equal(t, "", baseURL)
+}
+
+func TestGetActiveNLPConfig_OpenAI_ConDefaults(t *testing.T) {
+	cfg := &Config{
+		NLP: NLPConfig{
+			Provider: "openai",
+			OpenAI: OpenAIConfig{
+				APIKey: "sk-test-key",
+				// Todos los demás valores en cero, deberían aplicarse defaults
+			},
+		},
+	}
+
+	apiKey, model, maxTokens, temperature, timeout, baseURL := cfg.GetActiveNLPConfig()
+
+	assert.Equal(t, "sk-test-key", apiKey)
+	assert.Equal(t, "gpt-4-turbo-preview", model, "Debería usar modelo por defecto para OpenAI")
+	assert.Equal(t, 4096, maxTokens, "Debería usar maxTokens por defecto")
+	assert.Equal(t, 0.7, temperature, "Debería usar temperature por defecto")
+	assert.Equal(t, 30*time.Second, timeout, "Debería usar timeout por defecto")
+	assert.Equal(t, "", baseURL)
+}
+
+func TestGetActiveNLPConfig_Anthropic_ConfiguracionEspecifica(t *testing.T) {
+	cfg := &Config{
+		NLP: NLPConfig{
+			Provider: "anthropic",
+			Anthropic: AnthropicConfig{
+				APIKey:      "sk-ant-test-key",
+				Model:       "claude-3-opus-20240229",
+				MaxTokens:   8192,
+				Temperature: 0.3,
+				Timeout:     60 * time.Second,
+			},
+		},
+	}
+
+	apiKey, model, maxTokens, temperature, timeout, baseURL := cfg.GetActiveNLPConfig()
+
+	assert.Equal(t, "sk-ant-test-key", apiKey)
+	assert.Equal(t, "claude-3-opus-20240229", model)
+	assert.Equal(t, 8192, maxTokens)
+	assert.Equal(t, 0.3, temperature)
+	assert.Equal(t, 60*time.Second, timeout)
+	assert.Equal(t, "", baseURL, "Anthropic no usa baseURL")
+}
+
+func TestGetActiveNLPConfig_Anthropic_FallbackConfiguracionGeneral(t *testing.T) {
+	cfg := &Config{
+		NLP: NLPConfig{
+			Provider: "anthropic",
+			// Configuración específica vacía, usa fallback
+			APIKey:      "sk-fallback-key",
+			Model:       "claude-3-haiku-20240307",
+			MaxTokens:   2000,
+			Temperature: 0.8,
+			Timeout:     20 * time.Second,
+		},
+	}
+
+	apiKey, model, maxTokens, temperature, timeout, baseURL := cfg.GetActiveNLPConfig()
+
+	assert.Equal(t, "sk-fallback-key", apiKey)
+	assert.Equal(t, "claude-3-haiku-20240307", model)
+	assert.Equal(t, 2000, maxTokens)
+	assert.Equal(t, 0.8, temperature)
+	assert.Equal(t, 20*time.Second, timeout)
+	assert.Equal(t, "", baseURL)
+}
+
+func TestGetActiveNLPConfig_Anthropic_ConDefaults(t *testing.T) {
+	cfg := &Config{
+		NLP: NLPConfig{
+			Provider: "anthropic",
+			Anthropic: AnthropicConfig{
+				APIKey: "sk-ant-key",
+				// Todos los demás valores en cero
+			},
+		},
+	}
+
+	apiKey, model, maxTokens, temperature, timeout, baseURL := cfg.GetActiveNLPConfig()
+
+	assert.Equal(t, "sk-ant-key", apiKey)
+	assert.Equal(t, "claude-3-sonnet-20240229", model, "Debería usar modelo por defecto para Anthropic")
+	assert.Equal(t, 4096, maxTokens)
+	assert.Equal(t, 0.7, temperature)
+	assert.Equal(t, 30*time.Second, timeout)
+	assert.Equal(t, "", baseURL)
+}
+
+func TestGetActiveNLPConfig_Mock_UsaConfiguracionGeneral(t *testing.T) {
+	cfg := &Config{
+		NLP: NLPConfig{
+			Provider:    "mock",
+			APIKey:      "mock-key",
+			Model:       "mock-model",
+			MaxTokens:   1000,
+			Temperature: 0.9,
+			Timeout:     10 * time.Second,
+		},
+	}
+
+	apiKey, model, maxTokens, temperature, timeout, baseURL := cfg.GetActiveNLPConfig()
+
+	assert.Equal(t, "mock-key", apiKey)
+	assert.Equal(t, "mock-model", model)
+	assert.Equal(t, 1000, maxTokens)
+	assert.Equal(t, 0.9, temperature)
+	assert.Equal(t, 10*time.Second, timeout)
+	assert.Equal(t, "", baseURL)
+}
+
+func TestGetActiveNLPConfig_ProviderDesconocido_UsaConfiguracionGeneral(t *testing.T) {
+	cfg := &Config{
+		NLP: NLPConfig{
+			Provider:    "unknown-provider",
+			APIKey:      "test-key",
+			Model:       "test-model",
+			MaxTokens:   500,
+			Temperature: 0.1,
+			Timeout:     5 * time.Second,
+		},
+	}
+
+	apiKey, model, maxTokens, temperature, timeout, baseURL := cfg.GetActiveNLPConfig()
+
+	assert.Equal(t, "test-key", apiKey)
+	assert.Equal(t, "test-model", model)
+	assert.Equal(t, 500, maxTokens)
+	assert.Equal(t, 0.1, temperature)
+	assert.Equal(t, 5*time.Second, timeout)
+	assert.Equal(t, "", baseURL)
+}
+
+func TestGetActiveNLPConfig_SinConfiguracion_AplicaDefaults(t *testing.T) {
+	cfg := &Config{
+		NLP: NLPConfig{
+			Provider: "openai",
+			// Ninguna configuración, todos valores en cero
+		},
+	}
+
+	apiKey, model, maxTokens, temperature, timeout, baseURL := cfg.GetActiveNLPConfig()
+
+	assert.Equal(t, "", apiKey, "APIKey vacío es válido")
+	assert.Equal(t, "gpt-4-turbo-preview", model, "Debería aplicar modelo por defecto")
+	assert.Equal(t, 4096, maxTokens, "Debería aplicar maxTokens por defecto")
+	assert.Equal(t, 0.7, temperature, "Debería aplicar temperature por defecto")
+	assert.Equal(t, 30*time.Second, timeout, "Debería aplicar timeout por defecto")
+	assert.Equal(t, "", baseURL)
+}

@@ -10,7 +10,15 @@ messaging:
     url: "amqp://edugo_user:edugo_pass@localhost:5672/"
 
 nlp:
-  api_key: "sk-test-key-local"
+  # En desarrollo local usamos mock por defecto (sin API key real)
+  provider: "mock"
+
+  # Para pruebas con OpenAI real, descomentar:
+  # provider: "openai"
+  # openai:
+  #   api_key: "sk-test-key-local"
+  #   model: "gpt-4-turbo-preview"
+  #   timeout: "30s"
 
 logging:
   level: "debug"

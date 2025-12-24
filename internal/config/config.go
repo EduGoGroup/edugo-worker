@@ -62,7 +62,33 @@ type ExchangeConfig struct {
 }
 
 type NLPConfig struct {
-	Provider    string        `mapstructure:"provider"`
+	// Provider activo: "openai", "anthropic", "mock"
+	Provider string `mapstructure:"provider"`
+
+	// Configuraciones específicas por provider
+	OpenAI    OpenAIConfig    `mapstructure:"openai"`
+	Anthropic AnthropicConfig `mapstructure:"anthropic"`
+
+	// Configuración general (fallback para compatibilidad)
+	APIKey      string        `mapstructure:"api_key"`
+	Model       string        `mapstructure:"model"`
+	MaxTokens   int           `mapstructure:"max_tokens"`
+	Temperature float64       `mapstructure:"temperature"`
+	Timeout     time.Duration `mapstructure:"timeout"`
+}
+
+// OpenAIConfig configuración específica para OpenAI
+type OpenAIConfig struct {
+	APIKey      string        `mapstructure:"api_key"`
+	Model       string        `mapstructure:"model"`
+	MaxTokens   int           `mapstructure:"max_tokens"`
+	Temperature float64       `mapstructure:"temperature"`
+	Timeout     time.Duration `mapstructure:"timeout"`
+	BaseURL     string        `mapstructure:"base_url"` // Para Azure OpenAI u otros proxies
+}
+
+// AnthropicConfig configuración específica para Anthropic Claude
+type AnthropicConfig struct {
 	APIKey      string        `mapstructure:"api_key"`
 	Model       string        `mapstructure:"model"`
 	MaxTokens   int           `mapstructure:"max_tokens"`
@@ -145,6 +171,75 @@ func (c *Config) Validate() error {
 	}
 	// NLP.APIKey es opcional - si no está, usamos SmartFallback
 	return nil
+}
+
+// GetActiveNLPConfig retorna la configuración del provider NLP activo con valores por defecto
+func (c *Config) GetActiveNLPConfig() (apiKey, model string, maxTokens int, temperature float64, timeout time.Duration, baseURL string) {
+	switch c.NLP.Provider {
+	case "openai":
+		// Usar configuración específica de OpenAI si existe
+		if c.NLP.OpenAI.APIKey != "" {
+			apiKey = c.NLP.OpenAI.APIKey
+			model = c.NLP.OpenAI.Model
+			maxTokens = c.NLP.OpenAI.MaxTokens
+			temperature = c.NLP.OpenAI.Temperature
+			timeout = c.NLP.OpenAI.Timeout
+			baseURL = c.NLP.OpenAI.BaseURL
+		} else {
+			// Fallback a configuración general
+			apiKey = c.NLP.APIKey
+			model = c.NLP.Model
+			maxTokens = c.NLP.MaxTokens
+			temperature = c.NLP.Temperature
+			timeout = c.NLP.Timeout
+		}
+
+	case "anthropic":
+		// Usar configuración específica de Anthropic si existe
+		if c.NLP.Anthropic.APIKey != "" {
+			apiKey = c.NLP.Anthropic.APIKey
+			model = c.NLP.Anthropic.Model
+			maxTokens = c.NLP.Anthropic.MaxTokens
+			temperature = c.NLP.Anthropic.Temperature
+			timeout = c.NLP.Anthropic.Timeout
+		} else {
+			// Fallback a configuración general
+			apiKey = c.NLP.APIKey
+			model = c.NLP.Model
+			maxTokens = c.NLP.MaxTokens
+			temperature = c.NLP.Temperature
+			timeout = c.NLP.Timeout
+		}
+
+	default:
+		// "mock" o cualquier otro provider usa configuración general
+		apiKey = c.NLP.APIKey
+		model = c.NLP.Model
+		maxTokens = c.NLP.MaxTokens
+		temperature = c.NLP.Temperature
+		timeout = c.NLP.Timeout
+	}
+
+	// Aplicar defaults si no están configurados
+	if model == "" {
+		switch c.NLP.Provider {
+		case "openai":
+			model = "gpt-4-turbo-preview"
+		case "anthropic":
+			model = "claude-3-sonnet-20240229"
+		}
+	}
+	if maxTokens == 0 {
+		maxTokens = 4096
+	}
+	if temperature == 0 {
+		temperature = 0.7
+	}
+	if timeout == 0 {
+		timeout = 30 * time.Second
+	}
+
+	return apiKey, model, maxTokens, temperature, timeout, baseURL
 }
 
 // GetAPIAdminConfigWithDefaults retorna la configuración de api-admin con valores por defecto
