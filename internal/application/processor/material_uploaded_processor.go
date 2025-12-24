@@ -99,18 +99,24 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	// 3. Extraer texto del PDF
 	p.logger.Debug("extrayendo texto del PDF")
 	pdfStart := time.Now()
-	extractedText, err := p.pdfExtractor.Extract(ctx, pdfReader)
+	extractionResult, err := p.pdfExtractor.ExtractWithMetadata(ctx, pdfReader)
 	pdfStatus := "success"
 	if err != nil {
 		pdfStatus = "error"
 	}
-	metrics.RecordPDFExtraction(pdfStatus, time.Since(pdfStart).Seconds(), 0) // pageCount desconocido
+	pageCount := 0
+	if extractionResult != nil {
+		pageCount = extractionResult.PageCount
+	}
+	metrics.RecordPDFExtraction(pdfStatus, time.Since(pdfStart).Seconds(), pageCount)
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
 		metrics.RecordEventProcessed("material_uploaded", "pdf_error")
 		return errors.NewInternalError("failed to extract PDF text", err)
 	}
-	p.logger.Info("texto extraído", "words", len(extractedText)/5)
+
+	extractedText := extractionResult.Text
+	p.logger.Info("texto extraído", "pages", extractionResult.PageCount, "words", extractionResult.WordCount)
 
 	// 4. Generar resumen con NLP
 	p.logger.Debug("generando resumen con NLP")
@@ -120,7 +126,9 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	if err != nil {
 		nlpSummaryStatus = "error"
 	}
-	metrics.RecordOpenAIRequest(nlpSummaryStatus, time.Since(nlpSummaryStart).Seconds(), 0) // tokens desconocidos
+	// Estimar tokens: aproximadamente 1 palabra = 1.33 tokens (para inglés/español)
+	estimatedTokens := estimateTokens(extractedText)
+	metrics.RecordOpenAIRequest(nlpSummaryStatus, time.Since(nlpSummaryStart).Seconds(), estimatedTokens)
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
 		metrics.RecordEventProcessed("material_uploaded", "nlp_summary_error")
@@ -135,7 +143,9 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	if err != nil {
 		nlpQuizStatus = "error"
 	}
-	metrics.RecordOpenAIRequest(nlpQuizStatus, time.Since(nlpQuizStart).Seconds(), 0) // tokens desconocidos
+	// Estimar tokens para la generación del quiz
+	estimatedQuizTokens := estimateTokens(extractedText)
+	metrics.RecordOpenAIRequest(nlpQuizStatus, time.Since(nlpQuizStart).Seconds(), estimatedQuizTokens)
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
 		metrics.RecordEventProcessed("material_uploaded", "nlp_quiz_error")
@@ -262,4 +272,29 @@ func (p *MaterialUploadedProcessor) Process(ctx context.Context, payload []byte)
 		return errors.NewValidationError("invalid event payload")
 	}
 	return p.processEvent(ctx, event)
+}
+
+// estimateTokens estima la cantidad de tokens en un texto
+// Aproximación: 1 palabra ≈ 1.33 tokens para inglés/español
+// Esta es una estimación conservadora basada en el modelo de OpenAI
+func estimateTokens(text string) int {
+	if text == "" {
+		return 0
+	}
+
+	// Contar palabras (split por espacios en blanco)
+	words := 0
+	inWord := false
+	for _, char := range text {
+		if char == ' ' || char == '\n' || char == '\t' || char == '\r' {
+			inWord = false
+		} else if !inWord {
+			words++
+			inWord = true
+		}
+	}
+
+	// Aplicar factor de conversión: 1 palabra ≈ 1.33 tokens
+	// Usamos multiplicación por 4/3 para evitar decimales
+	return (words * 4) / 3
 }

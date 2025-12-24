@@ -400,23 +400,26 @@ func (b *ResourceBuilder) WithHealthChecks() *ResourceBuilder {
 	// Crear checker
 	checker := health.NewChecker()
 
+	// Obtener configuración de health checks con valores por defecto
+	healthConfig := b.config.GetHealthConfigWithDefaults()
+
 	// Registrar health check de PostgreSQL si está disponible
 	if b.sqlDB != nil {
-		pgCheck := health.NewPostgreSQLCheck(b.sqlDB, b.config.Database.MongoDB.Timeout)
+		pgCheck := health.NewPostgreSQLCheck(b.sqlDB, healthConfig.Timeouts.Postgres)
 		checker.Register(pgCheck)
 		b.logger.Info("registered PostgreSQL health check")
 	}
 
 	// Registrar health check de MongoDB si está disponible
 	if b.mongoClient != nil {
-		mongoCheck := health.NewMongoDBCheck(b.mongoClient, b.config.Database.MongoDB.Timeout)
+		mongoCheck := health.NewMongoDBCheck(b.mongoClient, healthConfig.Timeouts.MongoDB)
 		checker.Register(mongoCheck)
 		b.logger.Info("registered MongoDB health check")
 	}
 
 	// Registrar health check de RabbitMQ si está disponible
 	if b.rabbitChannel != nil {
-		rabbitCheck := health.NewRabbitMQCheck(b.rabbitChannel, b.config.Database.MongoDB.Timeout)
+		rabbitCheck := health.NewRabbitMQCheck(b.rabbitChannel, healthConfig.Timeouts.RabbitMQ)
 		checker.Register(rabbitCheck)
 		b.logger.Info("registered RabbitMQ health check")
 	}

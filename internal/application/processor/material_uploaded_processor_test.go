@@ -12,6 +12,7 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	nlpMocks "github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp/mocks"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 	pdfMocks "github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf/mocks"
 	storageMocks "github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage/mocks"
 	"github.com/stretchr/testify/assert"
@@ -142,8 +143,8 @@ func TestMaterialUploadedProcessor_Process_PDFExtractionError(t *testing.T) {
 	// Mock PDF extractor que falla
 	pdfExtractor := pdfMocks.NewMockExtractor(t)
 	pdfExtractor.EXPECT().
-		Extract(mock.Anything, mock.Anything).
-		Return("", assert.AnError)
+		ExtractWithMetadata(mock.Anything, mock.Anything).
+		Return(nil, assert.AnError)
 
 	processor := &MaterialUploadedProcessor{
 		db:            db,
@@ -193,8 +194,12 @@ func TestMaterialUploadedProcessor_Process_NLPSummaryError(t *testing.T) {
 	// Mock PDF extractor exitoso
 	pdfExtractor := pdfMocks.NewMockExtractor(t)
 	pdfExtractor.EXPECT().
-		Extract(mock.Anything, mock.Anything).
-		Return("Extracted text from PDF", nil)
+		ExtractWithMetadata(mock.Anything, mock.Anything).
+		Return(&pdf.ExtractionResult{
+			Text:      "Extracted text from PDF",
+			PageCount: 5,
+			WordCount: 100,
+		}, nil)
 
 	// Mock NLP client que falla en GenerateSummary
 	nlpClient := nlpMocks.NewMockClient(t)
@@ -251,8 +256,12 @@ func TestMaterialUploadedProcessor_Process_NLPQuizError(t *testing.T) {
 	// Mock PDF extractor exitoso
 	pdfExtractor := pdfMocks.NewMockExtractor(t)
 	pdfExtractor.EXPECT().
-		Extract(mock.Anything, mock.Anything).
-		Return("Extracted text from PDF", nil)
+		ExtractWithMetadata(mock.Anything, mock.Anything).
+		Return(&pdf.ExtractionResult{
+			Text:      "Extracted text from PDF",
+			PageCount: 5,
+			WordCount: 100,
+		}, nil)
 
 	// Mock NLP client - GenerateSummary exitoso
 	summary := &nlp.Summary{
