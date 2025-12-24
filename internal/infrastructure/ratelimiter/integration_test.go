@@ -19,7 +19,7 @@ import (
 // getCounterValue extrae el valor de un counter con labels
 func getCounterValue(t *testing.T, counter *prometheus.CounterVec, labels prometheus.Labels) float64 {
 	metric := &dto.Metric{}
-	err := counter.With(labels).(prometheus.Counter).Write(metric)
+	err := counter.With(labels).Write(metric)
 	require.NoError(t, err)
 	return metric.Counter.GetValue()
 }
@@ -27,7 +27,7 @@ func getCounterValue(t *testing.T, counter *prometheus.CounterVec, labels promet
 // getGaugeValue extrae el valor de un gauge con labels
 func getGaugeValue(t *testing.T, gauge *prometheus.GaugeVec, labels prometheus.Labels) float64 {
 	metric := &dto.Metric{}
-	err := gauge.With(labels).(prometheus.Gauge).Write(metric)
+	err := gauge.With(labels).Write(metric)
 	require.NoError(t, err)
 	return metric.Gauge.GetValue()
 }

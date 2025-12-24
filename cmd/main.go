@@ -43,7 +43,8 @@ func main() {
 		log.Fatal("❌ Error inicializando infraestructura:", err)
 	}
 	// Nota: No usamos defer cleanup() aquí porque lo gestionamos
-	// a través del graceful shutdown para tener mejor control del orden
+	// a través del graceful shutdown usando patrón LIFO (Last In, First Out)
+	// para cerrar recursos en orden inverso a su inicialización
 
 	resources.Logger.Info("✅ Worker iniciado correctamente")
 
@@ -110,18 +111,20 @@ func main() {
 
 	go func() {
 		for msg := range msgs {
+			// Incrementar contador antes del check de contexto para evitar race condition
+			processingWG.Add(1)
+
 			// Si el contexto está cancelado, no procesar más mensajes
 			select {
 			case <-consumerCtx.Done():
 				// Rechazar mensaje para que se reintente después del shutdown
+				processingWG.Done()
 				if err := msg.Nack(false, true); err != nil {
 					resources.Logger.Error("Error en Nack durante shutdown", "error", err.Error())
 				}
 				return
 			default:
 			}
-
-			processingWG.Add(1)
 
 			go func(m amqp.Delivery) {
 				defer processingWG.Done()
@@ -151,7 +154,7 @@ func main() {
 
 					// Registrar métricas de rate limiting
 					waitDuration := time.Since(start).Seconds()
-					if waitDuration > 0.001 { // Solo si esperó más de 1ms
+					if waitDuration > 0 {
 						metrics.RecordRateLimiterWait(eventType, waitDuration)
 					}
 					metrics.RecordRateLimiterAllowed(eventType)

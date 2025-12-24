@@ -249,10 +249,8 @@ func (c *Config) GetShutdownConfigWithDefaults() ShutdownConfig {
 		cfg.Timeout = 30 * time.Second
 	}
 
-	// Por defecto, esperamos que los mensajes en proceso terminen
-	if !cfg.WaitForMessages {
-		cfg.WaitForMessages = true
-	}
+	// WaitForMessages viene directamente de la configuración sin defaults
+	// El valor en config.yaml define el comportamiento
 
 	return cfg
 }

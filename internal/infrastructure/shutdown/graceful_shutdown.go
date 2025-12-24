@@ -114,7 +114,7 @@ func (gs *GracefulShutdown) WaitForSignal() error {
 
 	sig := <-sigChan
 	if gs.logger != nil {
-		gs.logger.Info("Señal de apagado recibida", "signal", sig.String())
+		gs.logger.Info("Señal de shutdown recibida", "signal", sig.String())
 	}
 
 	return gs.Shutdown(context.Background())
