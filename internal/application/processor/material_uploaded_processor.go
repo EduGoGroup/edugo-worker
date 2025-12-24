@@ -129,7 +129,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		}
 
 		// Guardar quiz en MongoDB
-		assessmentCollection := p.mongodb.Collection("material_assessments")
+		assessmentCollection := p.mongodb.Collection("material_assessment_worker")
 		assessmentDoc := bson.M{
 			"material_id": event.MaterialID,
 			"questions":   p.questionsToSlice(quiz.Questions),

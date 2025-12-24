@@ -49,7 +49,7 @@ func (p *MaterialDeletedProcessor) processEvent(ctx context.Context, event dto.M
 	}
 
 	// Eliminar assessment
-	assessmentCol := p.mongodb.Collection("material_assessments")
+	assessmentCol := p.mongodb.Collection("material_assessment_worker")
 	_, err = assessmentCol.DeleteOne(ctx, bson.M{"material_id": materialID.String()})
 	if err != nil {
 		p.logger.Error("failed to delete assessment", "error", err)
