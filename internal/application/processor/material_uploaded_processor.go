@@ -78,7 +78,11 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		p.updateStatusToFailed(ctx, materialID.String())
 		return errors.NewInternalError("failed to download PDF", err)
 	}
-	defer pdfReader.Close()
+	defer func() {
+		if err := pdfReader.Close(); err != nil {
+			p.logger.Error("error cerrando PDF reader", "error", err)
+		}
+	}()
 
 	// 3. Extraer texto del PDF
 	p.logger.Debug("extrayendo texto del PDF")

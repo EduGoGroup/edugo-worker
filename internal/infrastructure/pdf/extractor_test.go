@@ -511,7 +511,7 @@ func TestNewExtractor(t *testing.T) {
 		assert.NotNil(t, extractor, "el extractor no debería ser nil")
 
 		// Verificar que implementa la interfaz
-		var _ Extractor = extractor
+		_ = Extractor(extractor)
 	})
 }
 
@@ -524,6 +524,6 @@ func TestNewCleaner(t *testing.T) {
 		assert.NotNil(t, cleaner, "el cleaner no debería ser nil")
 
 		// Verificar que implementa la interfaz
-		var _ Cleaner = cleaner
+		_ = Cleaner(cleaner)
 	})
 }

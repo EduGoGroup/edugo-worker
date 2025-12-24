@@ -299,7 +299,7 @@ func TestSmartClient_EmptyText(t *testing.T) {
 		// Esto causa panic al hacer make([]Question, 0, questionCount)
 		// Este test documenta el comportamiento actual
 		assert.Panics(t, func() {
-			client.GenerateQuiz(ctx, testLongText(), -5)
+			_, _ = client.GenerateQuiz(ctx, testLongText(), -5)
 		}, "questionCount negativo debe causar panic (bug conocido)")
 	})
 }
