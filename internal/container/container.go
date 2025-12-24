@@ -87,11 +87,15 @@ func NewContainer(cfg ContainerConfig) *Container {
 }
 
 // NewContainerLegacy crea container con firma legacy (compatibilidad hacia atrás)
+// Deprecated: Usar NewContainer con ContainerConfig completo.
+// Los servicios de infraestructura (StorageClient, PDFExtractor, NLPClient) serán nil,
+// lo cual causará panic en MaterialUploadedProcessor si se procesa un evento.
 func NewContainerLegacy(db *sql.DB, mongodb *mongo.Database, logger logger.Logger) *Container {
 	return NewContainer(ContainerConfig{
 		DB:      db,
 		MongoDB: mongodb,
 		Logger:  logger,
+		// WARN: StorageClient, PDFExtractor, NLPClient son nil
 	})
 }
 

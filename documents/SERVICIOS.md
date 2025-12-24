@@ -210,81 +210,238 @@ rabbitmq:
 
 ---
 
-## 🤖 OpenAI API
+## 🤖 NLP Client (OpenAI + SmartFallback)
 
 ### Propósito
-Generación de resúmenes y evaluaciones usando GPT-4.
+Generación de resúmenes y evaluaciones. Soporta OpenAI (GPT-4) con fallback inteligente.
 
 ### Conexión
 
 | Parámetro | Valor | Variable de Entorno |
 |-----------|-------|---------------------|
-| API Key | - | `OPENAI_API_KEY` ⚠️ |
+| API Key | - (opcional) | `OPENAI_API_KEY` |
 | Model | `gpt-4` | config.yaml |
 | Max Tokens | `4000` | config.yaml |
 | Temperature | `0.7` | config.yaml |
 
-### Uso
+### Implementación
+
+El worker usa el patrón Factory para crear el cliente NLP:
 
 ```go
-// El worker actualmente SIMULA las llamadas a OpenAI
-// TODO: Implementar integración real
+// internal/infrastructure/factory.go
+func (f *Factory) CreateNLPClient() (nlp.Client, error) {
+    if f.config.NLP.APIKey != "" && f.config.NLP.Provider == "openai" {
+        // TODO: Usar OpenAI real cuando esté implementado
+    }
+    // Por defecto: SmartFallback
+    return fallback.NewSmartClient(f.logger), nil
+}
+```
 
-// Configuración en config.yaml
+### SmartFallback
+
+Cuando no hay API key de OpenAI, se usa `SmartFallback`:
+
+- **Extrae ideas principales** de las primeras oraciones del texto
+- **Identifica conceptos clave** por frecuencia de palabras
+- **Genera secciones** (Introducción, Desarrollo, Conclusión)
+- **Crea quizzes** basados en oraciones del texto
+
+**Ubicación:** `internal/infrastructure/nlp/fallback/client.go`
+
+### Interfaz NLP
+
+```go
+// internal/infrastructure/nlp/interface.go
+type Client interface {
+    GenerateSummary(ctx context.Context, text string) (*Summary, error)
+    GenerateQuiz(ctx context.Context, text string, questionCount int) (*Quiz, error)
+    HealthCheck(ctx context.Context) error
+}
+```
+
+### Configuración
+
+```yaml
+# config-local.yaml
 nlp:
-  provider: "openai"
+  provider: "openai"  # o vacío para SmartFallback
+  api_key: ""         # Si vacío, usa SmartFallback
   model: "gpt-4"
   max_tokens: 4000
   temperature: 0.7
 ```
 
-### Verificación
-
-```bash
-# Probar API key
-curl https://api.openai.com/v1/models \
-  -H "Authorization: Bearer $OPENAI_API_KEY"
-```
-
 ### Consideraciones
 
+- **Sin API Key**: Usa SmartFallback (no requiere conexión externa)
+- **Con API Key**: Usará OpenAI cuando se implemente
 - **Rate Limits**: OpenAI tiene límites de requests/minuto
 - **Costos**: Cada llamada a GPT-4 tiene costo
-- **Tokens**: El contenido del PDF puede exceder límites
-- **Fallback**: Considerar modelos alternativos (gpt-3.5-turbo)
 
 ---
 
-## 📦 AWS S3
+## 📦 AWS S3 / MinIO
 
 ### Propósito
 Almacenamiento de archivos PDF subidos por los docentes.
 
-### Conexión (TODO - No implementado aún)
+### Conexión
 
-| Parámetro | Variable de Entorno |
-|-----------|---------------------|
-| Region | `AWS_REGION` |
-| Access Key | `AWS_ACCESS_KEY_ID` |
-| Secret Key | `AWS_SECRET_ACCESS_KEY` |
-| Bucket | `S3_BUCKET` |
+| Parámetro | Variable de Entorno | Config |
+|-----------|---------------------|--------|
+| Region | - | `storage.s3.region` |
+| Bucket | - | `storage.s3.bucket` |
+| Endpoint | - | `storage.s3.endpoint` (para MinIO) |
+| Access Key | `AWS_ACCESS_KEY_ID` | `storage.s3.access_key_id` |
+| Secret Key | `AWS_SECRET_ACCESS_KEY` | `storage.s3.secret_access_key` |
+| Use Path Style | - | `storage.s3.use_path_style` (true para MinIO) |
 
-### Uso Esperado
+### Implementación
+
+El worker usa el patrón Factory para crear el cliente de storage:
 
 ```go
-// El worker recibe s3_key en el evento
-// y debe descargar el archivo para procesar
+// internal/infrastructure/factory.go
+func (f *Factory) CreateStorageClient(ctx context.Context) (storage.Client, error) {
+    switch f.config.Storage.Provider {
+    case "s3", "minio":
+        return s3.NewClient(ctx, region, bucket, endpoint, accessKey, secretKey, usePathStyle, logger)
+    }
+}
+```
 
-// Ejemplo de s3_key:
-// "materials/courses/unit-123/document.pdf"
+**Ubicación:** `internal/infrastructure/storage/s3/client.go`
+
+### Interfaz Storage
+
+```go
+// internal/infrastructure/storage/interface.go
+type Client interface {
+    Download(ctx context.Context, key string) (io.ReadCloser, error)
+    Upload(ctx context.Context, key string, content io.Reader) error
+    Delete(ctx context.Context, key string) error
+    Exists(ctx context.Context, key string) (bool, error)
+    GetMetadata(ctx context.Context, key string) (*FileMetadata, error)
+}
+```
+
+### Configuración para MinIO (local)
+
+```yaml
+# config-local.yaml
+storage:
+  provider: "minio"
+  s3:
+    region: "us-east-1"
+    bucket: "edugo-materials"
+    endpoint: "http://localhost:9000"
+    access_key_id: "minioadmin"
+    secret_access_key: "minioadmin"
+    use_path_style: true
+```
+
+### Configuración para AWS S3 (producción)
+
+```yaml
+# config-production.yaml
+storage:
+  provider: "s3"
+  s3:
+    region: "us-east-1"
+    bucket: "edugo-materials-prod"
+    # endpoint vacío para AWS S3 real
+    access_key_id: ""  # Usar variables de entorno
+    secret_access_key: ""
+    use_path_style: false
+```
+
+### Docker Compose (MinIO)
+
+```yaml
+minio:
+  image: minio/minio:latest
+  command: server /data --console-address ":9001"
+  environment:
+    MINIO_ROOT_USER: minioadmin
+    MINIO_ROOT_PASSWORD: minioadmin
+  ports:
+    - "9000:9000"
+    - "9001:9001"  # Console
+  networks:
+    - edugo-network
 ```
 
 ### Dependencias Go
 
 ```go
 // go.mod
+github.com/aws/aws-sdk-go-v2 v1.32.7
 github.com/aws/aws-sdk-go-v2/service/s3 v1.68.0
+github.com/aws/aws-sdk-go-v2/config v1.28.7
+github.com/aws/aws-sdk-go-v2/credentials v1.17.48
 ```
+
+### Características
+
+- **Retry con backoff exponencial**: 3 intentos con delays crecientes
+- **Logging estructurado**: Logs de operaciones con keys y errores
+- **Soporte MinIO**: Compatible con MinIO para desarrollo local
+
+---
+
+## 📄 PDF Extractor
+
+### Propósito
+Extracción de texto de archivos PDF para su procesamiento por NLP.
+
+### Implementación
+
+Usa la librería `pdfcpu` (open source) para extraer texto de PDFs.
+
+**Ubicación:** `internal/infrastructure/pdf/extractor.go`
+
+### Interfaz
+
+```go
+// internal/infrastructure/pdf/interface.go
+type Extractor interface {
+    Extract(ctx context.Context, reader io.Reader) (string, error)
+    ExtractWithMetadata(ctx context.Context, reader io.Reader) (*ExtractionResult, error)
+}
+
+type ExtractionResult struct {
+    Text      string            // Texto limpio
+    RawText   string            // Texto sin procesar
+    PageCount int               // Número de páginas
+    WordCount int               // Conteo de palabras
+    Metadata  map[string]string // Metadatos del PDF
+    HasImages bool              // Si tiene imágenes
+    IsScanned bool              // Si es un PDF escaneado (sin texto)
+}
+```
+
+### Limpieza de Texto
+
+El `TextCleaner` procesa el texto extraído:
+
+- **RemoveHeaders**: Elimina encabezados/pies de página comunes
+- **NormalizeSpaces**: Normaliza espacios y saltos de línea
+- **Clean**: Aplica todas las transformaciones
+
+### Dependencias Go
+
+```go
+// go.mod
+github.com/pdfcpu/pdfcpu v0.9.1
+```
+
+### Consideraciones
+
+- **PDFs escaneados**: Se detectan automáticamente (wordCount < 50)
+- **Encoding**: Maneja diferentes encodings de texto
+- **Memoria**: Lee el PDF completo en memoria
 
 ---
 
