@@ -57,8 +57,9 @@ func newTestLogger() logger.Logger {
 
 // generateMinimalPDF genera un PDF mínimo válido para tests
 // Este es un PDF básico que contiene la estructura mínima requerida
+// Actualizado para contener suficiente texto para pasar las validaciones (>50 palabras)
 func generateMinimalPDF() []byte {
-	// PDF mínimo válido con una página en blanco
+	// PDF mínimo válido con contenido suficiente para no ser detectado como escaneado
 	pdfContent := `%PDF-1.4
 1 0 obj
 <<
@@ -92,13 +93,31 @@ endobj
 endobj
 4 0 obj
 <<
-/Length 44
+/Length 550
 >>
 stream
 BT
 /F1 12 Tf
-100 700 Td
-(Hello World) Tj
+50 750 Td
+(Este es un documento PDF de prueba con suficiente contenido.) Tj
+0 -20 Td
+(El objetivo de este PDF es pasar las validaciones de detección) Tj
+0 -20 Td
+(de documentos escaneados. Para ello necesitamos al menos) Tj
+0 -20 Td
+(cincuenta palabras distribuidas en el contenido del archivo.) Tj
+0 -20 Td
+(Este texto contiene información variada sobre testing y) Tj
+0 -20 Td
+(validación de PDFs en sistemas de procesamiento de documentos.) Tj
+0 -20 Td
+(La extracción de texto debe funcionar correctamente y) Tj
+0 -20 Td
+(el contador de palabras debe superar el umbral mínimo.) Tj
+0 -20 Td
+(Adicionalmente este contenido permite probar la limpieza) Tj
+0 -20 Td
+(y normalización de texto extraído de archivos PDF reales.) Tj
 ET
 endstream
 endobj
@@ -115,7 +134,7 @@ trailer
 /Root 1 0 R
 >>
 startxref
-410
+916
 %%EOF`
 	return []byte(pdfContent)
 }
@@ -156,7 +175,8 @@ func TestPDFExtractor_Extract(t *testing.T) {
 		// Assert
 		assert.Error(t, err, "debería retornar error con datos inválidos")
 		assert.Empty(t, text, "el texto debería estar vacío cuando hay error")
-		assert.Contains(t, err.Error(), "error leyendo contexto PDF", "el error debería indicar problema al leer PDF")
+		// El error ahora debe ser ErrPDFCorrupt
+		assert.ErrorIs(t, err, ErrPDFCorrupt, "el error debería ser PDF corrupto")
 	})
 
 	t.Run("manejo de reader vacío", func(t *testing.T) {
@@ -209,23 +229,47 @@ func TestPDFExtractor_ExtractWithMetadata(t *testing.T) {
 		logger := newTestLogger()
 		extractor := NewExtractor(logger)
 
-		pdfBytes := generateMinimalPDF()
-		reader := bytes.NewReader(pdfBytes)
+		// Crear un PDF con muy poco texto (< 50 palabras) para simular PDF escaneado
+		// Usamos un PDF válido pero con contenido mínimo
+		scannedPDF := `%PDF-1.4
+1 0 obj
+<< /Type /Catalog /Pages 2 0 R >>
+endobj
+2 0 obj
+<< /Type /Pages /Kids [3 0 R] /Count 1 >>
+endobj
+3 0 obj
+<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
+endobj
+4 0 obj
+<< /Length 35 >>
+stream
+BT /F1 12 Tf 100 700 Td (Hola) Tj ET
+endstream
+endobj
+xref
+0 5
+0000000000 65535 f
+0000000009 00000 n
+0000000058 00000 n
+0000000115 00000 n
+0000000317 00000 n
+trailer
+<< /Size 5 /Root 1 0 R >>
+startxref
+400
+%%EOF`
+		reader := bytes.NewReader([]byte(scannedPDF))
 		ctx := context.Background()
 
 		// Act
 		result, err := extractor.ExtractWithMetadata(ctx, reader)
 
 		// Assert
-		require.NoError(t, err)
-
-		// La lógica es: isScanned = wordCount < 50 && pageCount > 0
-		// Validar que la lógica se aplicó correctamente
-		if result.WordCount < 50 && result.PageCount > 0 {
-			assert.True(t, result.IsScanned, "debería detectar como escaneado cuando hay pocas palabras")
-		} else {
-			assert.False(t, result.IsScanned, "no debería marcar como escaneado cuando hay suficientes palabras")
-		}
+		// Ahora esperamos que retorne error ErrPDFScanned
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrPDFScanned, "debería detectar como PDF escaneado")
+		assert.Nil(t, result, "result debería ser nil cuando se detecta PDF escaneado")
 	})
 
 	t.Run("error con datos inválidos", func(t *testing.T) {
@@ -525,5 +569,130 @@ func TestNewCleaner(t *testing.T) {
 
 		// Verificar que implementa la interfaz
 		_ = Cleaner(cleaner)
+	})
+}
+
+// Tests adicionales para las nuevas validaciones del PDF Extractor (Fase 5)
+
+func TestPDFExtractor_ValidateSize(t *testing.T) {
+	t.Run("rechaza PDF vacío", func(t *testing.T) {
+		logger := newTestLogger()
+		extractor := NewExtractor(logger)
+
+		reader := bytes.NewReader([]byte{})
+		ctx := context.Background()
+
+		_, err := extractor.ExtractWithMetadata(ctx, reader)
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrPDFEmpty)
+	})
+
+	t.Run("rechaza PDF demasiado grande", func(t *testing.T) {
+		logger := newTestLogger()
+		extractor := NewExtractor(logger)
+
+		// Crear datos que excedan maxPDFSize (100MB)
+		largeData := make([]byte, 101*1024*1024)
+		reader := bytes.NewReader(largeData)
+		ctx := context.Background()
+
+		_, err := extractor.ExtractWithMetadata(ctx, reader)
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrPDFTooLarge)
+	})
+
+	t.Run("rechaza reader nil", func(t *testing.T) {
+		logger := newTestLogger()
+		extractor := NewExtractor(logger)
+		ctx := context.Background()
+
+		_, err := extractor.ExtractWithMetadata(ctx, nil)
+
+		assert.Error(t, err)
+		assert.ErrorIs(t, err, ErrPDFEmpty)
+	})
+}
+
+func TestPDFExtractor_DetectScannedPDF(t *testing.T) {
+	logger := newTestLogger()
+	extractor := NewExtractor(logger).(*PDFExtractor)
+
+	tests := []struct {
+		name            string
+		totalWords      int
+		pageCount       int
+		pagesWithText   int
+		avgWordsPerPage float64
+		expectScanned   bool
+	}{
+		{
+			name:            "PDF con suficiente texto",
+			totalWords:      100,
+			pageCount:       1,
+			pagesWithText:   1,
+			avgWordsPerPage: 100.0,
+			expectScanned:   false,
+		},
+		{
+			name:            "PDF con muy poco texto total",
+			totalWords:      30,
+			pageCount:       5,
+			pagesWithText:   5,
+			avgWordsPerPage: 6.0,
+			expectScanned:   true,
+		},
+		{
+			name:            "PDF con bajo ratio de páginas con texto",
+			totalWords:      100,
+			pageCount:       10,
+			pagesWithText:   2,
+			avgWordsPerPage: 10.0,
+			expectScanned:   true,
+		},
+		{
+			name:            "PDF con promedio bajo de palabras por página",
+			totalWords:      80,
+			pageCount:       10,
+			pagesWithText:   10,
+			avgWordsPerPage: 8.0,
+			expectScanned:   true,
+		},
+		{
+			name:            "PDF limítrofe pero válido",
+			totalWords:      60,
+			pageCount:       2,
+			pagesWithText:   2,
+			avgWordsPerPage: 30.0,
+			expectScanned:   false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			result := extractor.detectScannedPDF(tt.totalWords, tt.pageCount, tt.pagesWithText, tt.avgWordsPerPage)
+			assert.Equal(t, tt.expectScanned, result)
+		})
+	}
+}
+
+func TestPDFExtractor_ContextCancellation(t *testing.T) {
+	t.Run("respeta cancelación de contexto", func(t *testing.T) {
+		logger := newTestLogger()
+		extractor := NewExtractor(logger)
+
+		// Crear un contexto ya cancelado
+		ctx, cancel := context.WithCancel(context.Background())
+		cancel() // Cancelar inmediatamente
+
+		// Usar un PDF válido pero el contexto cancelado debería detener el procesamiento
+		pdfBytes := generateMinimalPDF()
+		reader := bytes.NewReader(pdfBytes)
+
+		_, err := extractor.ExtractWithMetadata(ctx, reader)
+
+		// Puede ser error de contexto o error de PDF dependiendo del timing
+		assert.Error(t, err)
 	})
 }
