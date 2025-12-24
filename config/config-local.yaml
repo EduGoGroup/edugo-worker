@@ -23,3 +23,8 @@ api_admin:
   cache_ttl: "60s"
   cache_enabled: true
   max_bulk_size: 50
+
+# Métricas Prometheus
+metrics:
+  enabled: true
+  port: 9090

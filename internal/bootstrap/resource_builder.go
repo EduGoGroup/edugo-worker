@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"time"
 
 	sharedBootstrap "github.com/EduGoGroup/edugo-shared/bootstrap"
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
@@ -13,6 +14,8 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/health"
+	httpInfra "github.com/EduGoGroup/edugo-worker/internal/infrastructure/http"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
@@ -31,6 +34,8 @@ type Resources struct {
 	AuthClient        *client.AuthClient
 	LifecycleManager  *lifecycle.Manager
 	ProcessorRegistry *processor.Registry
+	MetricsServer     *httpInfra.MetricsServer
+	HealthChecker     *health.Checker
 }
 
 // ResourceBuilder construye Resources de forma incremental usando el patrón Builder
@@ -55,6 +60,8 @@ type ResourceBuilder struct {
 	// Recursos de aplicación
 	authClient        *client.AuthClient
 	processorRegistry *processor.Registry
+	metricsServer     *httpInfra.MetricsServer
+	healthChecker     *health.Checker
 
 	// Lifecycle
 	lifecycleManager *lifecycle.Manager
@@ -378,6 +385,110 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	return b
 }
 
+// WithHealthChecks configura los health checks para las dependencias
+func (b *ResourceBuilder) WithHealthChecks() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+
+	if b.logger == nil {
+		b.err = fmt.Errorf("logger required before health checks")
+		return b
+	}
+
+	b.logger.Info("initializing health checks")
+
+	// Crear checker
+	checker := health.NewChecker()
+
+	// Obtener configuración de health checks con valores por defecto
+	healthConfig := b.config.GetHealthConfigWithDefaults()
+
+	// Registrar health check de PostgreSQL si está disponible
+	if b.sqlDB != nil {
+		pgCheck := health.NewPostgreSQLCheck(b.sqlDB, healthConfig.Timeouts.Postgres)
+		checker.Register(pgCheck)
+		b.logger.Info("registered PostgreSQL health check")
+	}
+
+	// Registrar health check de MongoDB si está disponible
+	if b.mongoClient != nil {
+		mongoCheck := health.NewMongoDBCheck(b.mongoClient, healthConfig.Timeouts.MongoDB)
+		checker.Register(mongoCheck)
+		b.logger.Info("registered MongoDB health check")
+	}
+
+	// Registrar health check de RabbitMQ si está disponible
+	if b.rabbitChannel != nil {
+		rabbitCheck := health.NewRabbitMQCheck(b.rabbitChannel, healthConfig.Timeouts.RabbitMQ)
+		checker.Register(rabbitCheck)
+		b.logger.Info("registered RabbitMQ health check")
+	}
+
+	// Guardar referencia
+	b.healthChecker = checker
+
+	b.logger.Info("✅ Health checks initialized successfully")
+	return b
+}
+
+// WithMetricsServer configura el servidor HTTP de métricas Prometheus
+func (b *ResourceBuilder) WithMetricsServer() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+
+	if b.logger == nil {
+		b.err = fmt.Errorf("logger required before metrics server")
+		return b
+	}
+
+	// Obtener configuración con valores por defecto
+	metricsCfg := b.config.GetMetricsConfigWithDefaults()
+
+	// Si las métricas no están habilitadas, retornar sin hacer nada
+	if !metricsCfg.Enabled {
+		b.logger.Info("metrics server disabled")
+		return b
+	}
+
+	b.logger.Info("initializing metrics server", "port", metricsCfg.Port)
+
+	// Crear servidor de métricas con health checker si está disponible
+	var metricsServer *httpInfra.MetricsServer
+	if b.healthChecker != nil {
+		metricsServer = httpInfra.NewMetricsServerWithConfig(httpInfra.MetricsServerConfig{
+			Port:          metricsCfg.Port,
+			HealthChecker: b.healthChecker,
+		})
+		b.logger.Info("metrics server configured with health endpoints")
+	} else {
+		metricsServer = httpInfra.NewMetricsServer(metricsCfg.Port)
+	}
+
+	// Iniciar servidor en goroutine
+	go func() {
+		b.logger.Info("starting metrics server", "port", metricsCfg.Port)
+		if err := metricsServer.Start(); err != nil {
+			b.logger.Error("metrics server error", "error", err.Error())
+		}
+	}()
+
+	// Guardar referencia
+	b.metricsServer = metricsServer
+
+	// Registrar cleanup
+	b.addCleanup(func() error {
+		b.logger.Info("shutting down metrics server")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		return b.metricsServer.Shutdown(ctx)
+	})
+
+	b.logger.Info("✅ Metrics server initialized successfully", "endpoint", fmt.Sprintf("http://localhost:%d/metrics", metricsCfg.Port))
+	return b
+}
+
 // Build construye y retorna Resources con su función de cleanup
 func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 	// Verificar si hubo errores durante la construcción
@@ -407,6 +518,8 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 		AuthClient:        b.authClient,
 		LifecycleManager:  b.lifecycleManager,
 		ProcessorRegistry: b.processorRegistry,
+		MetricsServer:     b.metricsServer,
+		HealthChecker:     b.healthChecker,
 	}
 
 	// Crear función de cleanup

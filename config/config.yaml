@@ -38,3 +38,23 @@ api_admin:
   cache_ttl: "60s"
   cache_enabled: true
   max_bulk_size: 50
+
+# Health Checks
+health:
+  timeouts:
+    mongodb: "5s"
+    postgres: "3s"
+    rabbitmq: "3s"
+
+# Circuit Breakers
+circuit_breakers:
+  nlp:
+    max_failures: 5
+    timeout: "60s"
+    max_requests: 1
+    success_threshold: 2
+  storage:
+    max_failures: 5
+    timeout: "60s"
+    max_requests: 1
+    success_threshold: 2

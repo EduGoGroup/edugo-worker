@@ -6,13 +6,16 @@ import (
 )
 
 type Config struct {
-	Database  DatabaseConfig  `mapstructure:"database"`
-	Messaging MessagingConfig `mapstructure:"messaging"`
-	NLP       NLPConfig       `mapstructure:"nlp"`
-	Storage   StorageConfig   `mapstructure:"storage"`
-	PDF       PDFConfig       `mapstructure:"pdf"`
-	Logging   LoggingConfig   `mapstructure:"logging"`
-	APIAdmin  APIAdminConfig  `mapstructure:"api_admin"`
+	Database        DatabaseConfig        `mapstructure:"database"`
+	Messaging       MessagingConfig       `mapstructure:"messaging"`
+	NLP             NLPConfig             `mapstructure:"nlp"`
+	Storage         StorageConfig         `mapstructure:"storage"`
+	PDF             PDFConfig             `mapstructure:"pdf"`
+	Logging         LoggingConfig         `mapstructure:"logging"`
+	APIAdmin        APIAdminConfig        `mapstructure:"api_admin"`
+	Metrics         MetricsConfig         `mapstructure:"metrics"`
+	Health          HealthConfig          `mapstructure:"health"`
+	CircuitBreakers CircuitBreakersConfig `mapstructure:"circuit_breakers"`
 }
 
 type DatabaseConfig struct {
@@ -92,6 +95,33 @@ type LoggingConfig struct {
 	Format string `mapstructure:"format"`
 }
 
+type MetricsConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	Port    int  `mapstructure:"port"`
+}
+
+type HealthConfig struct {
+	Timeouts HealthTimeoutsConfig `mapstructure:"timeouts"`
+}
+
+type HealthTimeoutsConfig struct {
+	MongoDB  time.Duration `mapstructure:"mongodb"`
+	Postgres time.Duration `mapstructure:"postgres"`
+	RabbitMQ time.Duration `mapstructure:"rabbitmq"`
+}
+
+type CircuitBreakersConfig struct {
+	NLP     CircuitBreakerConfig `mapstructure:"nlp"`
+	Storage CircuitBreakerConfig `mapstructure:"storage"`
+}
+
+type CircuitBreakerConfig struct {
+	MaxFailures      uint32        `mapstructure:"max_failures"`
+	Timeout          time.Duration `mapstructure:"timeout"`
+	MaxRequests      uint32        `mapstructure:"max_requests"`
+	SuccessThreshold uint32        `mapstructure:"success_threshold"`
+}
+
 // APIAdminConfig configuración para conexión con api-admin (autenticación centralizada)
 type APIAdminConfig struct {
 	BaseURL      string        `mapstructure:"base_url"`
@@ -129,6 +159,48 @@ func (c *Config) GetAPIAdminConfigWithDefaults() APIAdminConfig {
 	}
 	if cfg.MaxBulkSize == 0 {
 		cfg.MaxBulkSize = 50
+	}
+	return cfg
+}
+
+// GetMetricsConfigWithDefaults retorna la configuración de métricas con valores por defecto
+func (c *Config) GetMetricsConfigWithDefaults() MetricsConfig {
+	cfg := c.Metrics
+	if cfg.Port == 0 {
+		cfg.Port = 9090
+	}
+	return cfg
+}
+
+// GetHealthConfigWithDefaults retorna la configuración de health checks con valores por defecto
+func (c *Config) GetHealthConfigWithDefaults() HealthConfig {
+	cfg := c.Health
+	if cfg.Timeouts.MongoDB == 0 {
+		cfg.Timeouts.MongoDB = 5 * time.Second
+	}
+	if cfg.Timeouts.Postgres == 0 {
+		cfg.Timeouts.Postgres = 3 * time.Second
+	}
+	if cfg.Timeouts.RabbitMQ == 0 {
+		cfg.Timeouts.RabbitMQ = 3 * time.Second
+	}
+	return cfg
+}
+
+// GetCircuitBreakerConfigWithDefaults retorna la configuración de un circuit breaker con valores por defecto
+func (c *CircuitBreakerConfig) GetWithDefaults() CircuitBreakerConfig {
+	cfg := *c
+	if cfg.MaxFailures == 0 {
+		cfg.MaxFailures = 5
+	}
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 60 * time.Second
+	}
+	if cfg.MaxRequests == 0 {
+		cfg.MaxRequests = 1
+	}
+	if cfg.SuccessThreshold == 0 {
+		cfg.SuccessThreshold = 2
 	}
 	return cfg
 }
