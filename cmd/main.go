@@ -6,10 +6,14 @@ import (
 	"log"
 	"os"
 	"os/signal"
+	"sync"
 	"syscall"
+	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/bootstrap"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/metrics"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/ratelimiter"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -59,7 +63,36 @@ func main() {
 		log.Fatal(err)
 	}
 
-	// 4. Consumir mensajes
+	// 4. Configurar rate limiter
+	var rateLimiter *ratelimiter.MultiRateLimiter
+	rateLimiterCfg := cfg.GetRateLimiterConfigWithDefaults()
+
+	if rateLimiterCfg.Enabled {
+		// Convertir configuración a formato esperado por MultiRateLimiter
+		configs := make(map[string]ratelimiter.Config)
+		for eventType, eventCfg := range rateLimiterCfg.ByEventType {
+			configs[eventType] = ratelimiter.Config{
+				RequestsPerSecond: eventCfg.RequestsPerSecond,
+				BurstSize:         eventCfg.BurstSize,
+			}
+		}
+
+		// Configuración por defecto
+		defaultCfg := &ratelimiter.Config{
+			RequestsPerSecond: rateLimiterCfg.Default.RequestsPerSecond,
+			BurstSize:         rateLimiterCfg.Default.BurstSize,
+		}
+
+		rateLimiter = ratelimiter.NewMulti(configs, defaultCfg)
+		resources.Logger.Info("✅ Rate limiter habilitado",
+			"configured_events", len(configs),
+			"default_rps", defaultCfg.RequestsPerSecond,
+			"default_burst", defaultCfg.BurstSize)
+	} else {
+		resources.Logger.Info("⚠️  Rate limiter deshabilitado")
+	}
+
+	// 5. Consumir mensajes
 	msgs, err := resources.RabbitMQChannel.Consume(
 		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded, // queue
 		"",    // consumer
@@ -77,23 +110,72 @@ func main() {
 	resources.Logger.Info("✅ Worker escuchando eventos",
 		"queue", cfg.Messaging.RabbitMQ.Queues.MaterialUploaded)
 
-	// 5. Procesar mensajes
+	// 6. Procesar mensajes con rate limiting
+	var processingWG sync.WaitGroup
+
 	go func() {
 		for msg := range msgs {
-			if err := processMessage(msg, resources, cfg); err != nil {
-				resources.Logger.Error("Error procesando mensaje", "error", err.Error())
-				if err := msg.Nack(false, true); err != nil {
-					resources.Logger.Error("Error en Nack", "error", err.Error())
+			processingWG.Add(1)
+
+			go func(m amqp.Delivery) {
+				defer processingWG.Done()
+
+				// Extraer tipo de evento del routing key
+				eventType := m.RoutingKey
+				if eventType == "" {
+					eventType = "unknown"
 				}
-			} else {
-				if err := msg.Ack(false); err != nil {
-					resources.Logger.Error("Error en Ack", "error", err.Error())
+
+				// Aplicar rate limiting si está habilitado
+				if rateLimiter != nil {
+					start := time.Now()
+
+					if err := rateLimiter.Wait(ctx, eventType); err != nil {
+						resources.Logger.Warn("Rate limiter interrumpido",
+							"event_type", eventType,
+							"error", err.Error())
+
+						// Rechazar mensaje para que se reintente después
+						if err := m.Nack(false, true); err != nil {
+							resources.Logger.Error("Error en Nack después de rate limit",
+								"error", err.Error())
+						}
+						return
+					}
+
+					// Registrar métricas de rate limiting
+					waitDuration := time.Since(start).Seconds()
+					if waitDuration > 0.001 { // Solo si esperó más de 1ms
+						metrics.RecordRateLimiterWait(eventType, waitDuration)
+					}
+					metrics.RecordRateLimiterAllowed(eventType)
+
+					// Actualizar tokens disponibles
+					tokens := rateLimiter.Tokens(eventType)
+					if tokens >= 0 {
+						metrics.UpdateRateLimiterTokens(eventType, tokens)
+					}
 				}
-			}
+
+				// Procesar mensaje
+				if err := processMessage(m, resources, cfg); err != nil {
+					resources.Logger.Error("Error procesando mensaje",
+						"event_type", eventType,
+						"error", err.Error())
+
+					if err := m.Nack(false, true); err != nil {
+						resources.Logger.Error("Error en Nack", "error", err.Error())
+					}
+				} else {
+					if err := m.Ack(false); err != nil {
+						resources.Logger.Error("Error en Ack", "error", err.Error())
+					}
+				}
+			}(msg)
 		}
 	}()
 
-	// 6. Graceful shutdown
+	// 7. Graceful shutdown
 	sigChan := make(chan os.Signal, 1)
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 	<-sigChan
