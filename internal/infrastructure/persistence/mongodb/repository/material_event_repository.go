@@ -8,6 +8,7 @@ import (
 
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/constants"
+	"github.com/EduGoGroup/edugo-worker/internal/domain/repository"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/service"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -19,22 +20,25 @@ var (
 	ErrMaterialEventNotFound = errors.New("material event not found")
 )
 
-// MaterialEventRepository maneja la persistencia de eventos de auditoría en MongoDB
-type MaterialEventRepository struct {
+// MongoMaterialEventRepository implementa la interfaz MaterialEventRepository usando MongoDB
+type MongoMaterialEventRepository struct {
 	collection   *mongo.Collection
 	stateMachine *service.EventStateMachine
 }
 
+// Verificar que MongoMaterialEventRepository implementa repository.MaterialEventRepository
+var _ repository.MaterialEventRepository = (*MongoMaterialEventRepository)(nil)
+
 // NewMaterialEventRepository crea una nueva instancia del repositorio
-func NewMaterialEventRepository(db *mongo.Database) *MaterialEventRepository {
-	return &MaterialEventRepository{
+func NewMaterialEventRepository(db *mongo.Database) repository.MaterialEventRepository {
+	return &MongoMaterialEventRepository{
 		collection:   db.Collection("material_event"),
 		stateMachine: service.NewEventStateMachine(3), // max 3 retries
 	}
 }
 
 // Create crea un nuevo evento en MongoDB
-func (r *MaterialEventRepository) Create(ctx context.Context, event *entities.MaterialEvent) error {
+func (r *MongoMaterialEventRepository) Create(ctx context.Context, event *entities.MaterialEvent) error {
 	if !r.stateMachine.IsValid(event) {
 		return errors.New("invalid material event")
 	}
@@ -52,7 +56,7 @@ func (r *MaterialEventRepository) Create(ctx context.Context, event *entities.Ma
 }
 
 // FindByID busca un evento por su ObjectID
-func (r *MaterialEventRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialEvent, error) {
+func (r *MongoMaterialEventRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialEvent, error) {
 	var event entities.MaterialEvent
 
 	filter := bson.M{"_id": id}
@@ -69,7 +73,7 @@ func (r *MaterialEventRepository) FindByID(ctx context.Context, id primitive.Obj
 }
 
 // Update actualiza un evento existente
-func (r *MaterialEventRepository) Update(ctx context.Context, event *entities.MaterialEvent) error {
+func (r *MongoMaterialEventRepository) Update(ctx context.Context, event *entities.MaterialEvent) error {
 	if !r.stateMachine.IsValid(event) {
 		return errors.New("invalid material event")
 	}
@@ -92,7 +96,7 @@ func (r *MaterialEventRepository) Update(ctx context.Context, event *entities.Ma
 }
 
 // FindByMaterialID busca eventos por material_id
-func (r *MaterialEventRepository) FindByMaterialID(ctx context.Context, materialID string, limit int64) ([]*entities.MaterialEvent, error) {
+func (r *MongoMaterialEventRepository) FindByMaterialID(ctx context.Context, materialID string, limit int64) ([]*entities.MaterialEvent, error) {
 	filter := bson.M{"material_id": materialID}
 	opts := options.Find().
 		SetLimit(limit).
@@ -117,7 +121,7 @@ func (r *MaterialEventRepository) FindByMaterialID(ctx context.Context, material
 }
 
 // FindByEventType busca eventos por tipo
-func (r *MaterialEventRepository) FindByEventType(ctx context.Context, eventType string, limit int64) ([]*entities.MaterialEvent, error) {
+func (r *MongoMaterialEventRepository) FindByEventType(ctx context.Context, eventType string, limit int64) ([]*entities.MaterialEvent, error) {
 	filter := bson.M{"event_type": eventType}
 	opts := options.Find().
 		SetLimit(limit).
@@ -142,7 +146,7 @@ func (r *MaterialEventRepository) FindByEventType(ctx context.Context, eventType
 }
 
 // FindByStatus busca eventos por estado
-func (r *MaterialEventRepository) FindByStatus(ctx context.Context, status string, limit int64) ([]*entities.MaterialEvent, error) {
+func (r *MongoMaterialEventRepository) FindByStatus(ctx context.Context, status string, limit int64) ([]*entities.MaterialEvent, error) {
 	filter := bson.M{"status": status}
 	opts := options.Find().
 		SetLimit(limit).
@@ -167,7 +171,7 @@ func (r *MaterialEventRepository) FindByStatus(ctx context.Context, status strin
 }
 
 // FindFailedEvents busca eventos fallidos que pueden reintentarse
-func (r *MaterialEventRepository) FindFailedEvents(ctx context.Context, maxRetries int, limit int64) ([]*entities.MaterialEvent, error) {
+func (r *MongoMaterialEventRepository) FindFailedEvents(ctx context.Context, maxRetries int, limit int64) ([]*entities.MaterialEvent, error) {
 	filter := bson.M{
 		"status":      constants.EventStatusFailed,
 		"retry_count": bson.M{"$lt": maxRetries},
@@ -195,7 +199,7 @@ func (r *MaterialEventRepository) FindFailedEvents(ctx context.Context, maxRetri
 }
 
 // FindPendingEvents busca eventos pendientes de procesar
-func (r *MaterialEventRepository) FindPendingEvents(ctx context.Context, limit int64) ([]*entities.MaterialEvent, error) {
+func (r *MongoMaterialEventRepository) FindPendingEvents(ctx context.Context, limit int64) ([]*entities.MaterialEvent, error) {
 	filter := bson.M{"status": constants.EventStatusPending}
 	opts := options.Find().
 		SetLimit(limit).
@@ -220,7 +224,7 @@ func (r *MaterialEventRepository) FindPendingEvents(ctx context.Context, limit i
 }
 
 // FindRecent busca los eventos más recientes
-func (r *MaterialEventRepository) FindRecent(ctx context.Context, limit int64) ([]*entities.MaterialEvent, error) {
+func (r *MongoMaterialEventRepository) FindRecent(ctx context.Context, limit int64) ([]*entities.MaterialEvent, error) {
 	opts := options.Find().
 		SetLimit(limit).
 		SetSort(bson.D{{Key: "created_at", Value: -1}})
@@ -244,19 +248,19 @@ func (r *MaterialEventRepository) FindRecent(ctx context.Context, limit int64) (
 }
 
 // CountByStatus cuenta eventos por estado
-func (r *MaterialEventRepository) CountByStatus(ctx context.Context, status string) (int64, error) {
+func (r *MongoMaterialEventRepository) CountByStatus(ctx context.Context, status string) (int64, error) {
 	filter := bson.M{"status": status}
 	return r.collection.CountDocuments(ctx, filter)
 }
 
 // CountByEventType cuenta eventos por tipo
-func (r *MaterialEventRepository) CountByEventType(ctx context.Context, eventType string) (int64, error) {
+func (r *MongoMaterialEventRepository) CountByEventType(ctx context.Context, eventType string) (int64, error) {
 	filter := bson.M{"event_type": eventType}
 	return r.collection.CountDocuments(ctx, filter)
 }
 
 // GetEventStatistics obtiene estadísticas de eventos
-func (r *MaterialEventRepository) GetEventStatistics(ctx context.Context) (map[string]int64, error) {
+func (r *MongoMaterialEventRepository) GetEventStatistics(ctx context.Context) (map[string]int64, error) {
 	pipeline := mongo.Pipeline{
 		{{Key: "$group", Value: bson.D{
 			{Key: "_id", Value: "$status"},
@@ -294,7 +298,7 @@ func (r *MaterialEventRepository) GetEventStatistics(ctx context.Context) (map[s
 }
 
 // DeleteOldEvents elimina eventos antiguos (útil para pruebas, el TTL index hace esto automáticamente)
-func (r *MaterialEventRepository) DeleteOldEvents(ctx context.Context, olderThan time.Time) (int64, error) {
+func (r *MongoMaterialEventRepository) DeleteOldEvents(ctx context.Context, olderThan time.Time) (int64, error) {
 	filter := bson.M{
 		"created_at": bson.M{"$lt": olderThan},
 	}

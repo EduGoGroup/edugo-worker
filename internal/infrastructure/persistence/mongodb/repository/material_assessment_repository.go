@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
+	"github.com/EduGoGroup/edugo-worker/internal/domain/repository"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/service"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -19,22 +20,25 @@ var (
 	ErrMaterialAssessmentAlreadyExists = errors.New("material assessment already exists")
 )
 
-// MaterialAssessmentRepository maneja la persistencia de evaluaciones en MongoDB
-type MaterialAssessmentRepository struct {
+// MongoMaterialAssessmentRepository implementa la interfaz MaterialAssessmentRepository usando MongoDB
+type MongoMaterialAssessmentRepository struct {
 	collection *mongo.Collection
 	validator  *service.AssessmentValidator
 }
 
+// Verificar que MongoMaterialAssessmentRepository implementa repository.MaterialAssessmentRepository
+var _ repository.MaterialAssessmentRepository = (*MongoMaterialAssessmentRepository)(nil)
+
 // NewMaterialAssessmentRepository crea una nueva instancia del repositorio
-func NewMaterialAssessmentRepository(db *mongo.Database) *MaterialAssessmentRepository {
-	return &MaterialAssessmentRepository{
+func NewMaterialAssessmentRepository(db *mongo.Database) repository.MaterialAssessmentRepository {
+	return &MongoMaterialAssessmentRepository{
 		collection: db.Collection("material_assessment_worker"),
 		validator:  service.NewAssessmentValidator(),
 	}
 }
 
 // Create crea una nueva evaluación en MongoDB
-func (r *MaterialAssessmentRepository) Create(ctx context.Context, assessment *entities.MaterialAssessment) error {
+func (r *MongoMaterialAssessmentRepository) Create(ctx context.Context, assessment *entities.MaterialAssessment) error {
 	if !r.validator.IsValid(assessment) {
 		return errors.New("invalid material assessment")
 	}
@@ -55,7 +59,7 @@ func (r *MaterialAssessmentRepository) Create(ctx context.Context, assessment *e
 }
 
 // FindByMaterialID busca una evaluación por material_id
-func (r *MaterialAssessmentRepository) FindByMaterialID(ctx context.Context, materialID string) (*entities.MaterialAssessment, error) {
+func (r *MongoMaterialAssessmentRepository) FindByMaterialID(ctx context.Context, materialID string) (*entities.MaterialAssessment, error) {
 	var assessment entities.MaterialAssessment
 
 	filter := bson.M{"material_id": materialID}
@@ -72,7 +76,7 @@ func (r *MaterialAssessmentRepository) FindByMaterialID(ctx context.Context, mat
 }
 
 // FindByID busca una evaluación por su ObjectID
-func (r *MaterialAssessmentRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialAssessment, error) {
+func (r *MongoMaterialAssessmentRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialAssessment, error) {
 	var assessment entities.MaterialAssessment
 
 	filter := bson.M{"_id": id}
@@ -89,7 +93,7 @@ func (r *MaterialAssessmentRepository) FindByID(ctx context.Context, id primitiv
 }
 
 // Update actualiza una evaluación existente
-func (r *MaterialAssessmentRepository) Update(ctx context.Context, assessment *entities.MaterialAssessment) error {
+func (r *MongoMaterialAssessmentRepository) Update(ctx context.Context, assessment *entities.MaterialAssessment) error {
 	if !r.validator.IsValid(assessment) {
 		return errors.New("invalid material assessment")
 	}
@@ -112,7 +116,7 @@ func (r *MaterialAssessmentRepository) Update(ctx context.Context, assessment *e
 }
 
 // Delete elimina una evaluación por material_id
-func (r *MaterialAssessmentRepository) Delete(ctx context.Context, materialID string) error {
+func (r *MongoMaterialAssessmentRepository) Delete(ctx context.Context, materialID string) error {
 	filter := bson.M{"material_id": materialID}
 
 	result, err := r.collection.DeleteOne(ctx, filter)
@@ -128,7 +132,7 @@ func (r *MaterialAssessmentRepository) Delete(ctx context.Context, materialID st
 }
 
 // FindByDifficulty busca evaluaciones por dificultad de preguntas
-func (r *MaterialAssessmentRepository) FindByDifficulty(ctx context.Context, difficulty string, limit int64) ([]*entities.MaterialAssessment, error) {
+func (r *MongoMaterialAssessmentRepository) FindByDifficulty(ctx context.Context, difficulty string, limit int64) ([]*entities.MaterialAssessment, error) {
 	filter := bson.M{"questions.difficulty": difficulty}
 	opts := options.Find().
 		SetLimit(limit).
@@ -153,7 +157,7 @@ func (r *MaterialAssessmentRepository) FindByDifficulty(ctx context.Context, dif
 }
 
 // FindByTotalQuestions busca evaluaciones por número total de preguntas
-func (r *MaterialAssessmentRepository) FindByTotalQuestions(ctx context.Context, minQuestions, maxQuestions int, limit int64) ([]*entities.MaterialAssessment, error) {
+func (r *MongoMaterialAssessmentRepository) FindByTotalQuestions(ctx context.Context, minQuestions, maxQuestions int, limit int64) ([]*entities.MaterialAssessment, error) {
 	filter := bson.M{
 		"total_questions": bson.M{
 			"$gte": minQuestions,
@@ -183,7 +187,7 @@ func (r *MaterialAssessmentRepository) FindByTotalQuestions(ctx context.Context,
 }
 
 // FindRecent busca las evaluaciones más recientes
-func (r *MaterialAssessmentRepository) FindRecent(ctx context.Context, limit int64) ([]*entities.MaterialAssessment, error) {
+func (r *MongoMaterialAssessmentRepository) FindRecent(ctx context.Context, limit int64) ([]*entities.MaterialAssessment, error) {
 	opts := options.Find().
 		SetLimit(limit).
 		SetSort(bson.D{{Key: "created_at", Value: -1}})
@@ -207,7 +211,7 @@ func (r *MaterialAssessmentRepository) FindRecent(ctx context.Context, limit int
 }
 
 // CountByTotalPoints cuenta evaluaciones en un rango de puntos totales
-func (r *MaterialAssessmentRepository) CountByTotalPoints(ctx context.Context, minPoints, maxPoints int) (int64, error) {
+func (r *MongoMaterialAssessmentRepository) CountByTotalPoints(ctx context.Context, minPoints, maxPoints int) (int64, error) {
 	filter := bson.M{
 		"total_points": bson.M{
 			"$gte": minPoints,
@@ -218,7 +222,7 @@ func (r *MaterialAssessmentRepository) CountByTotalPoints(ctx context.Context, m
 }
 
 // Exists verifica si existe una evaluación para un material
-func (r *MaterialAssessmentRepository) Exists(ctx context.Context, materialID string) (bool, error) {
+func (r *MongoMaterialAssessmentRepository) Exists(ctx context.Context, materialID string) (bool, error) {
 	filter := bson.M{"material_id": materialID}
 	count, err := r.collection.CountDocuments(ctx, filter)
 	if err != nil {
@@ -228,7 +232,7 @@ func (r *MaterialAssessmentRepository) Exists(ctx context.Context, materialID st
 }
 
 // GetAverageQuestionCount obtiene el promedio de preguntas por evaluación
-func (r *MaterialAssessmentRepository) GetAverageQuestionCount(ctx context.Context) (float64, error) {
+func (r *MongoMaterialAssessmentRepository) GetAverageQuestionCount(ctx context.Context) (float64, error) {
 	pipeline := mongo.Pipeline{
 		{{Key: "$group", Value: bson.D{
 			{Key: "_id", Value: nil},
