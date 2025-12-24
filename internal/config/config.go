@@ -17,6 +17,7 @@ type Config struct {
 	Health          HealthConfig          `mapstructure:"health"`
 	CircuitBreakers CircuitBreakersConfig `mapstructure:"circuit_breakers"`
 	RateLimiter     RateLimiterConfig     `mapstructure:"rate_limiter"`
+	Shutdown        ShutdownConfig        `mapstructure:"shutdown"`
 }
 
 type DatabaseConfig struct {
@@ -229,6 +230,28 @@ func (c *Config) GetRateLimiterConfigWithDefaults() RateLimiterConfig {
 	}
 	if cfg.Default.BurstSize == 0 {
 		cfg.Default.BurstSize = 20
+	}
+
+	return cfg
+}
+
+// ShutdownConfig configuración del graceful shutdown
+type ShutdownConfig struct {
+	Timeout         time.Duration `mapstructure:"timeout"`
+	WaitForMessages bool          `mapstructure:"wait_for_messages"`
+}
+
+// GetShutdownConfigWithDefaults retorna la configuración de shutdown con valores por defecto
+func (c *Config) GetShutdownConfigWithDefaults() ShutdownConfig {
+	cfg := c.Shutdown
+
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 30 * time.Second
+	}
+
+	// Por defecto, esperamos que los mensajes en proceso terminen
+	if !cfg.WaitForMessages {
+		cfg.WaitForMessages = true
 	}
 
 	return cfg

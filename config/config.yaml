@@ -81,3 +81,8 @@ rate_limiter:
   default:
     requests_per_second: 10.0
     burst_size: 20.0
+
+# Graceful Shutdown
+shutdown:
+  timeout: "30s" # Tiempo máximo para completar shutdown
+  wait_for_messages: true # Esperar a que terminen los mensajes en proceso
