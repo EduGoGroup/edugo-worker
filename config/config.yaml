@@ -22,10 +22,31 @@ messaging:
     prefetch_count: 5
 
 nlp:
+  # Provider activo: "openai", "anthropic", "mock"
   provider: "openai"
-  model: "gpt-4"
-  max_tokens: 4000
-  temperature: 0.7
+
+  # Configuraciones específicas por provider
+  openai:
+    api_key: "${OPENAI_API_KEY}" # Variable de entorno
+    model: "gpt-4-turbo-preview"
+    max_tokens: 4096
+    temperature: 0.7
+    timeout: "30s"
+    # base_url: "https://custom-proxy.example.com/v1" # Opcional: para Azure OpenAI u otros proxies
+
+  anthropic:
+    api_key: "${ANTHROPIC_API_KEY}" # Variable de entorno
+    model: "claude-3-sonnet-20240229"
+    max_tokens: 4096
+    temperature: 0.7
+    timeout: "30s"
+
+  # NOTA: Configuración general (deprecated, usar configuración específica del provider)
+  # Solo se usa como fallback si el provider específico no tiene configuración
+  # api_key: "${NLP_API_KEY}"
+  # model: "gpt-4"
+  # max_tokens: 4000
+  # temperature: 0.7
 
 logging:
   level: "info"
@@ -38,3 +59,51 @@ api_admin:
   cache_ttl: "60s"
   cache_enabled: true
   max_bulk_size: 50
+
+# Health Checks
+health:
+  timeouts:
+    mongodb: "5s"
+    postgres: "3s"
+    rabbitmq: "3s"
+
+# Circuit Breakers
+circuit_breakers:
+  nlp:
+    max_failures: 5
+    timeout: "60s"
+    max_requests: 1
+    success_threshold: 2
+  storage:
+    max_failures: 5
+    timeout: "60s"
+    max_requests: 1
+    success_threshold: 2
+
+# Rate Limiter
+rate_limiter:
+  enabled: true
+
+  # Configuración por tipo de evento
+  by_event_type:
+    material.uploaded:
+      requests_per_second: 5.0 # Procesamiento PDF es costoso
+      burst_size: 10.0
+
+    material.updated:
+      requests_per_second: 10.0 # Actualizaciones son más ligeras
+      burst_size: 20.0
+
+    assessment.attempt:
+      requests_per_second: 15.0 # Mayor throughput para quizzes
+      burst_size: 30.0
+
+  # Configuración por defecto para eventos no especificados
+  default:
+    requests_per_second: 10.0
+    burst_size: 20.0
+
+# Graceful Shutdown
+shutdown:
+  timeout: "30s" # Tiempo máximo para completar shutdown
+  wait_for_messages: true # Esperar a que terminen los mensajes en proceso

@@ -1,0 +1,21 @@
+with-expecter: true
+dir: "{{.InterfaceDir}}/mocks"
+mockname: "Mock{{.InterfaceName}}"
+outpkg: mocks
+filename: "mock_{{.InterfaceName | snakecase}}.go"
+packages:
+  github.com/EduGoGroup/edugo-worker/internal/domain/repository:
+    interfaces:
+      MaterialSummaryRepository:
+      MaterialAssessmentRepository:
+      MaterialEventRepository:
+  github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage:
+    interfaces:
+      Client:
+  github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf:
+    interfaces:
+      Extractor:
+      Cleaner:
+  github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp:
+    interfaces:
+      Client:

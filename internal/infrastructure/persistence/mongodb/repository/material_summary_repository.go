@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
+	"github.com/EduGoGroup/edugo-worker/internal/domain/repository"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/service"
 	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/bson/primitive"
@@ -19,22 +20,25 @@ var (
 	ErrMaterialSummaryAlreadyExists = errors.New("material summary already exists")
 )
 
-// MaterialSummaryRepository maneja la persistencia de resúmenes de materiales en MongoDB
-type MaterialSummaryRepository struct {
+// MongoMaterialSummaryRepository implementa la interfaz MaterialSummaryRepository usando MongoDB
+type MongoMaterialSummaryRepository struct {
 	collection *mongo.Collection
 	validator  *service.SummaryValidator
 }
 
+// Verificar que MongoMaterialSummaryRepository implementa repository.MaterialSummaryRepository
+var _ repository.MaterialSummaryRepository = (*MongoMaterialSummaryRepository)(nil)
+
 // NewMaterialSummaryRepository crea una nueva instancia del repositorio
-func NewMaterialSummaryRepository(db *mongo.Database) *MaterialSummaryRepository {
-	return &MaterialSummaryRepository{
+func NewMaterialSummaryRepository(db *mongo.Database) repository.MaterialSummaryRepository {
+	return &MongoMaterialSummaryRepository{
 		collection: db.Collection("material_summary"),
 		validator:  service.NewSummaryValidator(),
 	}
 }
 
 // Create crea un nuevo resumen en MongoDB
-func (r *MaterialSummaryRepository) Create(ctx context.Context, summary *entities.MaterialSummary) error {
+func (r *MongoMaterialSummaryRepository) Create(ctx context.Context, summary *entities.MaterialSummary) error {
 	if !r.validator.IsValid(summary) {
 		return errors.New("invalid material summary")
 	}
@@ -55,7 +59,7 @@ func (r *MaterialSummaryRepository) Create(ctx context.Context, summary *entitie
 }
 
 // FindByMaterialID busca un resumen por material_id
-func (r *MaterialSummaryRepository) FindByMaterialID(ctx context.Context, materialID string) (*entities.MaterialSummary, error) {
+func (r *MongoMaterialSummaryRepository) FindByMaterialID(ctx context.Context, materialID string) (*entities.MaterialSummary, error) {
 	var summary entities.MaterialSummary
 
 	filter := bson.M{"material_id": materialID}
@@ -72,7 +76,7 @@ func (r *MaterialSummaryRepository) FindByMaterialID(ctx context.Context, materi
 }
 
 // FindByID busca un resumen por su ObjectID
-func (r *MaterialSummaryRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialSummary, error) {
+func (r *MongoMaterialSummaryRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialSummary, error) {
 	var summary entities.MaterialSummary
 
 	filter := bson.M{"_id": id}
@@ -89,7 +93,7 @@ func (r *MaterialSummaryRepository) FindByID(ctx context.Context, id primitive.O
 }
 
 // Update actualiza un resumen existente
-func (r *MaterialSummaryRepository) Update(ctx context.Context, summary *entities.MaterialSummary) error {
+func (r *MongoMaterialSummaryRepository) Update(ctx context.Context, summary *entities.MaterialSummary) error {
 	if !r.validator.IsValid(summary) {
 		return errors.New("invalid material summary")
 	}
@@ -112,7 +116,7 @@ func (r *MaterialSummaryRepository) Update(ctx context.Context, summary *entitie
 }
 
 // Delete elimina un resumen por material_id
-func (r *MaterialSummaryRepository) Delete(ctx context.Context, materialID string) error {
+func (r *MongoMaterialSummaryRepository) Delete(ctx context.Context, materialID string) error {
 	filter := bson.M{"material_id": materialID}
 
 	result, err := r.collection.DeleteOne(ctx, filter)
@@ -128,7 +132,7 @@ func (r *MaterialSummaryRepository) Delete(ctx context.Context, materialID strin
 }
 
 // FindByLanguage busca resúmenes por idioma
-func (r *MaterialSummaryRepository) FindByLanguage(ctx context.Context, language string, limit int64) ([]*entities.MaterialSummary, error) {
+func (r *MongoMaterialSummaryRepository) FindByLanguage(ctx context.Context, language string, limit int64) ([]*entities.MaterialSummary, error) {
 	filter := bson.M{"language": language}
 	opts := options.Find().
 		SetLimit(limit).
@@ -153,7 +157,7 @@ func (r *MaterialSummaryRepository) FindByLanguage(ctx context.Context, language
 }
 
 // FindRecent busca los resúmenes más recientes
-func (r *MaterialSummaryRepository) FindRecent(ctx context.Context, limit int64) ([]*entities.MaterialSummary, error) {
+func (r *MongoMaterialSummaryRepository) FindRecent(ctx context.Context, limit int64) ([]*entities.MaterialSummary, error) {
 	opts := options.Find().
 		SetLimit(limit).
 		SetSort(bson.D{{Key: "created_at", Value: -1}})
@@ -177,13 +181,13 @@ func (r *MaterialSummaryRepository) FindRecent(ctx context.Context, limit int64)
 }
 
 // CountByLanguage cuenta los resúmenes por idioma
-func (r *MaterialSummaryRepository) CountByLanguage(ctx context.Context, language string) (int64, error) {
+func (r *MongoMaterialSummaryRepository) CountByLanguage(ctx context.Context, language string) (int64, error) {
 	filter := bson.M{"language": language}
 	return r.collection.CountDocuments(ctx, filter)
 }
 
 // Exists verifica si existe un resumen para un material
-func (r *MaterialSummaryRepository) Exists(ctx context.Context, materialID string) (bool, error) {
+func (r *MongoMaterialSummaryRepository) Exists(ctx context.Context, materialID string) (bool, error) {
 	filter := bson.M{"material_id": materialID}
 	count, err := r.collection.CountDocuments(ctx, filter)
 	if err != nil {

@@ -1,258 +1,402 @@
-# EduGo Worker - Procesamiento Asíncrono
+# EduGo Worker
 
-![Go Version](https://img.shields.io/badge/Go-1.25.3-00ADD8?logo=go)
-![Coverage](https://img.shields.io/badge/coverage-33%25%20min-brightgreen)
-![Workflows](https://img.shields.io/badge/workflows-4-blue)
-![Pre--commit](https://img.shields.io/badge/pre--commit-enabled-brightgreen?logo=pre-commit)
+Worker de procesamiento de eventos para la plataforma EduGo. Este servicio consume mensajes de RabbitMQ y procesa eventos relacionados con materiales educativos, evaluaciones y estudiantes.
 
-Worker que consume eventos de RabbitMQ para procesar materiales educativos con IA.
+## 📋 Tabla de Contenidos
 
-> 🚀 **CI/CD Automatizado**: Este proyecto incluye workflows de GitHub Actions para testing, linting y deployment automático de imágenes Docker.
+- [Arquitectura](#arquitectura)
+- [Requisitos](#requisitos)
+- [Instalación](#instalación)
+- [Configuración](#configuración)
+- [Uso](#uso)
+- [Estructura del Proyecto](#estructura-del-proyecto)
+- [Procesadores de Eventos](#procesadores-de-eventos)
+- [Testing](#testing)
+- [CI/CD](#cicd)
+- [Mejoras Recientes](#mejoras-recientes)
 
-## 📋 Recent Changes (Sprint 3 - Nov 2025)
+## 🏗️ Arquitectura
 
-### Workflows Consolidados
-- ✅ Eliminados 3 workflows Docker duplicados
-- ✅ Mantenido solo `manual-release.yml` con control fino
-- ✅ Reducción de workflows: 7 → 4 (-43%)
-- ✅ Reducción de código: ~250 líneas eliminadas
+El worker está construido con una arquitectura limpia basada en:
 
-### Tecnología Actualizada
-- ✅ Go 1.25.3 (anteriormente 1.24.10)
-- ✅ Pre-commit hooks (12 hooks configurados)
-- ✅ Coverage threshold 33% mínimo
+- **Bootstrap Pattern**: Inicialización ordenada de recursos usando Builder Pattern
+- **Processor Registry**: Registro dinámico de procesadores de eventos
+- **Dependency Injection**: Contenedor de dependencias para gestión centralizada
+- **Structured Logging**: Logger estructurado usando logrus a través de edugo-shared
 
-### Guías Disponibles
-- [Release Workflow](docs/RELEASE-WORKFLOW.md) - Cómo hacer releases
-- [Coverage Standards](docs/COVERAGE-STANDARDS.md) - Estándares de cobertura
-- [Pre-commit Hooks](#-pre-commit-hooks) - Validaciones automáticas
+### Componentes Principales
 
-## 🔄 Workflows Reusables (Sprint 4 - Nov 2025)
+```
+┌─────────────────┐
+│   RabbitMQ      │
+│   (Mensajes)    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ EventConsumer   │
+│ (Consumidor)    │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────┐
+│ ProcessorRegistry│
+│ (Enrutador)     │
+└────────┬────────┘
+         │
+         ▼
+┌─────────────────────────────────┐
+│ Processors (Procesadores)       │
+├─────────────────────────────────┤
+│ • MaterialUploadedProcessor     │
+│ • MaterialDeletedProcessor      │
+│ • MaterialReprocessProcessor    │
+│ • AssessmentAttemptProcessor    │
+│ • StudentEnrolledProcessor      │
+└─────────────────────────────────┘
+```
 
-### Migración a Workflows Centralizados
+## 📦 Requisitos
 
-edugo-worker usa **workflows reusables** centralizados en `edugo-infrastructure` para CI/CD:
+- Go 1.23 o superior
+- PostgreSQL 14+
+- MongoDB 6.0+
+- RabbitMQ 3.11+
+- Docker y Docker Compose (para desarrollo)
 
-| Workflow | Job Migrado | Reducción |
-|----------|-------------|-----------|
-| `ci.yml` | `lint` | -13 líneas (-11%) |
-| `test.yml` | `test-coverage` | -136 líneas (-68%) |
-| **Total** | - | **-149 líneas (-46%)** |
+## 🚀 Instalación
 
-**Workflows Reusables:**
-- 🔍 `reusable-go-lint.yml` - Linter con golangci-lint v2.4.0
-- 🧪 `reusable-go-test.yml` - Tests con coverage + servicios (PostgreSQL, MongoDB, RabbitMQ)
+### Desarrollo Local
 
-**Beneficios:**
-- ✅ Lógica centralizada en infrastructure
-- ✅ Mantenimiento simplificado (1 cambio → todos los repos)
-- ✅ Consistencia entre api-mobile, api-admin y worker
-- ✅ Aplicación automática de mejores prácticas
+1. Clonar el repositorio:
+```bash
+git clone https://github.com/EduGoGroup/edugo-worker.git
+cd edugo-worker
+```
 
-**Ver:** [REUSABLE-WORKFLOWS.md](docs/REUSABLE-WORKFLOWS.md) para detalles completos
-
----
-
-## Responsabilidades
-
-1. **Generación de Resumen y Quiz** (`material_uploaded`):
-   - Descarga PDF desde S3
-   - Extrae texto (OCR si es necesario)
-   - Llama API NLP (OpenAI GPT-4) para generar resumen
-   - Genera cuestionario con IA
-   - Persiste en MongoDB (`material_summary`, `material_assessment`)
-   - Actualiza PostgreSQL
-   - Notifica docente
-
-2. **Reprocesamiento** (`material_reprocess`):
-   - Regenera resumen/quiz de material existente
-   - Incrementa versión en MongoDB
-
-3. **Notificaciones** (`assessment_attempt_recorded`):
-   - Notifica docentes cuando estudiante completa quiz
-
-4. **Limpieza** (`material_deleted`):
-   - Elimina archivos S3
-   - Elimina documentos MongoDB
-
-5. **Bienvenida** (`student_enrolled`):
-   - Envía email/push de bienvenida a nuevos estudiantes
-
-## Tecnología
-
-- Go 1.25.3 + RabbitMQ + MongoDB + PostgreSQL
-
-## Dependencias del Ecosistema
-
-### edugo-infrastructure v0.8.0+
-- **mongodb v0.6.0** - Migraciones MongoDB (material_summary, material_assessment_worker, material_event)
-- **postgres v0.8.0** - Migraciones PostgreSQL + helpers de testing
-- **schemas** - Schemas de validación de eventos RabbitMQ
-- Contratos estandarizados de mensajería
-
-### edugo-shared v0.7.0
-- `bootstrap` - Inicialización de aplicaciones
-- `common` - Utilidades compartidas
-- `logger` - Logging estructurado
-- `database/postgres` - Helpers de PostgreSQL
-- `lifecycle` - Gestión de ciclo de vida
-- `testing` - Utilidades de testing con testcontainers
-
-### Módulos disponibles (para usar cuando se implemente)
-- `evaluation` v0.7.0 - Modelos de evaluación (Assessment, Question)
-- `messaging/rabbit` v0.7.0 - Cliente RabbitMQ con DLQ y retry logic
-- `database/mongodb` v0.7.0 - Helpers de MongoDB
-
-Para más información, ver: `docs/isolated/START_HERE.md`
-
-## Instalación
-
+2. Instalar dependencias:
 ```bash
 go mod download
-go run cmd/main.go
 ```
 
-## Eventos Procesados
+3. Compilar el proyecto:
+```bash
+make build
+```
 
-| Evento | Cola | Prioridad | Procesador |
-|--------|------|-----------|------------|
-| `material.uploaded` | material_processing_high | 10 | Summary + Quiz Generator |
-| `material.reprocess` | material_processing_medium | 5 | Reprocessor |
-| `assessment.attempt_recorded` | material_processing_medium | 5 | Notifier |
-| `material.deleted` | material_processing_low | 1 | Cleanup |
-| `student.enrolled` | material_processing_low | 1 | Welcome |
+### Usando Docker
 
-## Configuración
+```bash
+# Construir la imagen
+docker build -t edugo-worker .
 
-Variables de entorno:
-```env
+# Ejecutar con docker-compose
+docker-compose up -d
+```
+
+## ⚙️ Configuración
+
+El worker se configura mediante variables de entorno o archivo `config.yaml`.
+
+### Variables de Entorno Requeridas
+
+```bash
+# PostgreSQL
+POSTGRES_HOST=localhost
+POSTGRES_PORT=5432
+POSTGRES_USER=edugo
+POSTGRES_PASSWORD=secret
+POSTGRES_DB=edugo_db
+POSTGRES_SSLMODE=disable
+
+# MongoDB
+MONGODB_URI=mongodb://localhost:27017
+MONGODB_DATABASE=edugo_materials
+
+# RabbitMQ
 RABBITMQ_URL=amqp://guest:guest@localhost:5672/
-MONGODB_URL=mongodb://localhost:27017/edugo
-POSTGRES_URL=postgresql://user:pass@localhost:5432/edugo
-S3_ENDPOINT=https://s3.amazonaws.com
-OPENAI_API_KEY=sk-...
+
+# Logging
+LOG_LEVEL=info
+LOG_FORMAT=json
+
+# API Admin (Autenticación)
+API_ADMIN_BASE_URL=http://localhost:8081
+API_ADMIN_TIMEOUT=5s
+API_ADMIN_CACHE_TTL=60s
+API_ADMIN_CACHE_ENABLED=true
 ```
 
-## Estado: Código base con lógica MOCK
+### Ejemplo config.yaml
 
-Implementar para producción:
-- Clientes reales de S3, MongoDB, PostgreSQL
-- Integración con OpenAI API
-- Reintentos con backoff exponencial
-- Dead Letter Queue para errores
-- Logging estructurado
-- Métricas de procesamiento
+```yaml
+database:
+  postgres:
+    host: localhost
+    port: 5432
+    database: edugo_db
+    user: edugo
+    password: secret
+    ssl_mode: disable
+    max_connections: 25
+  mongodb:
+    uri: mongodb://localhost:27017
+    database: edugo_materials
+    timeout: 10s
 
-## 🔧 Pre-commit Hooks
+messaging:
+  rabbitmq:
+    url: amqp://guest:guest@localhost:5672/
+    prefetch_count: 10
+    queues:
+      material_uploaded: material.uploaded
+      assessment_attempt: assessment.attempt
+    exchanges:
+      materials: materials
 
-edugo-worker usa pre-commit hooks para validar código antes de commits.
+logging:
+  level: info
+  format: json
 
-### Instalación
+api_admin:
+  base_url: http://localhost:8081
+  timeout: 5s
+  cache_ttl: 60s
+  cache_enabled: true
+```
+
+## 🎯 Uso
+
+### Ejecutar el Worker
 
 ```bash
-# Instalar pre-commit
-pip install pre-commit
+# Usando el binario compilado
+./bin/worker
 
-# Instalar hooks en el repo
-pre-commit install
+# Usando go run
+go run cmd/main.go
+
+# Usando make
+make run
 ```
 
-### Hooks Configurados
-
-1. **no-commit-to-branch** - Previene commits directos a main
-2. **end-of-file-fixer** - Agrega newline al final de archivos
-3. **trailing-whitespace** - Remueve espacios en blanco
-4. **check-added-large-files** - Previene archivos >500KB
-5. **check-yaml** - Valida sintaxis YAML
-6. **detect-private-key** - Detecta credenciales expuestas
-7. **check-merge-conflict** - Detecta conflictos sin resolver
-8. **go-fmt** - Formatea código Go
-9. **go-imports** - Organiza imports
-10. **go-vet** - Análisis estático
-11. **go-mod-tidy** - Verifica go.mod actualizado
-12. **go-test** - Ejecuta tests (opcional, solo archivos .go)
-
-### Uso
+### Comandos Make Disponibles
 
 ```bash
-# Automático en cada commit
-git commit -m "mensaje"
-
-# Manual en todos los archivos
-pre-commit run --all-files
-
-# Manual en archivos staged
-pre-commit run
-
-# Saltar hooks (NO recomendado)
-git commit --no-verify -m "mensaje"
+make build          # Compilar el proyecto
+make test           # Ejecutar tests
+make test-coverage  # Tests con reporte de cobertura
+make lint           # Ejecutar linter
+make format         # Formatear código
+make clean          # Limpiar binarios
 ```
 
-## 🔄 Workflows CI/CD
+## 📁 Estructura del Proyecto
 
-| Workflow | Trigger | Propósito | Estado |
-|----------|---------|-----------|--------|
-| `ci.yml` | PR + Push main | Tests y validaciones | ✅ Activo |
-| `test.yml` | Manual + PR | Coverage con threshold 33% | ✅ Activo |
-| `manual-release.yml` | Manual | Release completo controlado | ✅ Activo |
-| `sync-main-to-dev.yml` | Push a main | Sincronización automática | ✅ Activo |
+```
+edugo-worker/
+├── cmd/
+│   └── main.go                 # Punto de entrada
+├── internal/
+│   ├── application/
+│   │   ├── dto/                # Data Transfer Objects
+│   │   └── processor/          # Procesadores de eventos
+│   │       ├── registry.go     # Registro de procesadores
+│   │       └── *_processor.go  # Implementaciones
+│   ├── bootstrap/              # Inicialización de recursos
+│   │   ├── adapter/            # Adaptadores (logger)
+│   │   ├── resource_builder.go # Builder Pattern para recursos
+│   │   └── DESIGN_*.md         # Documentación de diseño
+│   ├── client/                 # Clientes externos (AuthClient)
+│   ├── config/                 # Configuración
+│   ├── container/              # Contenedor de dependencias
+│   ├── domain/                 # Lógica de dominio
+│   │   ├── service/            # Servicios de dominio
+│   │   └── valueobject/        # Value Objects
+│   └── infrastructure/         # Capa de infraestructura
+│       ├── messaging/          # RabbitMQ consumer
+│       └── persistence/        # Repositorios
+├── docs/                       # Documentación adicional
+├── improvements/               # Planes de mejora
+├── Dockerfile
+├── docker-compose.yml
+├── Makefile
+└── README.md
+```
 
-**Workflows eliminados en Sprint 3:**
-- ❌ `build-and-push.yml` - Consolidado en manual-release.yml
-- ❌ `docker-only.yml` - Consolidado en manual-release.yml
-- ❌ `release.yml` - Consolidado en manual-release.yml
+## 🔄 Procesadores de Eventos
 
-## 🚀 Release Process
+El worker procesa los siguientes tipos de eventos:
 
-edugo-worker usa un proceso de release manual controlado.
+### material_uploaded
+Procesa materiales educativos subidos (PDFs, imágenes, videos).
+- Extrae texto de PDFs
+- Genera embeddings para búsqueda semántica
+- Almacena metadatos en PostgreSQL y MongoDB
 
-### Quick Start
+### material_deleted
+Elimina materiales educativos del sistema.
+- Limpia datos en PostgreSQL
+- Elimina documentos de MongoDB
+- Gestiona cleanup de recursos asociados
+
+### material_reprocess
+Reprocesa materiales existentes.
+- Re-extrae texto
+- Regenera embeddings
+- Actualiza metadatos
+
+### assessment_attempt
+Procesa intentos de evaluación.
+- Registra respuestas del estudiante
+- Calcula puntuación
+- Actualiza estadísticas
+
+### student_enrolled
+Procesa inscripciones de estudiantes.
+- Registra inscripción
+- Inicializa progreso
+- Notifica al sistema
+
+## 🧪 Testing
+
+### Ejecutar Tests
 
 ```bash
-# Ejecutar release desde GitHub UI
-https://github.com/EduGoGroup/edugo-worker/actions/workflows/manual-release.yml
+# Todos los tests
+make test
 
-# O desde CLI
-gh workflow run manual-release.yml -f version=0.1.0 -f bump_type=minor
+# Tests con cobertura
+make test-coverage
+
+# Tests de un paquete específico
+go test ./internal/bootstrap/... -v
+
+# Tests con cobertura detallada
+go test ./... -coverprofile=coverage.out
+go tool cover -html=coverage.out
 ```
 
-Ver [RELEASE-WORKFLOW.md](docs/RELEASE-WORKFLOW.md) para guía completa.
+### Cobertura Actual
 
-### Release Types
+```
+✅ adapter:    82.2%
+✅ container:  84.2%
+✅ client:     82.3%
+⚠️  bootstrap: 33.1%
+⚠️  processor: 22.0%
+```
 
-- **patch** (0.0.1 → 0.0.2): Bugfixes
-- **minor** (0.0.1 → 0.1.0): Features
-- **major** (0.0.1 → 1.0.0): Breaking changes
+### Estructura de Tests
 
-### ¿Qué hace manual-release.yml?
+- **Unit Tests**: Tests unitarios para componentes individuales
+- **Integration Tests**: Tests de integración con bases de datos
+- **Mocks**: Uso de interfaces para facilitar testing
 
-1. ✅ Valida versión semver
-2. ✅ Actualiza version.txt
-3. ✅ Genera entrada de CHANGELOG
-4. ✅ Commit a main
-5. ✅ Crea y pushea tag
-6. ✅ Ejecuta tests completos
-7. ✅ Build Docker multi-platform (linux/amd64 + linux/arm64)
-8. ✅ Push Docker a GHCR
-9. ✅ Crea GitHub Release
+## 🔧 CI/CD
 
-## 📊 Coverage Standards
+El proyecto usa GitHub Actions para CI/CD:
 
-**Threshold mínimo:** 33%
+### Pipeline de PR
 
-> ⚠️ **Nota:** Los comandos de coverage requieren que existan archivos `*_test.go` implementados.  
-> Actualmente el proyecto no tiene tests unitarios. Implementa tests antes de ejecutar estos comandos.
+```yaml
+# .github/workflows/pr.yml
+- Format Check (gofmt)
+- Linting (golangci-lint)
+- Unit Tests
+- Integration Tests
+- Coverage Report
+- go.mod/go.sum Validation
+```
 
+### Validaciones
+
+- ✅ Código formateado con `gofmt`
+- ✅ Sin errores de linter
+- ✅ Tests pasando
+- ✅ Cobertura > 30%
+- ✅ go.mod sincronizado
+
+## 🎉 Mejoras Recientes
+
+### Fase 1: Refactorización Bootstrap (Completada)
+
+**Objetivo**: Mejorar la inicialización de recursos y eliminar código complejo.
+
+**Cambios Implementados**:
+
+1. **ProcessorRegistry Pattern** (T1.1-T1.4)
+   - ✅ Eliminado switch gigante en favor de registro dinámico
+   - ✅ Registry con enrutamiento automático basado en event_type
+   - ✅ Desacoplamiento de consumer y processors
+   - **Reducción**: -180 líneas de código
+
+2. **ResourceBuilder Pattern** (T1.5-T1.9)
+   - ✅ Builder con API fluida para inicialización
+   - ✅ Eliminación de doble punteros (**Type)
+   - ✅ Cleanup LIFO garantizado
+   - ✅ Validación de dependencias en tiempo de build
+   - **Reducción**: -360 líneas de código complejo
+
+3. **Tests y Cobertura** (T1.10)
+   - ✅ Logger Adapter: 82.2% (0% → 82.2%)
+   - ✅ Container: 84.2% (0% → 84.2%)
+   - ✅ Total: +655 líneas de tests
+
+4. **Documentación** (T1.11)
+   - ✅ README completo
+   - ✅ Documentación de diseño
+   - ✅ Ejemplos de uso
+
+**Impacto**:
+- 📉 -540 líneas de código complejo eliminadas
+- 📈 +655 líneas de tests agregadas
+- 🎯 Cobertura mejorada significativamente
+- 🚀 Código más mantenible y testeable
+
+### Documentos de Diseño
+
+- [ProcessorRegistry Design](internal/application/processor/DESIGN_PROCESSOR_REGISTRY.md)
+- [ResourceBuilder Design](internal/bootstrap/DESIGN_RESOURCE_BUILDER.md)
+
+## 📝 Contribuir
+
+1. Crear una rama desde `dev`:
 ```bash
-# Generar reporte de coverage
-go test -coverprofile=coverage/coverage.out -covermode=atomic ./...
-
-# Ver coverage total
-go tool cover -func=coverage/coverage.out | tail -1
-
-# Generar reporte HTML
-go tool cover -html=coverage/coverage.out -o coverage/coverage.html
-open coverage/coverage.html
+git checkout dev
+git pull origin dev
+git checkout -b feature/mi-feature
 ```
 
-Ver [COVERAGE-STANDARDS.md](docs/COVERAGE-STANDARDS.md) para guía completa.
+2. Hacer cambios y crear commits atómicos:
+```bash
+git add .
+git commit -m "feat: descripción del cambio"
+```
+
+3. Ejecutar validaciones locales:
+```bash
+make format
+make lint
+make test
+```
+
+4. Push y crear PR:
+```bash
+git push origin feature/mi-feature
+# Crear PR en GitHub apuntando a 'dev'
+```
+
+## 📄 Licencia
+
+Propietario: EduGo Group
+
+## 🔗 Enlaces
+
+- [Repositorio](https://github.com/EduGoGroup/edugo-worker)
+- [Issues](https://github.com/EduGoGroup/edugo-worker/issues)
+- [Pull Requests](https://github.com/EduGoGroup/edugo-worker/pulls)
+
+## 📞 Soporte
+
+Para preguntas o problemas, crear un issue en el repositorio.
