@@ -111,9 +111,7 @@ func (c *Config) Validate() error {
 	if c.Messaging.RabbitMQ.URL == "" {
 		return fmt.Errorf("RABBITMQ_URL is required")
 	}
-	if c.NLP.APIKey == "" {
-		return fmt.Errorf("OPENAI_API_KEY is required")
-	}
+	// NLP.APIKey es opcional - si no está, usamos SmartFallback
 	return nil
 }
 
