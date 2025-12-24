@@ -6,14 +6,29 @@ import (
 	"time"
 )
 
+// PostgresDB define la interfaz para operaciones de PostgreSQL necesarias para health checks
+type PostgresDB interface {
+	PingContext(ctx context.Context) error
+	Stats() sql.DBStats
+}
+
 // PostgreSQLCheck implementa HealthCheck para PostgreSQL
 type PostgreSQLCheck struct {
-	db      *sql.DB
+	db      PostgresDB
 	timeout time.Duration
 }
 
 // NewPostgreSQLCheck crea un nuevo PostgreSQL health check
 func NewPostgreSQLCheck(db *sql.DB, timeout time.Duration) *PostgreSQLCheck {
+	return &PostgreSQLCheck{
+		db:      db,
+		timeout: timeout,
+	}
+}
+
+// NewPostgreSQLCheckWithDB crea un health check con una interfaz PostgresDB
+// Útil para testing con mocks
+func NewPostgreSQLCheckWithDB(db PostgresDB, timeout time.Duration) *PostgreSQLCheck {
 	return &PostgreSQLCheck{
 		db:      db,
 		timeout: timeout,

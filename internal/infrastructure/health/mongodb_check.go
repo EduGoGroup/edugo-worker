@@ -5,16 +5,31 @@ import (
 	"time"
 
 	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/mongo/readpref"
 )
+
+// MongoClient define la interfaz para operaciones de MongoDB necesarias para health checks
+type MongoClient interface {
+	Ping(ctx context.Context, rp *readpref.ReadPref) error
+}
 
 // MongoDBCheck implementa HealthCheck para MongoDB
 type MongoDBCheck struct {
-	client  *mongo.Client
+	client  MongoClient
 	timeout time.Duration
 }
 
 // NewMongoDBCheck crea un nuevo MongoDB health check
 func NewMongoDBCheck(client *mongo.Client, timeout time.Duration) *MongoDBCheck {
+	return &MongoDBCheck{
+		client:  client,
+		timeout: timeout,
+	}
+}
+
+// NewMongoDBCheckWithClient crea un health check con una interfaz MongoClient
+// Útil para testing con mocks
+func NewMongoDBCheckWithClient(client MongoClient, timeout time.Duration) *MongoDBCheck {
 	return &MongoDBCheck{
 		client:  client,
 		timeout: timeout,

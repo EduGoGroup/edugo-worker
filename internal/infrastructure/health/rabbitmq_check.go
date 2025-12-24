@@ -7,14 +7,28 @@ import (
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
+// RabbitMQChannel define la interfaz para operaciones de RabbitMQ necesarias para health checks
+type RabbitMQChannel interface {
+	IsClosed() bool
+}
+
 // RabbitMQCheck implementa HealthCheck para RabbitMQ
 type RabbitMQCheck struct {
-	channel *amqp.Channel
+	channel RabbitMQChannel
 	timeout time.Duration
 }
 
 // NewRabbitMQCheck crea un nuevo RabbitMQ health check
 func NewRabbitMQCheck(channel *amqp.Channel, timeout time.Duration) *RabbitMQCheck {
+	return &RabbitMQCheck{
+		channel: channel,
+		timeout: timeout,
+	}
+}
+
+// NewRabbitMQCheckWithChannel crea un health check con una interfaz RabbitMQChannel
+// Útil para testing con mocks
+func NewRabbitMQCheckWithChannel(channel RabbitMQChannel, timeout time.Duration) *RabbitMQCheck {
 	return &RabbitMQCheck{
 		channel: channel,
 		timeout: timeout,
