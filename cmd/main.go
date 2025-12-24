@@ -33,6 +33,7 @@ func main() {
 		WithAuthClient().
 		WithInfrastructure().
 		WithProcessors().
+		WithHealthChecks().
 		WithMetricsServer().
 		Build()
 

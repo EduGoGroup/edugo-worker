@@ -13,6 +13,7 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/health"
 	httpInfra "github.com/EduGoGroup/edugo-worker/internal/infrastructure/http"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
@@ -33,6 +34,7 @@ type Resources struct {
 	LifecycleManager  *lifecycle.Manager
 	ProcessorRegistry *processor.Registry
 	MetricsServer     *httpInfra.MetricsServer
+	HealthChecker     *health.Checker
 }
 
 // ResourceBuilder construye Resources de forma incremental usando el patrón Builder
@@ -58,6 +60,7 @@ type ResourceBuilder struct {
 	authClient        *client.AuthClient
 	processorRegistry *processor.Registry
 	metricsServer     *httpInfra.MetricsServer
+	healthChecker     *health.Checker
 
 	// Lifecycle
 	lifecycleManager *lifecycle.Manager
@@ -381,6 +384,50 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	return b
 }
 
+// WithHealthChecks configura los health checks para las dependencias
+func (b *ResourceBuilder) WithHealthChecks() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+
+	if b.logger == nil {
+		b.err = fmt.Errorf("logger required before health checks")
+		return b
+	}
+
+	b.logger.Info("initializing health checks")
+
+	// Crear checker
+	checker := health.NewChecker()
+
+	// Registrar health check de PostgreSQL si está disponible
+	if b.sqlDB != nil {
+		pgCheck := health.NewPostgreSQLCheck(b.sqlDB, b.config.Database.MongoDB.Timeout)
+		checker.Register(pgCheck)
+		b.logger.Info("registered PostgreSQL health check")
+	}
+
+	// Registrar health check de MongoDB si está disponible
+	if b.mongoClient != nil {
+		mongoCheck := health.NewMongoDBCheck(b.mongoClient, b.config.Database.MongoDB.Timeout)
+		checker.Register(mongoCheck)
+		b.logger.Info("registered MongoDB health check")
+	}
+
+	// Registrar health check de RabbitMQ si está disponible
+	if b.rabbitChannel != nil {
+		rabbitCheck := health.NewRabbitMQCheck(b.rabbitChannel, b.config.Database.MongoDB.Timeout)
+		checker.Register(rabbitCheck)
+		b.logger.Info("registered RabbitMQ health check")
+	}
+
+	// Guardar referencia
+	b.healthChecker = checker
+
+	b.logger.Info("✅ Health checks initialized successfully")
+	return b
+}
+
 // WithMetricsServer configura el servidor HTTP de métricas Prometheus
 func (b *ResourceBuilder) WithMetricsServer() *ResourceBuilder {
 	if b.err != nil {
@@ -403,8 +450,17 @@ func (b *ResourceBuilder) WithMetricsServer() *ResourceBuilder {
 
 	b.logger.Info("initializing metrics server", "port", metricsCfg.Port)
 
-	// Crear servidor de métricas
-	metricsServer := httpInfra.NewMetricsServer(metricsCfg.Port)
+	// Crear servidor de métricas con health checker si está disponible
+	var metricsServer *httpInfra.MetricsServer
+	if b.healthChecker != nil {
+		metricsServer = httpInfra.NewMetricsServerWithConfig(httpInfra.MetricsServerConfig{
+			Port:          metricsCfg.Port,
+			HealthChecker: b.healthChecker,
+		})
+		b.logger.Info("metrics server configured with health endpoints")
+	} else {
+		metricsServer = httpInfra.NewMetricsServer(metricsCfg.Port)
+	}
 
 	// Iniciar servidor en goroutine
 	go func() {
@@ -459,6 +515,7 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 		LifecycleManager:  b.lifecycleManager,
 		ProcessorRegistry: b.processorRegistry,
 		MetricsServer:     b.metricsServer,
+		HealthChecker:     b.healthChecker,
 	}
 
 	// Crear función de cleanup
