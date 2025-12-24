@@ -72,20 +72,45 @@ func (h *HealthHandler) Liveness(w http.ResponseWriter, r *http.Request) {
 }
 
 // Readiness maneja GET /health/ready - readiness probe (Kubernetes)
+// Implementa lógica granular: solo componentes críticos (MongoDB, PostgreSQL) afectan el estado ready
 func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
 	results := h.checker.CheckAll(ctx)
-	isReady := h.checker.IsReady(ctx)
+
+	// Componentes críticos que deben estar saludables para que el servicio esté "ready"
+	criticalComponents := map[string]bool{
+		"mongodb":    true,
+		"postgresql": true,
+	}
+
+	hasCriticalFailure := false
+	hasOptionalFailure := false
+
+	for componentName, result := range results {
+		if result.Status != health.StatusHealthy {
+			if criticalComponents[componentName] {
+				hasCriticalFailure = true
+			} else {
+				hasOptionalFailure = true
+			}
+		}
+	}
 
 	status := "ready"
 	statusCode := http.StatusOK
 	message := "Application is ready to serve traffic"
 
-	if !isReady {
+	if hasCriticalFailure {
+		// Si hay falla crítica, el servicio NO está ready
 		status = "not_ready"
 		statusCode = http.StatusServiceUnavailable
-		message = "Application is not ready to serve traffic"
+		message = "Application is not ready: critical components are unhealthy"
+	} else if hasOptionalFailure {
+		// Si solo hay fallas opcionales, el servicio está ready pero degradado
+		status = "ready_degraded"
+		statusCode = http.StatusOK
+		message = "Application is ready but some optional components are unhealthy"
 	}
 
 	response := HealthResponse{
