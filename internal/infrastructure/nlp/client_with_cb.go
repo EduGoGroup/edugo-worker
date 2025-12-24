@@ -8,14 +8,14 @@ import (
 
 // ClientWithCircuitBreaker envuelve un Client con protección de circuit breaker
 type ClientWithCircuitBreaker struct {
-	client        Client
+	client         Client
 	circuitBreaker *circuitbreaker.CircuitBreaker
 }
 
 // NewClientWithCircuitBreaker crea un nuevo cliente NLP con circuit breaker
 func NewClientWithCircuitBreaker(client Client, cb *circuitbreaker.CircuitBreaker) Client {
 	return &ClientWithCircuitBreaker{
-		client:        client,
+		client:         client,
 		circuitBreaker: cb,
 	}
 }

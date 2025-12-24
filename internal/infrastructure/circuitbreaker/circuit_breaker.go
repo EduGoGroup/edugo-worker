@@ -13,9 +13,9 @@ import (
 type State int
 
 const (
-	StateClosed State = iota // Permite todas las peticiones
-	StateOpen                // Rechaza todas las peticiones
-	StateHalfOpen            // Permite peticiones limitadas para probar
+	StateClosed   State = iota // Permite todas las peticiones
+	StateOpen                  // Rechaza todas las peticiones
+	StateHalfOpen              // Permite peticiones limitadas para probar
 )
 
 // String convierte el estado a string para logging
