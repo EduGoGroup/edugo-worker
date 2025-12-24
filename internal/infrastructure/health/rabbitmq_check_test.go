@@ -10,7 +10,7 @@ import (
 
 // MockRabbitMQChannel es un mock simple de la interfaz RabbitMQChannel
 type MockRabbitMQChannel struct {
-	closed    bool
+	closed     bool
 	checkDelay time.Duration
 }
 
