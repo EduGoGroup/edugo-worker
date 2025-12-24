@@ -13,6 +13,7 @@ type Config struct {
 	PDF       PDFConfig       `mapstructure:"pdf"`
 	Logging   LoggingConfig   `mapstructure:"logging"`
 	APIAdmin  APIAdminConfig  `mapstructure:"api_admin"`
+	Metrics   MetricsConfig   `mapstructure:"metrics"`
 }
 
 type DatabaseConfig struct {
@@ -92,6 +93,11 @@ type LoggingConfig struct {
 	Format string `mapstructure:"format"`
 }
 
+type MetricsConfig struct {
+	Enabled bool `mapstructure:"enabled"`
+	Port    int  `mapstructure:"port"`
+}
+
 // APIAdminConfig configuración para conexión con api-admin (autenticación centralizada)
 type APIAdminConfig struct {
 	BaseURL      string        `mapstructure:"base_url"`
@@ -129,6 +135,15 @@ func (c *Config) GetAPIAdminConfigWithDefaults() APIAdminConfig {
 	}
 	if cfg.MaxBulkSize == 0 {
 		cfg.MaxBulkSize = 50
+	}
+	return cfg
+}
+
+// GetMetricsConfigWithDefaults retorna la configuración de métricas con valores por defecto
+func (c *Config) GetMetricsConfigWithDefaults() MetricsConfig {
+	cfg := c.Metrics
+	if cfg.Port == 0 {
+		cfg.Port = 9090
 	}
 	return cfg
 }

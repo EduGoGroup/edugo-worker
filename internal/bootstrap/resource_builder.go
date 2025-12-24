@@ -13,6 +13,7 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure"
+	httpInfra "github.com/EduGoGroup/edugo-worker/internal/infrastructure/http"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
@@ -31,6 +32,7 @@ type Resources struct {
 	AuthClient        *client.AuthClient
 	LifecycleManager  *lifecycle.Manager
 	ProcessorRegistry *processor.Registry
+	MetricsServer     *httpInfra.MetricsServer
 }
 
 // ResourceBuilder construye Resources de forma incremental usando el patrón Builder
@@ -55,6 +57,7 @@ type ResourceBuilder struct {
 	// Recursos de aplicación
 	authClient        *client.AuthClient
 	processorRegistry *processor.Registry
+	metricsServer     *httpInfra.MetricsServer
 
 	// Lifecycle
 	lifecycleManager *lifecycle.Manager
@@ -378,6 +381,54 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	return b
 }
 
+// WithMetricsServer configura el servidor HTTP de métricas Prometheus
+func (b *ResourceBuilder) WithMetricsServer() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+
+	if b.logger == nil {
+		b.err = fmt.Errorf("logger required before metrics server")
+		return b
+	}
+
+	// Obtener configuración con valores por defecto
+	metricsCfg := b.config.GetMetricsConfigWithDefaults()
+
+	// Si las métricas no están habilitadas, retornar sin hacer nada
+	if !metricsCfg.Enabled {
+		b.logger.Info("metrics server disabled")
+		return b
+	}
+
+	b.logger.Info("initializing metrics server", "port", metricsCfg.Port)
+
+	// Crear servidor de métricas
+	metricsServer := httpInfra.NewMetricsServer(metricsCfg.Port)
+
+	// Iniciar servidor en goroutine
+	go func() {
+		b.logger.Info("starting metrics server", "port", metricsCfg.Port)
+		if err := metricsServer.Start(); err != nil {
+			b.logger.Error("metrics server error", "error", err.Error())
+		}
+	}()
+
+	// Guardar referencia
+	b.metricsServer = metricsServer
+
+	// Registrar cleanup
+	b.addCleanup(func() error {
+		b.logger.Info("shutting down metrics server")
+		ctx, cancel := context.WithTimeout(context.Background(), 5*b.config.Database.MongoDB.Timeout)
+		defer cancel()
+		return b.metricsServer.Shutdown(ctx)
+	})
+
+	b.logger.Info("✅ Metrics server initialized successfully", "endpoint", fmt.Sprintf("http://localhost:%d/metrics", metricsCfg.Port))
+	return b
+}
+
 // Build construye y retorna Resources con su función de cleanup
 func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 	// Verificar si hubo errores durante la construcción
@@ -407,6 +458,7 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 		AuthClient:        b.authClient,
 		LifecycleManager:  b.lifecycleManager,
 		ProcessorRegistry: b.processorRegistry,
+		MetricsServer:     b.metricsServer,
 	}
 
 	// Crear función de cleanup

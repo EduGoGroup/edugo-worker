@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"time"
 
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/common/types/enum"
@@ -11,6 +12,7 @@ import (
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/valueobject"
+	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/metrics"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
@@ -50,6 +52,8 @@ func NewMaterialUploadedProcessor(cfg MaterialUploadedProcessorConfig) *Material
 }
 
 func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.MaterialUploadedEvent) error {
+	startTime := time.Now()
+
 	p.logger.Info("processing material uploaded",
 		"material_id", event.MaterialID,
 		"s3_key", event.S3Key,
@@ -57,6 +61,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 
 	materialID, err := valueobject.MaterialIDFromString(event.MaterialID)
 	if err != nil {
+		metrics.RecordEventProcessed("material_uploaded", "validation_error")
 		return errors.NewValidationError("invalid material_id")
 	}
 
@@ -73,9 +78,16 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 
 	// 2. Descargar PDF desde S3
 	p.logger.Debug("descargando PDF de S3", "s3_key", event.S3Key)
+	s3Start := time.Now()
 	pdfReader, err := p.storageClient.Download(ctx, event.S3Key)
+	s3Status := "success"
+	if err != nil {
+		s3Status = "error"
+	}
+	metrics.RecordS3Operation("download", s3Status, time.Since(s3Start).Seconds())
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
+		metrics.RecordEventProcessed("material_uploaded", "s3_error")
 		return errors.NewInternalError("failed to download PDF", err)
 	}
 	defer func() {
@@ -86,32 +98,55 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 
 	// 3. Extraer texto del PDF
 	p.logger.Debug("extrayendo texto del PDF")
+	pdfStart := time.Now()
 	extractedText, err := p.pdfExtractor.Extract(ctx, pdfReader)
+	pdfStatus := "success"
+	if err != nil {
+		pdfStatus = "error"
+	}
+	metrics.RecordPDFExtraction(pdfStatus, time.Since(pdfStart).Seconds(), 0) // pageCount desconocido
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
+		metrics.RecordEventProcessed("material_uploaded", "pdf_error")
 		return errors.NewInternalError("failed to extract PDF text", err)
 	}
 	p.logger.Info("texto extraído", "words", len(extractedText)/5)
 
 	// 4. Generar resumen con NLP
 	p.logger.Debug("generando resumen con NLP")
+	nlpSummaryStart := time.Now()
 	summary, err := p.nlpClient.GenerateSummary(ctx, extractedText)
+	nlpSummaryStatus := "success"
+	if err != nil {
+		nlpSummaryStatus = "error"
+	}
+	metrics.RecordOpenAIRequest(nlpSummaryStatus, time.Since(nlpSummaryStart).Seconds(), 0) // tokens desconocidos
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
+		metrics.RecordEventProcessed("material_uploaded", "nlp_summary_error")
 		return errors.NewInternalError("failed to generate summary", err)
 	}
 
 	// 5. Generar quiz con NLP
 	p.logger.Debug("generando quiz con NLP")
+	nlpQuizStart := time.Now()
 	quiz, err := p.nlpClient.GenerateQuiz(ctx, extractedText, 10)
+	nlpQuizStatus := "success"
+	if err != nil {
+		nlpQuizStatus = "error"
+	}
+	metrics.RecordOpenAIRequest(nlpQuizStatus, time.Since(nlpQuizStart).Seconds(), 0) // tokens desconocidos
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
+		metrics.RecordEventProcessed("material_uploaded", "nlp_quiz_error")
 		return errors.NewInternalError("failed to generate quiz", err)
 	}
 
 	// 6. Guardar en MongoDB dentro de transacción
+	dbStart := time.Now()
 	err = postgres.WithTransaction(ctx, p.db, func(tx *sql.Tx) error {
 		// Guardar resumen en MongoDB
+		mongoStart := time.Now()
 		summaryCollection := p.mongodb.Collection("material_summaries")
 		summaryDoc := bson.M{
 			"material_id":  event.MaterialID,
@@ -124,11 +159,13 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		}
 
 		_, err = summaryCollection.InsertOne(ctx, summaryDoc)
+		metrics.RecordDatabaseOperation("mongodb", "insert", time.Since(mongoStart).Seconds(), err == nil)
 		if err != nil {
 			return err
 		}
 
 		// Guardar quiz en MongoDB
+		mongoStart = time.Now()
 		assessmentCollection := p.mongodb.Collection("material_assessment_worker")
 		assessmentDoc := bson.M{
 			"material_id": event.MaterialID,
@@ -137,25 +174,34 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		}
 
 		_, err = assessmentCollection.InsertOne(ctx, assessmentDoc)
+		metrics.RecordDatabaseOperation("mongodb", "insert", time.Since(mongoStart).Seconds(), err == nil)
 		if err != nil {
 			return err
 		}
 
 		// Actualizar estado a completed
+		pgStart := time.Now()
 		_, err = tx.ExecContext(ctx,
 			"UPDATE materials SET processing_status = $1, updated_at = NOW() WHERE id = $2",
 			enum.ProcessingStatusCompleted.String(),
 			materialID.String(),
 		)
+		metrics.RecordDatabaseOperation("postgres", "update", time.Since(pgStart).Seconds(), err == nil)
 
 		return err
 	})
+	metrics.RecordDatabaseOperation("postgres", "transaction", time.Since(dbStart).Seconds(), err == nil)
 
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
 		p.logger.Error("processing failed", "error", err, "material_id", event.MaterialID)
+		metrics.RecordEventProcessed("material_uploaded", "database_error")
 		return errors.NewInternalError("processing failed", err)
 	}
+
+	// Registrar evento completado exitosamente
+	metrics.RecordEventProcessed("material_uploaded", "success")
+	metrics.RecordProcessingDuration("material_uploaded", time.Since(startTime).Seconds())
 
 	p.logger.Info("material processing completed", "material_id", event.MaterialID)
 	return nil

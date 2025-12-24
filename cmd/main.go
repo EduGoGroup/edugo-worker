@@ -31,7 +31,9 @@ func main() {
 		WithMongoDB().
 		WithRabbitMQ().
 		WithAuthClient().
+		WithInfrastructure().
 		WithProcessors().
+		WithMetricsServer().
 		Build()
 
 	if err != nil {
