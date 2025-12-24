@@ -41,6 +41,11 @@ FASE 2: Integraciones Externas (3-4 semanas)
   ├── Implementar extracción PDF
   └── Implementar cliente S3
 
+FASE 2.5: Homologación Material Assessment (1-2 días)
+  ├── Verificar uso de colección material_assessment_worker
+  ├── Actualizar dependencia edugo-infrastructure
+  └── Validar compatibilidad con nuevo esquema
+
 FASE 3: Testing y Calidad (2-3 semanas)
   ├── Aumentar cobertura de tests
   ├── Crear mocks e interfaces
@@ -68,6 +73,10 @@ plan-mejoras/
 │   ├── TAREAS.md
 │   └── VALIDACION.md
 ├── fase-2/                      # Integraciones externas
+│   ├── README.md
+│   ├── TAREAS.md
+│   └── VALIDACION.md
+├── fase-2.5/                    # Homologación material_assessment
 │   ├── README.md
 │   ├── TAREAS.md
 │   └── VALIDACION.md
@@ -161,6 +170,12 @@ git push origin fase-N-complete
 - [ ] Cliente S3 funcional
 - [ ] Tests con mocks para servicios externos
 
+### Fase 2.5
+- [ ] Verificado uso correcto de colección material_assessment_worker
+- [ ] Dependencia edugo-infrastructure actualizada
+- [ ] Entity MaterialAssessment completa con todos los campos
+- [ ] Todos los tests pasan sin errores
+
 ### Fase 3
 - [ ] Cobertura de tests >80%
 - [ ] Mocks e interfaces implementados
@@ -182,6 +197,7 @@ git push origin fase-N-complete
 | Fase 0 | 1-2 días | Baja | Bajo |
 | Fase 1 | 2-3 semanas | Alta | Medio |
 | Fase 2 | 3-4 semanas | Alta | Alto |
+| Fase 2.5 | 1-2 días | Baja | Bajo |
 | Fase 3 | 2-3 semanas | Media | Bajo |
 | Fase 4 | 2-3 semanas | Media | Medio |
 
@@ -276,6 +292,7 @@ Fase: 1
 | Fase 0 | ✅ Completada | 2025-12-23 | 2025-12-23 | [#28](https://github.com/EduGoGroup/edugo-worker/pull/28) |
 | Fase 1 | 🚧 En desarrollo | 2025-12-23 | - | - |
 | Fase 2 | ⏸️ No iniciada | - | - | - |
+| Fase 2.5 | ⏸️ No iniciada | - | - | - |
 | Fase 3 | ⏸️ No iniciada | - | - | - |
 | Fase 4 | ⏸️ No iniciada | - | - | - |
 
