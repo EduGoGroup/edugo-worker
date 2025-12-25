@@ -56,11 +56,11 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	startTime := time.Now()
 
 	p.logger.Info("processing material uploaded",
-		"material_id", event.MaterialID,
-		"s3_key", event.S3Key,
+		"material_id", event.GetMaterialID(),
+		"s3_key", event.GetS3Key(),
 	)
 
-	materialID, err := valueobject.MaterialIDFromString(event.MaterialID)
+	materialID, err := valueobject.MaterialIDFromString(event.GetMaterialID())
 	if err != nil {
 		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
@@ -80,14 +80,14 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	}
 
 	// 2. Descargar PDF desde S3 con retry logic
-	p.logger.Debug("descargando PDF de S3", "s3_key", event.S3Key)
+	p.logger.Debug("descargando PDF de S3", "s3_key", event.GetS3Key())
 	s3Start := time.Now()
 
 	var pdfReader io.ReadCloser
 	retryCfg := DefaultRetryConfig(p.logger)
 	err = WithRetry(ctx, retryCfg, func() error {
 		var downloadErr error
-		pdfReader, downloadErr = p.storageClient.Download(ctx, event.S3Key)
+		pdfReader, downloadErr = p.storageClient.Download(ctx, event.GetS3Key())
 		return downloadErr
 	})
 
@@ -101,7 +101,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		p.updateStatusToFailed(ctx, materialID.String())
 		p.logger.Error("error descargando PDF de S3 después de reintentos",
 			"error", err,
-			"s3_key", event.S3Key,
+			"s3_key", event.GetS3Key(),
 			"errorType", classifyError(err),
 		)
 		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
@@ -221,7 +221,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		mongoStart := time.Now()
 		summaryCollection := p.mongodb.Collection("material_summaries")
 		summaryDoc := bson.M{
-			"material_id":  event.MaterialID,
+			"material_id":  event.GetMaterialID(),
 			"main_ideas":   summary.MainIdeas,
 			"key_concepts": summary.KeyConcepts,
 			"sections":     p.sectionsToSlice(summary.Sections),
@@ -240,7 +240,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		mongoStart = time.Now()
 		assessmentCollection := p.mongodb.Collection("material_assessment_worker")
 		assessmentDoc := bson.M{
-			"material_id": event.MaterialID,
+			"material_id": event.GetMaterialID(),
 			"questions":   p.questionsToSlice(quiz.Questions),
 			"created_at":  quiz.GeneratedAt,
 		}
@@ -266,7 +266,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 
 	if err != nil {
 		p.updateStatusToFailed(ctx, materialID.String())
-		p.logger.Error("processing failed", "error", err, "material_id", event.MaterialID)
+		p.logger.Error("processing failed", "error", err, "material_id", event.GetMaterialID())
 		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
 		metrics.RecordEventProcessed("material_uploaded", "database_error")
 		return errors.NewInternalError("processing failed", err)
@@ -277,7 +277,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	metrics.RecordEventProcessed("material_uploaded", "success")
 	metrics.RecordProcessingDuration("material_uploaded", time.Since(startTime).Seconds())
 
-	p.logger.Info("material processing completed", "material_id", event.MaterialID)
+	p.logger.Info("material processing completed", "material_id", event.GetMaterialID())
 	return nil
 }
 

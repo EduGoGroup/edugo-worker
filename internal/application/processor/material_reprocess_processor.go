@@ -22,7 +22,7 @@ func NewMaterialReprocessProcessor(uploadedProcessor *MaterialUploadedProcessor,
 }
 
 func (p *MaterialReprocessProcessor) processEvent(ctx context.Context, event dto.MaterialUploadedEvent) error {
-	p.logger.Info("reprocessing material", "material_id", event.MaterialID)
+	p.logger.Info("reprocessing material", "material_id", event.GetMaterialID())
 
 	// Reprocesar es lo mismo que procesar por primera vez
 	return p.uploadedProcessor.processEvent(ctx, event)
