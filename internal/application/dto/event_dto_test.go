@@ -36,7 +36,7 @@ func TestMaterialUploadedEvent_GetS3Key(t *testing.T) {
 		expected string
 	}{
 		{
-			name: "retorna FileURL directamente",
+			name: "extrae key desde metadata s3_key",
 			event: MaterialUploadedEvent{
 				EventID:      "evt-123",
 				EventType:    "material.uploaded",
@@ -49,9 +49,66 @@ func TestMaterialUploadedEvent_GetS3Key(t *testing.T) {
 					FileURL:       "https://s3.amazonaws.com/bucket/materials/file.pdf",
 					FileSizeBytes: 1024000,
 					FileType:      "application/pdf",
+					Metadata: map[string]interface{}{
+						"s3_key": "materials/school-789/mat-456.pdf",
+					},
 				},
 			},
-			expected: "https://s3.amazonaws.com/bucket/materials/file.pdf",
+			expected: "materials/school-789/mat-456.pdf",
+		},
+		{
+			name: "extrae key desde URL formato s3://",
+			event: MaterialUploadedEvent{
+				EventID:      "evt-123",
+				EventType:    "material.uploaded",
+				EventVersion: "1.0.0",
+				Timestamp:    time.Now(),
+				Payload: MaterialUploadedPayload{
+					MaterialID:    "mat-456",
+					SchoolID:      "school-789",
+					TeacherID:     "teacher-101",
+					FileURL:       "s3://my-bucket/materials/school-789/file.pdf",
+					FileSizeBytes: 1024000,
+					FileType:      "application/pdf",
+				},
+			},
+			expected: "materials/school-789/file.pdf",
+		},
+		{
+			name: "extrae key desde URL formato https://s3.amazonaws.com/bucket/key",
+			event: MaterialUploadedEvent{
+				EventID:      "evt-123",
+				EventType:    "material.uploaded",
+				EventVersion: "1.0.0",
+				Timestamp:    time.Now(),
+				Payload: MaterialUploadedPayload{
+					MaterialID:    "mat-456",
+					SchoolID:      "school-789",
+					TeacherID:     "teacher-101",
+					FileURL:       "https://s3.amazonaws.com/my-bucket/materials/file.pdf",
+					FileSizeBytes: 1024000,
+					FileType:      "application/pdf",
+				},
+			},
+			expected: "materials/file.pdf",
+		},
+		{
+			name: "fallback a FileURL completo si no hay patrón conocido",
+			event: MaterialUploadedEvent{
+				EventID:      "evt-123",
+				EventType:    "material.uploaded",
+				EventVersion: "1.0.0",
+				Timestamp:    time.Now(),
+				Payload: MaterialUploadedPayload{
+					MaterialID:    "mat-456",
+					SchoolID:      "school-789",
+					TeacherID:     "teacher-101",
+					FileURL:       "materials/custom/path.pdf",
+					FileSizeBytes: 1024000,
+					FileType:      "application/pdf",
+				},
+			},
+			expected: "materials/custom/path.pdf",
 		},
 	}
 

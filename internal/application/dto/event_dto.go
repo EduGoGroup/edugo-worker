@@ -1,6 +1,9 @@
 package dto
 
-import "time"
+import (
+	"strings"
+	"time"
+)
 
 // MaterialUploadedEvent representa el evento recibido de API Mobile
 // NOTA: Este es un mapeo TEMPORAL hasta implementar DTOs compartidos en edugo-shared
@@ -31,11 +34,53 @@ func (e MaterialUploadedEvent) GetMaterialID() string {
 	return e.Payload.MaterialID
 }
 
-// GetS3Key helper para compatibilidad (FileURL es la URL completa, extraer key si es necesario)
+// GetS3Key helper para compatibilidad (extrae la key S3 desde FileURL)
 func (e MaterialUploadedEvent) GetS3Key() string {
-	// Por ahora retornar FileURL directamente
-	// TODO: Si es necesario extraer solo la key del path S3, implementar lógica aquí
-	return e.Payload.FileURL
+	// 1. Si hay metadata con s3_key, usar ese valor (preferido)
+	if e.Payload.Metadata != nil {
+		if key, ok := e.Payload.Metadata["s3_key"].(string); ok && key != "" {
+			return key
+		}
+	}
+
+	// 2. Intentar extraer key desde FileURL
+	fileURL := e.Payload.FileURL
+
+	// Formato s3://bucket/path/to/file.pdf
+	if strings.HasPrefix(fileURL, "s3://") {
+		// Remover prefijo s3://
+		rest := strings.TrimPrefix(fileURL, "s3://")
+		// Buscar el primer / para saltar el bucket
+		if idx := strings.Index(rest, "/"); idx != -1 {
+			return rest[idx+1:]
+		}
+	}
+
+	// Formato https://s3.amazonaws.com/bucket/path/to/file.pdf o
+	// https://bucket.s3.amazonaws.com/path/to/file.pdf
+	if strings.Contains(fileURL, "s3.amazonaws.com") || strings.Contains(fileURL, "s3.") {
+		// Buscar la posición después del dominio
+		if idx := strings.Index(fileURL, "//"); idx != -1 {
+			// Saltar protocolo
+			rest := fileURL[idx+2:]
+			// Buscar el primer /
+			if slashIdx := strings.Index(rest, "/"); slashIdx != -1 {
+				pathPart := rest[slashIdx+1:]
+				// Si contiene otro /, probablemente es bucket/key
+				if strings.Contains(pathPart, "/") {
+					// Formato: .../bucket/key - saltar el bucket
+					parts := strings.SplitN(pathPart, "/", 2)
+					if len(parts) >= 2 {
+						return parts[1]
+					}
+				}
+				return pathPart
+			}
+		}
+	}
+
+	// 3. Fallback: retornar FileURL completo
+	return fileURL
 }
 
 // GetAuthorID helper para mapear TeacherID → AuthorID
