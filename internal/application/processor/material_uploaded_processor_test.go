@@ -62,8 +62,18 @@ func TestMaterialUploadedProcessor_Process_InvalidMaterialID(t *testing.T) {
 	}
 
 	event := dto.MaterialUploadedEvent{
-		MaterialID: "invalid-uuid",
-		S3Key:      "test.pdf",
+		EventID:      "evt-test-123",
+		EventType:    "material.uploaded",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.MaterialUploadedPayload{
+			MaterialID:    "invalid-uuid",
+			SchoolID:      "school-test-789",
+			TeacherID:     "teacher-test-101",
+			FileURL:       "test.pdf",
+			FileSizeBytes: 1024000,
+			FileType:      "application/pdf",
+		},
 	}
 	payload, _ := json.Marshal(event)
 
@@ -103,8 +113,18 @@ func TestMaterialUploadedProcessor_Process_StorageDownloadError(t *testing.T) {
 	}
 
 	event := dto.MaterialUploadedEvent{
-		MaterialID: "550e8400-e29b-41d4-a716-446655440000",
-		S3Key:      "test.pdf",
+		EventID:      "evt-test-123",
+		EventType:    "material.uploaded",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.MaterialUploadedPayload{
+			MaterialID:    "550e8400-e29b-41d4-a716-446655440000",
+			SchoolID:      "school-test-789",
+			TeacherID:     "teacher-test-101",
+			FileURL:       "test.pdf",
+			FileSizeBytes: 1024000,
+			FileType:      "application/pdf",
+		},
 	}
 	payload, _ := json.Marshal(event)
 
@@ -154,8 +174,18 @@ func TestMaterialUploadedProcessor_Process_PDFExtractionError(t *testing.T) {
 	}
 
 	event := dto.MaterialUploadedEvent{
-		MaterialID: "550e8400-e29b-41d4-a716-446655440000",
-		S3Key:      "test.pdf",
+		EventID:      "evt-test-123",
+		EventType:    "material.uploaded",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.MaterialUploadedPayload{
+			MaterialID:    "550e8400-e29b-41d4-a716-446655440000",
+			SchoolID:      "school-test-789",
+			TeacherID:     "teacher-test-101",
+			FileURL:       "test.pdf",
+			FileSizeBytes: 1024000,
+			FileType:      "application/pdf",
+		},
 	}
 	payload, _ := json.Marshal(event)
 
@@ -216,8 +246,18 @@ func TestMaterialUploadedProcessor_Process_NLPSummaryError(t *testing.T) {
 	}
 
 	event := dto.MaterialUploadedEvent{
-		MaterialID: "550e8400-e29b-41d4-a716-446655440000",
-		S3Key:      "test.pdf",
+		EventID:      "evt-test-123",
+		EventType:    "material.uploaded",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.MaterialUploadedPayload{
+			MaterialID:    "550e8400-e29b-41d4-a716-446655440000",
+			SchoolID:      "school-test-789",
+			TeacherID:     "teacher-test-101",
+			FileURL:       "test.pdf",
+			FileSizeBytes: 1024000,
+			FileType:      "application/pdf",
+		},
 	}
 	payload, _ := json.Marshal(event)
 
@@ -291,8 +331,18 @@ func TestMaterialUploadedProcessor_Process_NLPQuizError(t *testing.T) {
 	}
 
 	event := dto.MaterialUploadedEvent{
-		MaterialID: "550e8400-e29b-41d4-a716-446655440000",
-		S3Key:      "test.pdf",
+		EventID:      "evt-test-123",
+		EventType:    "material.uploaded",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.MaterialUploadedPayload{
+			MaterialID:    "550e8400-e29b-41d4-a716-446655440000",
+			SchoolID:      "school-test-789",
+			TeacherID:     "teacher-test-101",
+			FileURL:       "test.pdf",
+			FileSizeBytes: 1024000,
+			FileType:      "application/pdf",
+		},
 	}
 	payload, _ := json.Marshal(event)
 
