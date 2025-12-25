@@ -19,8 +19,8 @@ type MaterialUploadedEvent struct {
 type MaterialUploadedPayload struct {
 	MaterialID    string                 `json:"material_id"`
 	SchoolID      string                 `json:"school_id"`
-	TeacherID     string                 `json:"teacher_id"`    // API usa teacher_id
-	FileURL       string                 `json:"file_url"`       // API usa file_url (no s3_key)
+	TeacherID     string                 `json:"teacher_id"` // API usa teacher_id
+	FileURL       string                 `json:"file_url"`   // API usa file_url (no s3_key)
 	FileSizeBytes int64                  `json:"file_size_bytes"`
 	FileType      string                 `json:"file_type"`
 	Metadata      map[string]interface{} `json:"metadata,omitempty"`

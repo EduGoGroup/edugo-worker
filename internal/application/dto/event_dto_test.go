@@ -98,7 +98,7 @@ func TestMaterialUploadedPayload_Metadata(t *testing.T) {
 		FileSizeBytes: 1024000,
 		FileType:      "application/pdf",
 		Metadata: map[string]interface{}{
-			"s3_key":     "materials/school-789/mat-456.pdf",
+			"s3_key":        "materials/school-789/mat-456.pdf",
 			"upload_source": "web",
 		},
 	}
