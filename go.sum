@@ -10,8 +10,8 @@ github.com/EduGoGroup/edugo-infrastructure/mongodb v0.11.0 h1:E49YkJ+wDD6nEyKdXG
 github.com/EduGoGroup/edugo-infrastructure/mongodb v0.11.0/go.mod h1:63USm9b8Xu/U4F4t/UqwpIjKZuWSVrNEshCIqUTl/v8=
 github.com/EduGoGroup/edugo-shared/bootstrap v0.9.0 h1:CcHBkwmYUpqO33xYGNELaHWXkz8xaZez68ye7oALJQQ=
 github.com/EduGoGroup/edugo-shared/bootstrap v0.9.0/go.mod h1:Vdj7oMeDe52YU8kduP8MB5s1N4zJLXGyUZzhwW9Faiw=
-github.com/EduGoGroup/edugo-shared/common v0.9.0 h1:05gZYPQcH4BAToop17IHqRlNIFpB0iVXCDIcWCM0LUw=
-github.com/EduGoGroup/edugo-shared/common v0.9.0/go.mod h1:qW4U7XqhQ24J7DZqNzJRm9kbcYS916nIvsmqOY2ks88=
+github.com/EduGoGroup/edugo-shared/common v0.10.0 h1:t7w8CrhgmWN1vSR7iOa2a9aEwoAOBhpfczmXQ3Nxenc=
+github.com/EduGoGroup/edugo-shared/common v0.10.0/go.mod h1:hGz6Jr7zNj9SxpTJ03ayrUAoxPiwljFlKkZ6BbIL6mo=
 github.com/EduGoGroup/edugo-shared/database/postgres v0.9.0 h1:Zs7OWE2cY9Nb3WQPEsGUB+kJQqYh7TJ268yBTYaoekc=
 github.com/EduGoGroup/edugo-shared/database/postgres v0.9.0/go.mod h1:r2o2TbxJ4Kpnx3YqLQRdPPbrpM9/LsckwhIMZY3YUeQ=
 github.com/EduGoGroup/edugo-shared/lifecycle v0.9.0 h1:B4KLMLfBmaQod7X4fIgEJfIPallgt8lKlo8JzeHYJ70=

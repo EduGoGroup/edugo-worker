@@ -6,7 +6,7 @@ require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.11.0
 	github.com/EduGoGroup/edugo-shared/bootstrap v0.9.0
-	github.com/EduGoGroup/edugo-shared/common v0.9.0
+	github.com/EduGoGroup/edugo-shared/common v0.10.0
 	github.com/EduGoGroup/edugo-shared/database/postgres v0.9.0
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.9.0
 	github.com/EduGoGroup/edugo-shared/logger v0.9.0
