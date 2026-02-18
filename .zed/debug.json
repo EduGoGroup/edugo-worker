@@ -1,0 +1,77 @@
+[
+  {
+    "label": "Go: Debug main (Delve)",
+    "adapter": "Delve",
+    "program": "${ZED_WORKTREE_ROOT}/cmd/main.go",
+    "cwd": "${ZED_WORKTREE_ROOT}",
+    "request": "launch",
+    "mode": "debug",
+    "stopOnEntry": false,
+    "envFile": "${ZED_WORKTREE_ROOT}/.env"
+  },
+  {
+    "label": "Go: Debug main (MOCK - Sin Docker)",
+    "adapter": "Delve",
+    "program": "${ZED_WORKTREE_ROOT}/cmd/main.go",
+    "cwd": "${ZED_WORKTREE_ROOT}",
+    "request": "launch",
+    "mode": "debug",
+    "stopOnEntry": false,
+    "env": {
+      "APP_ENV": "local",
+      "USE_MOCK_REPOSITORIES": "true"
+    }
+  },
+  {
+    "label": "Go: Debug main (CLOUD MODE - Neon/Atlas/Upstash)",
+    "adapter": "Delve",
+    "program": "${ZED_WORKTREE_ROOT}/cmd/main.go",
+    "cwd": "${ZED_WORKTREE_ROOT}",
+    "request": "launch",
+    "mode": "debug",
+    "stopOnEntry": false,
+    "env": {
+      "APP_ENV": "development",
+      "ENV": "development",
+      "POSTGRES_PASSWORD": "npg_sC2u9pTVwQJI",
+      "MONGODB_URI": "mongodb+srv://medinatello_db_user:6NQjJDaOkN4nvldT@edugo.alxme5j.mongodb.net/edugo?appName=Edugo",
+      "RABBITMQ_URL": "amqp://edugo:edugo123@localhost:5672/",
+      "OPENAI_API_KEY": "",
+      "EDUGO_WORKER_DATABASE_POSTGRES_HOST": "ep-green-frost-ado4abbi-pooler.c-2.us-east-1.aws.neon.tech",
+      "EDUGO_WORKER_DATABASE_POSTGRES_PORT": "5432",
+      "EDUGO_WORKER_DATABASE_POSTGRES_USER": "neondb_owner",
+      "EDUGO_WORKER_DATABASE_POSTGRES_DATABASE": "edugo",
+      "EDUGO_WORKER_DATABASE_POSTGRES_SSLMODE": "require",
+      "EDUGO_WORKER_DATABASE_POSTGRES_MAX_CONNECTIONS": "25",
+      "EDUGO_WORKER_DATABASE_MONGODB_DATABASE": "edugo",
+      "EDUGO_WORKER_DATABASE_MONGODB_TIMEOUT": "10s",
+      "EDUGO_WORKER_MESSAGING_RABBITMQ_PREFETCH_COUNT": "1",
+      "EDUGO_WORKER_MESSAGING_RABBITMQ_QUEUES_MATERIAL_UPLOADED": "material.uploaded",
+      "EDUGO_WORKER_MESSAGING_RABBITMQ_QUEUES_ASSESSMENT_ATTEMPT": "assessment.attempt",
+      "EDUGO_WORKER_MESSAGING_RABBITMQ_EXCHANGES_MATERIALS": "materials",
+      "EDUGO_WORKER_NLP_PROVIDER": "openai",
+      "EDUGO_WORKER_NLP_MODEL": "gpt-4",
+      "EDUGO_WORKER_NLP_MAX_TOKENS": "2000",
+      "EDUGO_WORKER_NLP_TEMPERATURE": "0.7",
+      "EDUGO_WORKER_LOGGING_LEVEL": "debug",
+      "EDUGO_WORKER_LOGGING_FORMAT": "json"
+    }
+  },
+  {
+    "label": "Go: Debug current file",
+    "adapter": "Delve",
+    "program": "$ZED_FILE",
+    "request": "launch",
+    "mode": "debug",
+    "stopOnEntry": false
+  },
+  {
+    "label": "Go: Debug package tests",
+    "adapter": "Delve",
+    "request": "launch",
+    "mode": "test",
+    "program": ".",
+    "buildFlags": [],
+    "stopOnEntry": false
+  }
+]
