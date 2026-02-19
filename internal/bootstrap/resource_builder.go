@@ -10,7 +10,6 @@ import (
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
-	"github.com/EduGoGroup/edugo-worker/internal/bootstrap/adapter"
 	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure"
@@ -20,8 +19,7 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"github.com/sirupsen/logrus"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 	gormLogger "gorm.io/gorm/logger"
 )
 
@@ -44,11 +42,10 @@ type ResourceBuilder struct {
 	ctx    context.Context
 
 	// Recursos de infraestructura base
-	logger        logger.Logger
-	logrusLogger  *logrus.Logger
-	sqlDB         *sql.DB
-	mongoClient   *mongo.Client
-	mongodb       *mongo.Database
+	logger      logger.Logger
+	sqlDB       *sql.DB
+	mongoClient *mongo.Client
+	mongodb     *mongo.Database
 	rabbitConn    *amqp.Connection
 	rabbitChannel *amqp.Channel
 
@@ -99,9 +96,8 @@ func (b *ResourceBuilder) WithLogger() *ResourceBuilder {
 		return b
 	}
 
-	// Guardar referencias
-	b.logrusLogger = logrusLogger
-	b.logger = adapter.NewLoggerAdapter(logrusLogger)
+	// Guardar referencia
+	b.logger = logrusLogger
 
 	// Registrar cleanup
 	b.addCleanup(func() error {

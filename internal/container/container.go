@@ -10,7 +10,7 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // Container es el contenedor de dependencias del Worker

@@ -7,7 +7,7 @@ APP_NAME=worker
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
 BUILD_DIR=bin
 COVERAGE_DIR=coverage
-MAIN_PATH=./cmd/main.go
+MAIN_PATH=./cmd
 
 # Go commands
 GOCMD=go

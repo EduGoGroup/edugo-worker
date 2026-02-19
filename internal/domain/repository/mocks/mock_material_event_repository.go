@@ -8,7 +8,7 @@ import (
 	entities "github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	mock "github.com/stretchr/testify/mock"
 
-	primitive "go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/v2/bson"
 
 	time "time"
 )
@@ -305,7 +305,7 @@ func (_c *MockMaterialEventRepository_FindByEventType_Call) RunAndReturn(run fun
 }
 
 // FindByID provides a mock function with given fields: ctx, id
-func (_m *MockMaterialEventRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialEvent, error) {
+func (_m *MockMaterialEventRepository) FindByID(ctx context.Context, id bson.ObjectID) (*entities.MaterialEvent, error) {
 	ret := _m.Called(ctx, id)
 
 	if len(ret) == 0 {
@@ -314,10 +314,10 @@ func (_m *MockMaterialEventRepository) FindByID(ctx context.Context, id primitiv
 
 	var r0 *entities.MaterialEvent
 	var r1 error
-	if rf, ok := ret.Get(0).(func(context.Context, primitive.ObjectID) (*entities.MaterialEvent, error)); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, bson.ObjectID) (*entities.MaterialEvent, error)); ok {
 		return rf(ctx, id)
 	}
-	if rf, ok := ret.Get(0).(func(context.Context, primitive.ObjectID) *entities.MaterialEvent); ok {
+	if rf, ok := ret.Get(0).(func(context.Context, bson.ObjectID) *entities.MaterialEvent); ok {
 		r0 = rf(ctx, id)
 	} else {
 		if ret.Get(0) != nil {
@@ -325,7 +325,7 @@ func (_m *MockMaterialEventRepository) FindByID(ctx context.Context, id primitiv
 		}
 	}
 
-	if rf, ok := ret.Get(1).(func(context.Context, primitive.ObjectID) error); ok {
+	if rf, ok := ret.Get(1).(func(context.Context, bson.ObjectID) error); ok {
 		r1 = rf(ctx, id)
 	} else {
 		r1 = ret.Error(1)
@@ -341,14 +341,14 @@ type MockMaterialEventRepository_FindByID_Call struct {
 
 // FindByID is a helper method to define mock.On call
 //   - ctx context.Context
-//   - id primitive.ObjectID
+//   - id bson.ObjectID
 func (_e *MockMaterialEventRepository_Expecter) FindByID(ctx interface{}, id interface{}) *MockMaterialEventRepository_FindByID_Call {
 	return &MockMaterialEventRepository_FindByID_Call{Call: _e.mock.On("FindByID", ctx, id)}
 }
 
-func (_c *MockMaterialEventRepository_FindByID_Call) Run(run func(ctx context.Context, id primitive.ObjectID)) *MockMaterialEventRepository_FindByID_Call {
+func (_c *MockMaterialEventRepository_FindByID_Call) Run(run func(ctx context.Context, id bson.ObjectID)) *MockMaterialEventRepository_FindByID_Call {
 	_c.Call.Run(func(args mock.Arguments) {
-		run(args[0].(context.Context), args[1].(primitive.ObjectID))
+		run(args[0].(context.Context), args[1].(bson.ObjectID))
 	})
 	return _c
 }
@@ -358,7 +358,7 @@ func (_c *MockMaterialEventRepository_FindByID_Call) Return(_a0 *entities.Materi
 	return _c
 }
 
-func (_c *MockMaterialEventRepository_FindByID_Call) RunAndReturn(run func(context.Context, primitive.ObjectID) (*entities.MaterialEvent, error)) *MockMaterialEventRepository_FindByID_Call {
+func (_c *MockMaterialEventRepository_FindByID_Call) RunAndReturn(run func(context.Context, bson.ObjectID) (*entities.MaterialEvent, error)) *MockMaterialEventRepository_FindByID_Call {
 	_c.Call.Return(run)
 	return _c
 }

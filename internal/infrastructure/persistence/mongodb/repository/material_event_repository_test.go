@@ -9,7 +9,7 @@ import (
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/persistence/mongodb/repository"
 	"github.com/google/uuid"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 func TestMaterialEventRepository_Create(t *testing.T) {
@@ -24,7 +24,7 @@ func TestMaterialEventRepository_Create(t *testing.T) {
 	event := entities.NewMaterialEventWithMaterialID(
 		entities.EventTypeMaterialUploaded,
 		uuid.New().String(),
-		primitive.M{"file": "test.pdf", "size": 1024},
+		bson.M{"file": "test.pdf", "size": 1024},
 	)
 
 	err := repo.Create(ctx, event)
@@ -62,7 +62,7 @@ func TestMaterialEventRepository_FindByStatus(t *testing.T) {
 	for i := 0; i < 2; i++ {
 		event := entities.NewMaterialEvent(
 			entities.EventTypeAssessmentAttempt,
-			primitive.M{"student_id": uuid.New().String()},
+			bson.M{"student_id": uuid.New().String()},
 		)
 		_ = repo.Create(ctx, event)
 	}
@@ -94,7 +94,7 @@ func TestMaterialEventRepository_MarkAsCompleted(t *testing.T) {
 
 	event := entities.NewMaterialEvent(
 		entities.EventTypeMaterialUploaded,
-		primitive.M{"test": "data"},
+		bson.M{"test": "data"},
 	)
 	_ = repo.Create(ctx, event)
 
@@ -124,10 +124,10 @@ func TestMaterialEventRepository_GetEventStatistics(t *testing.T) {
 	ctx := context.Background()
 
 	// Create events with different statuses
-	event1 := entities.NewMaterialEvent(entities.EventTypeMaterialUploaded, primitive.M{})
+	event1 := entities.NewMaterialEvent(entities.EventTypeMaterialUploaded, bson.M{})
 	_ = repo.Create(ctx, event1)
 
-	event2 := entities.NewMaterialEvent(entities.EventTypeMaterialUploaded, primitive.M{})
+	event2 := entities.NewMaterialEvent(entities.EventTypeMaterialUploaded, bson.M{})
 	event2.MarkAsCompleted()
 	_ = repo.Create(ctx, event2)
 

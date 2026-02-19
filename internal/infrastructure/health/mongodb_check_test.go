@@ -7,7 +7,7 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"go.mongodb.org/mongo-driver/mongo/readpref"
+	"go.mongodb.org/mongo-driver/v2/mongo/readpref"
 )
 
 // MockMongoClient es un mock simple de la interfaz MongoClient

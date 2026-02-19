@@ -4,7 +4,7 @@ import (
 	"time"
 
 	mongoentities "github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // AssessmentConstructor proporciona constructores para MaterialAssessment y sus componentes
@@ -96,7 +96,7 @@ func NewEventConstructor() *EventConstructor {
 }
 
 // NewMaterialEvent crea una nueva instancia de MaterialEvent
-func (c *EventConstructor) NewMaterialEvent(eventType string, payload primitive.M) *mongoentities.MaterialEvent {
+func (c *EventConstructor) NewMaterialEvent(eventType string, payload bson.M) *mongoentities.MaterialEvent {
 	now := time.Now()
 	return &mongoentities.MaterialEvent{
 		EventType:  eventType,
@@ -109,7 +109,7 @@ func (c *EventConstructor) NewMaterialEvent(eventType string, payload primitive.
 }
 
 // NewMaterialEventWithMaterialID crea un evento con material_id
-func (c *EventConstructor) NewMaterialEventWithMaterialID(eventType, materialID string, payload primitive.M) *mongoentities.MaterialEvent {
+func (c *EventConstructor) NewMaterialEventWithMaterialID(eventType, materialID string, payload bson.M) *mongoentities.MaterialEvent {
 	event := c.NewMaterialEvent(eventType, payload)
 	event.MaterialID = materialID
 	return event

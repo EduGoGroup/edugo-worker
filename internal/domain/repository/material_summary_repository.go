@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // MaterialSummaryRepository define la interfaz para la persistencia de resúmenes de materiales
@@ -16,7 +16,7 @@ type MaterialSummaryRepository interface {
 	FindByMaterialID(ctx context.Context, materialID string) (*entities.MaterialSummary, error)
 
 	// FindByID busca un resumen por su ObjectID
-	FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialSummary, error)
+	FindByID(ctx context.Context, id bson.ObjectID) (*entities.MaterialSummary, error)
 
 	// Update actualiza un resumen existente
 	Update(ctx context.Context, summary *entities.MaterialSummary) error

@@ -10,10 +10,9 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/domain/constants"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/repository"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/service"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 var (
@@ -51,12 +50,12 @@ func (r *MongoMaterialEventRepository) Create(ctx context.Context, event *entiti
 		return err
 	}
 
-	event.ID = result.InsertedID.(primitive.ObjectID)
+	event.ID = result.InsertedID.(bson.ObjectID)
 	return nil
 }
 
 // FindByID busca un evento por su ObjectID
-func (r *MongoMaterialEventRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialEvent, error) {
+func (r *MongoMaterialEventRepository) FindByID(ctx context.Context, id bson.ObjectID) (*entities.MaterialEvent, error) {
 	var event entities.MaterialEvent
 
 	filter := bson.M{"_id": id}

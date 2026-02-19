@@ -12,7 +12,7 @@ import (
 	"github.com/EduGoGroup/edugo-shared/testing/containers"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/persistence/mongodb/repository"
 	"github.com/google/uuid"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // setupTestDB configura MongoDB con migraciones aplicadas
