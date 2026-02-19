@@ -11,7 +11,7 @@ import (
 	"github.com/EduGoGroup/edugo-shared/testing/containers"
 	_ "github.com/lib/pq"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.mongodb.org/mongo-driver/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // setupAllContainers inicia todos los contenedores necesarios (PostgreSQL + MongoDB + RabbitMQ)

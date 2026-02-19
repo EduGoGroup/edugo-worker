@@ -5,7 +5,7 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // MaterialEventRepository define la interfaz para la persistencia de eventos de auditoría
@@ -14,7 +14,7 @@ type MaterialEventRepository interface {
 	Create(ctx context.Context, event *entities.MaterialEvent) error
 
 	// FindByID busca un evento por su ObjectID
-	FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialEvent, error)
+	FindByID(ctx context.Context, id bson.ObjectID) (*entities.MaterialEvent, error)
 
 	// Update actualiza un evento existente
 	Update(ctx context.Context, event *entities.MaterialEvent) error

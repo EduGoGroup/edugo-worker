@@ -9,10 +9,9 @@ import (
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/repository"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/service"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 var (
@@ -54,7 +53,7 @@ func (r *MongoMaterialSummaryRepository) Create(ctx context.Context, summary *en
 		return err
 	}
 
-	summary.ID = result.InsertedID.(primitive.ObjectID)
+	summary.ID = result.InsertedID.(bson.ObjectID)
 	return nil
 }
 
@@ -76,7 +75,7 @@ func (r *MongoMaterialSummaryRepository) FindByMaterialID(ctx context.Context, m
 }
 
 // FindByID busca un resumen por su ObjectID
-func (r *MongoMaterialSummaryRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialSummary, error) {
+func (r *MongoMaterialSummaryRepository) FindByID(ctx context.Context, id bson.ObjectID) (*entities.MaterialSummary, error) {
 	var summary entities.MaterialSummary
 
 	filter := bson.M{"_id": id}

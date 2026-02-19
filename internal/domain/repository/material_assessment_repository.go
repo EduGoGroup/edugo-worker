@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
-	"go.mongodb.org/mongo-driver/bson/primitive"
+	"go.mongodb.org/mongo-driver/v2/bson"
 )
 
 // MaterialAssessmentRepository define la interfaz para la persistencia de evaluaciones
@@ -16,7 +16,7 @@ type MaterialAssessmentRepository interface {
 	FindByMaterialID(ctx context.Context, materialID string) (*entities.MaterialAssessment, error)
 
 	// FindByID busca una evaluación por su ObjectID
-	FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialAssessment, error)
+	FindByID(ctx context.Context, id bson.ObjectID) (*entities.MaterialAssessment, error)
 
 	// Update actualiza una evaluación existente
 	Update(ctx context.Context, assessment *entities.MaterialAssessment) error

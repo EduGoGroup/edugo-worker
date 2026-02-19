@@ -17,8 +17,8 @@ import (
 	storageMocks "github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage/mocks"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 func TestMaterialUploadedProcessor_EventType(t *testing.T) {
@@ -365,7 +365,7 @@ func TestMaterialUploadedProcessor_NewMaterialUploadedProcessor(t *testing.T) {
 
 	// Crear un cliente MongoDB de prueba (puede ser nil para este test)
 	clientOpts := options.Client().ApplyURI("mongodb://localhost:27017")
-	mongoClient, _ := mongo.Connect(context.Background(), clientOpts)
+	mongoClient, _ := mongo.Connect(clientOpts)
 	mongodb := mongoClient.Database("test")
 
 	storageClient := storageMocks.NewMockClient(t)

@@ -9,10 +9,9 @@ import (
 	"github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/repository"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/service"
-	"go.mongodb.org/mongo-driver/bson"
-	"go.mongodb.org/mongo-driver/bson/primitive"
-	"go.mongodb.org/mongo-driver/mongo"
-	"go.mongodb.org/mongo-driver/mongo/options"
+	"go.mongodb.org/mongo-driver/v2/bson"
+	"go.mongodb.org/mongo-driver/v2/mongo"
+	"go.mongodb.org/mongo-driver/v2/mongo/options"
 )
 
 var (
@@ -54,7 +53,7 @@ func (r *MongoMaterialAssessmentRepository) Create(ctx context.Context, assessme
 		return err
 	}
 
-	assessment.ID = result.InsertedID.(primitive.ObjectID)
+	assessment.ID = result.InsertedID.(bson.ObjectID)
 	return nil
 }
 
@@ -76,7 +75,7 @@ func (r *MongoMaterialAssessmentRepository) FindByMaterialID(ctx context.Context
 }
 
 // FindByID busca una evaluación por su ObjectID
-func (r *MongoMaterialAssessmentRepository) FindByID(ctx context.Context, id primitive.ObjectID) (*entities.MaterialAssessment, error) {
+func (r *MongoMaterialAssessmentRepository) FindByID(ctx context.Context, id bson.ObjectID) (*entities.MaterialAssessment, error) {
 	var assessment entities.MaterialAssessment
 
 	filter := bson.M{"_id": id}
