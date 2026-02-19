@@ -16,6 +16,8 @@ github.com/EduGoGroup/edugo-shared/database/postgres v0.10.0 h1:sD4oWC/WCa0kx+UH
 github.com/EduGoGroup/edugo-shared/database/postgres v0.10.0/go.mod h1:7Y5990HWkVAb63SfanRukZIL98MrUexHDiyy4B8O9So=
 github.com/EduGoGroup/edugo-shared/lifecycle v0.10.0 h1:Y+dW+g70iHxZb0CxDRs9JCbuXwfgR1FH7hjMiuvGpN8=
 github.com/EduGoGroup/edugo-shared/lifecycle v0.10.0/go.mod h1:Ac72/sydoiiO+m6oRBSfajwCxhXJldRd5yJol4CB1s8=
+github.com/EduGoGroup/edugo-shared/lifecycle v0.10.1 h1:MVIKeuzAlSz3YMY4Gc6nvKb45JNvo3TROlHDINquuhk=
+github.com/EduGoGroup/edugo-shared/lifecycle v0.10.1/go.mod h1:Ac72/sydoiiO+m6oRBSfajwCxhXJldRd5yJol4CB1s8=
 github.com/EduGoGroup/edugo-shared/logger v0.10.0 h1:kICgdWgq3nBlFDE2hxsxnuMQNZlj7bB//kSoQi1PVPM=
 github.com/EduGoGroup/edugo-shared/logger v0.10.0/go.mod h1:ZxM3tYnv1dtTE3abIYoiDwZUD5QFobge6Vx7JGLOKt8=
 github.com/EduGoGroup/edugo-shared/testing v0.11.0 h1:b0YL5/E2YrH31ym3djxBXfneOxs9zp+WhezypKhF/L8=

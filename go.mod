@@ -8,7 +8,7 @@ require (
 	github.com/EduGoGroup/edugo-shared/bootstrap v0.11.0
 	github.com/EduGoGroup/edugo-shared/common v0.12.1
 	github.com/EduGoGroup/edugo-shared/database/postgres v0.10.0
-	github.com/EduGoGroup/edugo-shared/lifecycle v0.10.0
+	github.com/EduGoGroup/edugo-shared/lifecycle v0.10.1
 	github.com/EduGoGroup/edugo-shared/logger v0.10.0
 	github.com/EduGoGroup/edugo-shared/testing v0.11.0
 	github.com/aws/aws-sdk-go-v2 v1.41.1
