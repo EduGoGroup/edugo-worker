@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 
+	mongoentities "github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
@@ -42,14 +43,14 @@ func (p *MaterialDeletedProcessor) processEvent(ctx context.Context, event dto.M
 	materialID, _ := valueobject.MaterialIDFromString(event.MaterialID)
 
 	// Eliminar summary
-	summaryCol := p.mongodb.Collection("material_summaries")
+	summaryCol := p.mongodb.Collection(mongoentities.MaterialSummary{}.CollectionName())
 	_, err := summaryCol.DeleteOne(ctx, bson.M{"material_id": materialID.String()})
 	if err != nil {
 		p.logger.Error("failed to delete summary", "error", err)
 	}
 
 	// Eliminar assessment
-	assessmentCol := p.mongodb.Collection("material_assessment_worker")
+	assessmentCol := p.mongodb.Collection(mongoentities.MaterialAssessment{}.CollectionName())
 	_, err = assessmentCol.DeleteOne(ctx, bson.M{"material_id": materialID.String()})
 	if err != nil {
 		p.logger.Error("failed to delete assessment", "error", err)

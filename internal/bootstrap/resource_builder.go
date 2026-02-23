@@ -349,6 +349,7 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	b.logger.Info("initializing processors")
 
 	// Crear processors individuales
+	_, aiModel, _, _, _, _ := b.config.GetActiveNLPConfig()
 	materialUploadedProc := processor.NewMaterialUploadedProcessor(processor.MaterialUploadedProcessorConfig{
 		DB:            b.sqlDB,
 		MongoDB:       b.mongodb,
@@ -356,6 +357,7 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		StorageClient: b.storageClient,
 		PDFExtractor:  b.pdfExtractor,
 		NLPClient:     b.nlpClient,
+		AIModel:       aiModel,
 	})
 	materialDeletedProc := processor.NewMaterialDeletedProcessor(
 		b.mongodb,
