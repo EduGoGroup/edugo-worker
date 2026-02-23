@@ -42,6 +42,7 @@ type ContainerConfig struct {
 	StorageClient storage.Client
 	PDFExtractor  pdf.Extractor
 	NLPClient     nlp.Client
+	AIModel       string // Nombre del modelo IA activo
 }
 
 // NewContainer crea un nuevo container con todas las dependencias
@@ -64,6 +65,7 @@ func NewContainer(cfg ContainerConfig) *Container {
 		StorageClient: cfg.StorageClient,
 		PDFExtractor:  cfg.PDFExtractor,
 		NLPClient:     cfg.NLPClient,
+		AIModel:       cfg.AIModel,
 	})
 	materialDeletedProc := processor.NewMaterialDeletedProcessor(cfg.MongoDB, cfg.Logger)
 	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(cfg.Logger)
