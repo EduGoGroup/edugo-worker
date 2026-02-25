@@ -4,12 +4,12 @@ go 1.25.3
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.51.0
-	github.com/EduGoGroup/edugo-shared/bootstrap v0.50.0
-	github.com/EduGoGroup/edugo-shared/common v0.50.0
-	github.com/EduGoGroup/edugo-shared/database/postgres v0.51.0
-	github.com/EduGoGroup/edugo-shared/lifecycle v0.50.0
-	github.com/EduGoGroup/edugo-shared/logger v0.50.0
+	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.52.0
+	github.com/EduGoGroup/edugo-shared/bootstrap v0.50.1
+	github.com/EduGoGroup/edugo-shared/common v0.50.1
+	github.com/EduGoGroup/edugo-shared/database/postgres v0.51.1
+	github.com/EduGoGroup/edugo-shared/lifecycle v0.50.1
+	github.com/EduGoGroup/edugo-shared/logger v0.50.1
 	github.com/EduGoGroup/edugo-shared/testing v0.50.0
 	github.com/aws/aws-sdk-go-v2 v1.41.2
 	github.com/aws/aws-sdk-go-v2/config v1.32.10
@@ -99,7 +99,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
-	github.com/prometheus/procfs v0.19.2 // indirect
+	github.com/prometheus/procfs v0.20.0 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.1 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
@@ -132,8 +132,6 @@ require (
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/text v0.34.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20250929231259-57b25ae835d4 // indirect
-	google.golang.org/genproto/googleapis/rpc v0.0.0-20250929231259-57b25ae835d4 // indirect
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
