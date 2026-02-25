@@ -42,10 +42,10 @@ type ResourceBuilder struct {
 	ctx    context.Context
 
 	// Recursos de infraestructura base
-	logger      logger.Logger
-	sqlDB       *sql.DB
-	mongoClient *mongo.Client
-	mongodb     *mongo.Database
+	logger        logger.Logger
+	sqlDB         *sql.DB
+	mongoClient   *mongo.Client
+	mongodb       *mongo.Database
 	rabbitConn    *amqp.Connection
 	rabbitChannel *amqp.Channel
 
