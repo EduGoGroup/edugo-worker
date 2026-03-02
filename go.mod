@@ -24,7 +24,6 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/sony/gobreaker v1.0.0
 	github.com/spf13/viper v1.21.0
-	github.com/streadway/amqp v1.1.0
 	github.com/stretchr/testify v1.11.1
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	gorm.io/gorm v1.31.1
