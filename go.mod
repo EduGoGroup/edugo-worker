@@ -5,16 +5,16 @@ go 1.25.3
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.52.0
-	github.com/EduGoGroup/edugo-shared/bootstrap v0.50.1
-	github.com/EduGoGroup/edugo-shared/common v0.50.1
-	github.com/EduGoGroup/edugo-shared/database/postgres v0.51.1
-	github.com/EduGoGroup/edugo-shared/lifecycle v0.50.1
+	github.com/EduGoGroup/edugo-shared/bootstrap v0.50.3
+	github.com/EduGoGroup/edugo-shared/common v0.51.0
+	github.com/EduGoGroup/edugo-shared/database/postgres v0.51.2
+	github.com/EduGoGroup/edugo-shared/lifecycle v0.50.3
 	github.com/EduGoGroup/edugo-shared/logger v0.50.1
-	github.com/EduGoGroup/edugo-shared/testing v0.50.0
+	github.com/EduGoGroup/edugo-shared/testing v0.50.2
 	github.com/aws/aws-sdk-go-v2 v1.41.2
 	github.com/aws/aws-sdk-go-v2/config v1.32.10
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.10
-	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.1
+	github.com/aws/aws-sdk-go-v2/service/s3 v1.96.2
 	github.com/google/uuid v1.6.0
 	github.com/lib/pq v1.11.2
 	github.com/pdfcpu/pdfcpu v0.11.1
@@ -24,7 +24,6 @@ require (
 	github.com/sirupsen/logrus v1.9.4
 	github.com/sony/gobreaker v1.0.0
 	github.com/spf13/viper v1.21.0
-	github.com/streadway/amqp v1.1.0
 	github.com/stretchr/testify v1.11.1
 	go.mongodb.org/mongo-driver/v2 v2.5.0
 	gorm.io/gorm v1.31.1
@@ -41,14 +40,14 @@ require (
 	github.com/aws/aws-sdk-go-v2/internal/ini v1.8.4 // indirect
 	github.com/aws/aws-sdk-go-v2/internal/v4a v1.4.18 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/accept-encoding v1.13.5 // indirect
-	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.9 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/checksum v1.9.10 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.13.18 // indirect
 	github.com/aws/aws-sdk-go-v2/service/internal/s3shared v1.19.18 // indirect
 	github.com/aws/aws-sdk-go-v2/service/signin v1.0.6 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sso v1.30.11 // indirect
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.35.15 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.41.7 // indirect
-	github.com/aws/smithy-go v1.24.1 // indirect
+	github.com/aws/smithy-go v1.24.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
@@ -63,7 +62,7 @@ require (
 	github.com/docker/docker v28.5.2+incompatible // indirect
 	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/docker/go-units v0.5.0 // indirect
-	github.com/ebitengine/purego v0.9.1 // indirect
+	github.com/ebitengine/purego v0.10.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fsnotify/fsnotify v1.9.0 // indirect
 	github.com/go-logr/logr v1.4.3 // indirect
@@ -99,7 +98,7 @@ require (
 	github.com/pmezard/go-difflib v1.0.0 // indirect
 	github.com/power-devops/perfstat v0.0.0-20240221224432-82ca36839d55 // indirect
 	github.com/prometheus/common v0.67.5 // indirect
-	github.com/prometheus/procfs v0.20.0 // indirect
+	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.1 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
