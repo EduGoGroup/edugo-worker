@@ -190,8 +190,18 @@ jobs:
       - name: Ejecutar tests
         run: go test -v -race ./...
 
-      - name: Build
-        run: go build -v ./...
+      - name: Compilar binario Linux amd64
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -trimpath -ldflags="-s -w" \
+            -o ./main ./cmd/main.go
+
+      - name: Subir binario compilado
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-binary
+          path: ./main
+          retention-days: 1
 
   build-docker-image:
     name: Construir y Publicar Imagen Docker
@@ -203,6 +213,12 @@ jobs:
         uses: actions/checkout@v6
         with:
           ref: v${{ inputs.version }}
+
+      - name: Descargar binario compilado (del job anterior)
+        uses: actions/download-artifact@v4
+        with:
+          name: api-binary
+          path: .
 
       - name: Setup Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -228,7 +244,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          platforms: linux/amd64,linux/arm64
+          platforms: linux/amd64
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
