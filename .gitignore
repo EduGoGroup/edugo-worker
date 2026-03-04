@@ -97,3 +97,6 @@ tmp/
 # Testcontainers
 .testcontainers-*
 .envrc
+
+# Claude Code local settings
+.claude/
