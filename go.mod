@@ -4,7 +4,7 @@ go 1.25.3
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.54.0
+	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.55.0
 	github.com/EduGoGroup/edugo-shared/bootstrap v0.51.0
 	github.com/EduGoGroup/edugo-shared/common v0.54.0
 	github.com/EduGoGroup/edugo-shared/database/postgres v0.51.2
@@ -16,7 +16,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/credentials v1.19.12
 	github.com/aws/aws-sdk-go-v2/service/s3 v1.97.1
 	github.com/google/uuid v1.6.0
-	github.com/lib/pq v1.11.2
+	github.com/lib/pq v1.12.0
 	github.com/pdfcpu/pdfcpu v0.11.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
@@ -78,7 +78,7 @@ require (
 	github.com/jackc/puddle/v2 v2.2.2 // indirect
 	github.com/jinzhu/inflection v1.0.0 // indirect
 	github.com/jinzhu/now v1.1.5 // indirect
-	github.com/klauspost/compress v1.18.4 // indirect
+	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260216142805-b3301c5f2a88 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/mattn/go-runewidth v0.0.21 // indirect
