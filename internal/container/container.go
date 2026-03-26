@@ -67,7 +67,7 @@ func NewContainer(cfg ContainerConfig) *Container {
 		NLPClient:     cfg.NLPClient,
 		AIModel:       cfg.AIModel,
 	})
-	materialDeletedProc := processor.NewMaterialDeletedProcessor(cfg.MongoDB, cfg.Logger)
+	materialDeletedProc := processor.NewMaterialDeletedProcessor(cfg.MongoDB, cfg.Logger, nil)
 	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(cfg.Logger)
 	studentEnrolledProc := processor.NewStudentEnrolledProcessor(cfg.Logger)
 

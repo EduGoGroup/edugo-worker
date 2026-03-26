@@ -29,6 +29,7 @@ func main() {
 	// 2. Inicializar infraestructura usando ResourceBuilder
 	resources, cleanup, err := bootstrap.NewResourceBuilder(ctx, cfg).
 		WithLogger().
+		WithSharedMetrics().
 		WithPostgreSQL().
 		WithMongoDB().
 		WithRabbitMQ().

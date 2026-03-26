@@ -3,18 +3,17 @@ package s3
 import (
 	"context"
 	"io"
+	"log/slog"
 	"testing"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 )
 
-// createTestLogger crea un logger para tests que no imprime en consola
+// createTestLogger crea un logger silencioso para tests
 func createTestLogger() logger.Logger {
-	l := logrus.New()
-	l.SetOutput(io.Discard) // No imprimir logs durante tests
-	return logger.NewLogrusLogger(l)
+	discardLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return logger.NewSlogAdapter(discardLogger)
 }
 
 func TestNewClient(t *testing.T) {

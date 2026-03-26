@@ -9,6 +9,7 @@ import (
 	sharedBootstrap "github.com/EduGoGroup/edugo-shared/bootstrap"
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
 	"github.com/EduGoGroup/edugo-shared/logger"
+	sharedMetrics "github.com/EduGoGroup/edugo-shared/metrics"
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
 	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
@@ -34,6 +35,7 @@ type Resources struct {
 	ProcessorRegistry *processor.Registry
 	MetricsServer     *httpInfra.MetricsServer
 	HealthChecker     *health.Checker
+	SharedMetrics     *sharedMetrics.Metrics
 }
 
 // ResourceBuilder construye Resources de forma incremental usando el patrón Builder
@@ -59,6 +61,7 @@ type ResourceBuilder struct {
 	processorRegistry *processor.Registry
 	metricsServer     *httpInfra.MetricsServer
 	healthChecker     *health.Checker
+	sharedMetrics     *sharedMetrics.Metrics
 
 	// Lifecycle
 	lifecycleManager *lifecycle.Manager
@@ -83,21 +86,15 @@ func (b *ResourceBuilder) WithLogger() *ResourceBuilder {
 		return b
 	}
 
-	// Crear logger usando shared/bootstrap
-	loggerFactory := sharedBootstrap.NewDefaultLoggerFactory()
-
-	logrusLogger, err := loggerFactory.CreateLogger(
-		b.ctx,
-		"production",
-		"v1.0.0",
-	)
-	if err != nil {
-		b.err = fmt.Errorf("failed to create logger: %w", err)
-		return b
-	}
-
-	// Guardar referencia
-	b.logger = logrusLogger
+	// Crear logger usando shared/logger (slog centralizado)
+	slogLogger := logger.NewSlogProvider(logger.SlogConfig{
+		Level:   b.config.Logging.Level,
+		Format:  b.config.Logging.Format,
+		Service: "edugo-worker",
+		Env:     b.config.Logging.Env,
+		Version: b.config.Logging.Version,
+	})
+	b.logger = logger.NewSlogAdapter(slogLogger)
 
 	// Registrar cleanup
 	b.addCleanup(func() error {
@@ -105,7 +102,23 @@ func (b *ResourceBuilder) WithLogger() *ResourceBuilder {
 		return b.logger.Sync()
 	})
 
-	b.logger.Info("✅ Logger initialized successfully")
+	b.logger.Info("Logger initialized successfully")
+	return b
+}
+
+// WithSharedMetrics configura el facade de métricas centralizado (shared/metrics).
+// Es complementario al servidor Prometheus existente (internal/infrastructure/metrics).
+func (b *ResourceBuilder) WithSharedMetrics() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+
+	b.sharedMetrics = sharedMetrics.New("edugo-worker")
+
+	if b.logger != nil {
+		b.logger.Info("shared metrics facade initialized", "service", "edugo-worker")
+	}
+
 	return b
 }
 
@@ -358,10 +371,12 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		PDFExtractor:  b.pdfExtractor,
 		NLPClient:     b.nlpClient,
 		AIModel:       aiModel,
+		SharedMetrics: b.sharedMetrics,
 	})
 	materialDeletedProc := processor.NewMaterialDeletedProcessor(
 		b.mongodb,
 		b.logger,
+		b.sharedMetrics,
 	)
 	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(b.logger)
 	studentEnrolledProc := processor.NewStudentEnrolledProcessor(b.logger)
@@ -518,6 +533,7 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 		ProcessorRegistry: b.processorRegistry,
 		MetricsServer:     b.metricsServer,
 		HealthChecker:     b.healthChecker,
+		SharedMetrics:     b.sharedMetrics,
 	}
 
 	// Crear función de cleanup

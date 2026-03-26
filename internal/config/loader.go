@@ -32,6 +32,9 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// Defaults para logging
+	v.SetDefault("logging.version", "dev")
+
 	v.AutomaticEnv()
 	v.SetEnvPrefix("EDUGO_WORKER")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
@@ -44,6 +47,11 @@ func Load() (*Config, error) {
 	var cfg Config
 	if err := v.Unmarshal(&cfg); err != nil {
 		return nil, err
+	}
+
+	// Derive logging.env from APP_ENV so logs are labeled with the correct environment
+	if cfg.Logging.Env == "" {
+		cfg.Logging.Env = env
 	}
 
 	if err := cfg.Validate(); err != nil {

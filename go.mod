@@ -9,7 +9,8 @@ require (
 	github.com/EduGoGroup/edugo-shared/common v0.56.0
 	github.com/EduGoGroup/edugo-shared/database/postgres v0.51.2
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.50.3
-	github.com/EduGoGroup/edugo-shared/logger v0.50.1
+	github.com/EduGoGroup/edugo-shared/logger v0.51.0
+	github.com/EduGoGroup/edugo-shared/metrics v0.2.0
 	github.com/EduGoGroup/edugo-shared/testing v0.51.0
 	github.com/aws/aws-sdk-go-v2 v1.41.4
 	github.com/aws/aws-sdk-go-v2/config v1.32.12
@@ -21,7 +22,6 @@ require (
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/rabbitmq/amqp091-go v1.10.0
-	github.com/sirupsen/logrus v1.9.4
 	github.com/sony/gobreaker v1.0.0
 	github.com/spf13/viper v1.21.0
 	github.com/stretchr/testify v1.11.1
@@ -101,6 +101,7 @@ require (
 	github.com/prometheus/procfs v0.20.1 // indirect
 	github.com/sagikazarmark/locafero v0.12.0 // indirect
 	github.com/shirou/gopsutil/v4 v4.26.2 // indirect
+	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/spf13/afero v1.15.0 // indirect
 	github.com/spf13/cast v1.10.0 // indirect
 	github.com/spf13/pflag v1.0.10 // indirect
