@@ -3,10 +3,12 @@ package processor
 import (
 	"context"
 	"encoding/json"
+	"time"
 
 	mongoentities "github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/logger"
+	sharedMetrics "github.com/EduGoGroup/edugo-shared/metrics"
 	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/valueobject"
 	"go.mongodb.org/mongo-driver/v2/bson"
@@ -14,14 +16,16 @@ import (
 )
 
 type MaterialDeletedProcessor struct {
-	mongodb *mongo.Database
-	logger  logger.Logger
+	mongodb       *mongo.Database
+	logger        logger.Logger
+	sharedMetrics *sharedMetrics.Metrics
 }
 
-func NewMaterialDeletedProcessor(mongodb *mongo.Database, logger logger.Logger) *MaterialDeletedProcessor {
+func NewMaterialDeletedProcessor(mongodb *mongo.Database, logger logger.Logger, sm *sharedMetrics.Metrics) *MaterialDeletedProcessor {
 	return &MaterialDeletedProcessor{
-		mongodb: mongodb,
-		logger:  logger,
+		mongodb:       mongodb,
+		logger:        logger,
+		sharedMetrics: sm,
 	}
 }
 
@@ -30,11 +34,27 @@ func (p *MaterialDeletedProcessor) EventType() string {
 }
 
 func (p *MaterialDeletedProcessor) Process(ctx context.Context, payload []byte) error {
+	start := time.Now()
+
 	var event dto.MaterialDeletedEvent
 	if err := json.Unmarshal(payload, &event); err != nil {
+		p.recordSharedMetrics(start, err)
 		return errors.NewValidationError("invalid event payload")
 	}
-	return p.processEvent(ctx, event)
+
+	err := p.processEvent(ctx, event)
+	p.recordSharedMetrics(start, err)
+	return err
+}
+
+// recordSharedMetrics registra métricas en el facade centralizado (shared/metrics).
+func (p *MaterialDeletedProcessor) recordSharedMetrics(start time.Time, err error) {
+	if p.sharedMetrics == nil {
+		return
+	}
+	duration := time.Since(start)
+	p.sharedMetrics.RecordMessageProcessed("material_deleted", duration, err)
+	p.sharedMetrics.RecordBusinessOperation("material", "delete", duration, err)
 }
 
 func (p *MaterialDeletedProcessor) processEvent(ctx context.Context, event dto.MaterialDeletedEvent) error {

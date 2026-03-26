@@ -14,6 +14,7 @@ import (
 	"github.com/EduGoGroup/edugo-shared/common/types/enum"
 	"github.com/EduGoGroup/edugo-shared/database/postgres"
 	"github.com/EduGoGroup/edugo-shared/logger"
+	sharedMetrics "github.com/EduGoGroup/edugo-shared/metrics"
 	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
 	"github.com/EduGoGroup/edugo-worker/internal/domain/valueobject"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/metrics"
@@ -32,6 +33,7 @@ type MaterialUploadedProcessor struct {
 	pdfExtractor  pdf.Extractor
 	nlpClient     nlp.Client
 	aiModel       string
+	sharedMetrics *sharedMetrics.Metrics
 }
 
 // MaterialUploadedProcessorConfig contiene las dependencias del processor
@@ -43,6 +45,7 @@ type MaterialUploadedProcessorConfig struct {
 	PDFExtractor  pdf.Extractor
 	NLPClient     nlp.Client
 	AIModel       string // Nombre del modelo IA activo (ej: "gpt-4-turbo-preview")
+	SharedMetrics *sharedMetrics.Metrics
 }
 
 func NewMaterialUploadedProcessor(cfg MaterialUploadedProcessorConfig) *MaterialUploadedProcessor {
@@ -58,6 +61,7 @@ func NewMaterialUploadedProcessor(cfg MaterialUploadedProcessorConfig) *Material
 		pdfExtractor:  cfg.PDFExtractor,
 		nlpClient:     cfg.NLPClient,
 		aiModel:       aiModel,
+		sharedMetrics: cfg.SharedMetrics,
 	}
 }
 
@@ -376,11 +380,28 @@ func (p *MaterialUploadedProcessor) EventType() string {
 
 // Process implementa la interfaz Processor
 func (p *MaterialUploadedProcessor) Process(ctx context.Context, payload []byte) error {
+	start := time.Now()
+
 	var event dto.MaterialUploadedEvent
 	if err := json.Unmarshal(payload, &event); err != nil {
+		p.recordSharedMetrics(start, err)
 		return errors.NewValidationError("invalid event payload")
 	}
-	return p.processEvent(ctx, event)
+
+	err := p.processEvent(ctx, event)
+	p.recordSharedMetrics(start, err)
+	return err
+}
+
+// recordSharedMetrics registra métricas en el facade centralizado (shared/metrics).
+// Complementario a las métricas Prometheus directas en internal/infrastructure/metrics.
+func (p *MaterialUploadedProcessor) recordSharedMetrics(start time.Time, err error) {
+	if p.sharedMetrics == nil {
+		return
+	}
+	duration := time.Since(start)
+	p.sharedMetrics.RecordMessageProcessed("material_uploaded", duration, err)
+	p.sharedMetrics.RecordBusinessOperation("material", "process", duration, err)
 }
 
 // estimateTokens estima la cantidad de tokens en un texto

@@ -16,8 +16,10 @@ github.com/EduGoGroup/edugo-shared/database/postgres v0.51.2 h1:wTGYCdZ3cKgIni+p
 github.com/EduGoGroup/edugo-shared/database/postgres v0.51.2/go.mod h1:E9y9ZDnqaS8FLIZPYxhd/5cpmzxyI+q/Gi/9ilth9ww=
 github.com/EduGoGroup/edugo-shared/lifecycle v0.50.3 h1:4SBchk3tUxwRK8XCt8RtvMrj5+J+utlQXvCnQcJo1js=
 github.com/EduGoGroup/edugo-shared/lifecycle v0.50.3/go.mod h1:ZPolugQlPpkNav6zcsl5q4DtEG9qqdCAT2WDkBB60Ww=
-github.com/EduGoGroup/edugo-shared/logger v0.50.1 h1:glii4TebN8g6XJQUdcg2ibR18PM5q6Uw/Gsl6PZbArw=
-github.com/EduGoGroup/edugo-shared/logger v0.50.1/go.mod h1:S4RAQUh0bq697MiQBh9rhrvf/hSt7PbRfr0wgtZy7is=
+github.com/EduGoGroup/edugo-shared/logger v0.51.0 h1:e4KutBDDiYyjzNeNF76/4Jd1vIPIO9NinwT7Z0uM258=
+github.com/EduGoGroup/edugo-shared/logger v0.51.0/go.mod h1:MxMk6Yy4H7UrdwdO4H5CYvU6AFTBHc8IyiwSAHXCfPk=
+github.com/EduGoGroup/edugo-shared/metrics v0.2.0 h1:zWcI/WEY0fNSSvK+Q7rSLP+DPsGOWtrD8YeXcRG5v3o=
+github.com/EduGoGroup/edugo-shared/metrics v0.2.0/go.mod h1:cW8Gq1Wo2V9ZpUgVKGyGfSAn2qkmw/bRuYrNCJuT1kw=
 github.com/EduGoGroup/edugo-shared/testing v0.51.0 h1:8Ht9k/mOjfpO2X50O4HWVMkugw6br1M4gpQmCtovkdo=
 github.com/EduGoGroup/edugo-shared/testing v0.51.0/go.mod h1:lq1KvqsL9v1LJzZJRfjYYl7a72p1EwlegznF+3BGi3Y=
 github.com/Microsoft/go-winio v0.6.2 h1:F2VQgta7ecxGYO8k3ZZz3RS8fVIXVxONVUPlNERoyfY=
