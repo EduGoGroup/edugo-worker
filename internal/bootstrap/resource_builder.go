@@ -9,6 +9,7 @@ import (
 	sharedBootstrap "github.com/EduGoGroup/edugo-shared/bootstrap"
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
 	"github.com/EduGoGroup/edugo-shared/logger"
+	sharedMetrics "github.com/EduGoGroup/edugo-shared/metrics"
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
 	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
@@ -34,6 +35,7 @@ type Resources struct {
 	ProcessorRegistry *processor.Registry
 	MetricsServer     *httpInfra.MetricsServer
 	HealthChecker     *health.Checker
+	SharedMetrics     *sharedMetrics.Metrics
 }
 
 // ResourceBuilder construye Resources de forma incremental usando el patrón Builder
@@ -59,6 +61,7 @@ type ResourceBuilder struct {
 	processorRegistry *processor.Registry
 	metricsServer     *httpInfra.MetricsServer
 	healthChecker     *health.Checker
+	sharedMetrics     *sharedMetrics.Metrics
 
 	// Lifecycle
 	lifecycleManager *lifecycle.Manager
@@ -100,6 +103,22 @@ func (b *ResourceBuilder) WithLogger() *ResourceBuilder {
 	})
 
 	b.logger.Info("Logger initialized successfully")
+	return b
+}
+
+// WithSharedMetrics configura el facade de métricas centralizado (shared/metrics).
+// Es complementario al servidor Prometheus existente (internal/infrastructure/metrics).
+func (b *ResourceBuilder) WithSharedMetrics() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+
+	b.sharedMetrics = sharedMetrics.New("edugo-worker")
+
+	if b.logger != nil {
+		b.logger.Info("shared metrics facade initialized", "service", "edugo-worker")
+	}
+
 	return b
 }
 
@@ -352,10 +371,12 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		PDFExtractor:  b.pdfExtractor,
 		NLPClient:     b.nlpClient,
 		AIModel:       aiModel,
+		SharedMetrics: b.sharedMetrics,
 	})
 	materialDeletedProc := processor.NewMaterialDeletedProcessor(
 		b.mongodb,
 		b.logger,
+		b.sharedMetrics,
 	)
 	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(b.logger)
 	studentEnrolledProc := processor.NewStudentEnrolledProcessor(b.logger)
@@ -512,6 +533,7 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 		ProcessorRegistry: b.processorRegistry,
 		MetricsServer:     b.metricsServer,
 		HealthChecker:     b.healthChecker,
+		SharedMetrics:     b.sharedMetrics,
 	}
 
 	// Crear función de cleanup

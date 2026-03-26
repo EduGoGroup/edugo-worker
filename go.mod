@@ -10,6 +10,7 @@ require (
 	github.com/EduGoGroup/edugo-shared/database/postgres v0.51.2
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.50.3
 	github.com/EduGoGroup/edugo-shared/logger v0.50.1
+	github.com/EduGoGroup/edugo-shared/metrics v0.1.0
 	github.com/EduGoGroup/edugo-shared/testing v0.51.0
 	github.com/aws/aws-sdk-go-v2 v1.41.4
 	github.com/aws/aws-sdk-go-v2/config v1.32.12
@@ -136,3 +137,5 @@ require (
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 	gorm.io/driver/postgres v1.6.0 // indirect
 )
+
+replace github.com/EduGoGroup/edugo-shared/metrics v0.1.0 => ../edugo-shared/metrics
