@@ -44,7 +44,7 @@ func (r *Registry) Register(p Processor) {
 //
 // Extrae el event_type del mensaje JSON, busca el processor registrado
 // y delega el procesamiento. Si no hay processor para el event_type,
-// loguea una advertencia pero NO retorna error (para no hacer nack del mensaje).
+// retorna error para que el mensaje sea enviado al DLQ.
 func (r *Registry) Process(ctx context.Context, payload []byte) error {
 	// Extraer event_type del mensaje
 	var base struct {
@@ -62,12 +62,11 @@ func (r *Registry) Process(ctx context.Context, payload []byte) error {
 	// Buscar processor
 	processor, ok := r.processors[base.EventType]
 	if !ok {
-		// No es error: simplemente no tenemos processor para este tipo
 		r.logger.Warn("no processor registered for event type",
 			"event_type", base.EventType,
 			"available_processors", r.RegisteredTypes(),
 		)
-		return nil
+		return fmt.Errorf("no processor registered for event_type: %s", base.EventType)
 	}
 
 	// Procesar con el processor correcto

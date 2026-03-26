@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"strings"
 	"testing"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
@@ -158,12 +159,16 @@ func TestRegistry_Process_UnknownEventType(t *testing.T) {
 	}
 	payload, _ := json.Marshal(message)
 
-	// Procesar - NO debe retornar error
+	// Procesar - DEBE retornar error para que el mensaje vaya al DLQ
 	ctx := context.Background()
 	err := registry.Process(ctx, payload)
 
-	if err != nil {
-		t.Errorf("expected nil error for unknown event_type, got: %v", err)
+	if err == nil {
+		t.Error("expected error for unknown event_type, got nil")
+	}
+
+	if !strings.Contains(err.Error(), "no processor registered") {
+		t.Errorf("expected error to contain 'no processor registered', got: %v", err)
 	}
 }
 
