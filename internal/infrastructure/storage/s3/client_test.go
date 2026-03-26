@@ -2,6 +2,7 @@ package s3
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"testing"
 
@@ -9,9 +10,10 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-// createTestLogger crea un logger para tests
+// createTestLogger crea un logger silencioso para tests
 func createTestLogger() logger.Logger {
-	return logger.NewSlogAdapter(slog.Default())
+	discardLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return logger.NewSlogAdapter(discardLogger)
 }
 
 func TestNewClient(t *testing.T) {

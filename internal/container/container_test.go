@@ -1,6 +1,7 @@
 package container
 
 import (
+	"io"
 	"log/slog"
 	"testing"
 
@@ -11,7 +12,7 @@ func TestNewContainer(t *testing.T) {
 	t.Parallel()
 
 	// Crear logger mock
-	testLogger := logger.NewSlogAdapter(slog.Default())
+	testLogger := logger.NewSlogAdapter(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	cfg := ContainerConfig{
 		DB:         nil, // En test unitario no necesitamos DB real
@@ -70,7 +71,7 @@ func TestNewContainer(t *testing.T) {
 func TestNewContainer_WithAllDependencies(t *testing.T) {
 	t.Parallel()
 
-	testLogger := logger.NewSlogAdapter(slog.Default())
+	testLogger := logger.NewSlogAdapter(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	cfg := ContainerConfig{
 		DB:         nil,
@@ -102,7 +103,7 @@ func TestNewContainer_WithAllDependencies(t *testing.T) {
 func TestNewContainerLegacy(t *testing.T) {
 	t.Parallel()
 
-	testLogger := logger.NewSlogAdapter(slog.Default())
+	testLogger := logger.NewSlogAdapter(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	container := NewContainerLegacy(nil, nil, testLogger)
 
@@ -126,7 +127,7 @@ func TestNewContainerLegacy(t *testing.T) {
 func TestNewContainerLegacy_ParametersMapping(t *testing.T) {
 	t.Parallel()
 
-	testLogger := logger.NewSlogAdapter(slog.Default())
+	testLogger := logger.NewSlogAdapter(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	container := NewContainerLegacy(nil, nil, testLogger)
 
@@ -147,7 +148,7 @@ func TestNewContainerLegacy_ParametersMapping(t *testing.T) {
 func TestContainer_Close(t *testing.T) {
 	t.Parallel()
 
-	testLogger := logger.NewSlogAdapter(slog.Default())
+	testLogger := logger.NewSlogAdapter(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	container := NewContainer(ContainerConfig{
 		Logger: testLogger,
@@ -178,7 +179,7 @@ func TestContainer_Close_WithNilLogger(t *testing.T) {
 func TestNewContainer_ProcessorRegistryIntegration(t *testing.T) {
 	t.Parallel()
 
-	testLogger := logger.NewSlogAdapter(slog.Default())
+	testLogger := logger.NewSlogAdapter(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	cfg := ContainerConfig{
 		Logger: testLogger,
@@ -201,7 +202,7 @@ func TestNewContainer_ProcessorRegistryIntegration(t *testing.T) {
 func TestNewContainer_EventConsumerIntegration(t *testing.T) {
 	t.Parallel()
 
-	testLogger := logger.NewSlogAdapter(slog.Default())
+	testLogger := logger.NewSlogAdapter(slog.New(slog.NewTextHandler(io.Discard, nil)))
 
 	cfg := ContainerConfig{
 		Logger: testLogger,

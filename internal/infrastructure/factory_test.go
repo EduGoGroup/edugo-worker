@@ -2,6 +2,7 @@ package infrastructure
 
 import (
 	"context"
+	"io"
 	"log/slog"
 	"testing"
 
@@ -13,7 +14,8 @@ import (
 
 // createTestLogger crea un logger silencioso para tests
 func createTestLogger() logger.Logger {
-	return logger.NewSlogAdapter(slog.Default())
+	discardLogger := slog.New(slog.NewTextHandler(io.Discard, nil))
+	return logger.NewSlogAdapter(discardLogger)
 }
 
 func TestFactory_CreatePDFExtractor(t *testing.T) {

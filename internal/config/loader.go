@@ -32,6 +32,10 @@ func Load() (*Config, error) {
 		}
 	}
 
+	// Defaults para logging
+	v.SetDefault("logging.env", "development")
+	v.SetDefault("logging.version", "dev")
+
 	v.AutomaticEnv()
 	v.SetEnvPrefix("EDUGO_WORKER")
 	v.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
