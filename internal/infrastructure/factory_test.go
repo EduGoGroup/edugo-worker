@@ -2,22 +2,18 @@ package infrastructure
 
 import (
 	"context"
-	"io"
+	"log/slog"
 	"testing"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
-	"github.com/EduGoGroup/edugo-worker/internal/bootstrap/adapter"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 // createTestLogger crea un logger silencioso para tests
 func createTestLogger() logger.Logger {
-	logrusLogger := logrus.New()
-	logrusLogger.SetOutput(io.Discard)
-	return adapter.NewLoggerAdapter(logrusLogger)
+	return logger.NewSlogAdapter(slog.Default())
 }
 
 func TestFactory_CreatePDFExtractor(t *testing.T) {

@@ -1,23 +1,22 @@
 package container
 
 import (
+	"log/slog"
 	"testing"
 
-	"github.com/EduGoGroup/edugo-worker/internal/bootstrap/adapter"
-	"github.com/sirupsen/logrus"
+	"github.com/EduGoGroup/edugo-shared/logger"
 )
 
 func TestNewContainer(t *testing.T) {
 	t.Parallel()
 
 	// Crear logger mock
-	logrusLogger := logrus.New()
-	logger := adapter.NewLoggerAdapter(logrusLogger)
+	testLogger := logger.NewSlogAdapter(slog.Default())
 
 	cfg := ContainerConfig{
 		DB:         nil, // En test unitario no necesitamos DB real
 		MongoDB:    nil,
-		Logger:     logger,
+		Logger:     testLogger,
 		AuthClient: nil,
 	}
 
@@ -71,13 +70,12 @@ func TestNewContainer(t *testing.T) {
 func TestNewContainer_WithAllDependencies(t *testing.T) {
 	t.Parallel()
 
-	logrusLogger := logrus.New()
-	logger := adapter.NewLoggerAdapter(logrusLogger)
+	testLogger := logger.NewSlogAdapter(slog.Default())
 
 	cfg := ContainerConfig{
 		DB:         nil,
 		MongoDB:    nil,
-		Logger:     logger,
+		Logger:     testLogger,
 		AuthClient: nil,
 	}
 
@@ -104,10 +102,9 @@ func TestNewContainer_WithAllDependencies(t *testing.T) {
 func TestNewContainerLegacy(t *testing.T) {
 	t.Parallel()
 
-	logrusLogger := logrus.New()
-	logger := adapter.NewLoggerAdapter(logrusLogger)
+	testLogger := logger.NewSlogAdapter(slog.Default())
 
-	container := NewContainerLegacy(nil, nil, logger)
+	container := NewContainerLegacy(nil, nil, testLogger)
 
 	if container == nil {
 		t.Fatal("expected container to be created")
@@ -129,10 +126,9 @@ func TestNewContainerLegacy(t *testing.T) {
 func TestNewContainerLegacy_ParametersMapping(t *testing.T) {
 	t.Parallel()
 
-	logrusLogger := logrus.New()
-	logger := adapter.NewLoggerAdapter(logrusLogger)
+	testLogger := logger.NewSlogAdapter(slog.Default())
 
-	container := NewContainerLegacy(nil, nil, logger)
+	container := NewContainerLegacy(nil, nil, testLogger)
 
 	// Verificar que los parámetros se mapean correctamente
 	if container.DB != nil {
@@ -143,7 +139,7 @@ func TestNewContainerLegacy_ParametersMapping(t *testing.T) {
 		t.Error("expected MongoDB to be nil")
 	}
 
-	if container.Logger != logger {
+	if container.Logger != testLogger {
 		t.Error("expected Logger to match input")
 	}
 }
@@ -151,11 +147,10 @@ func TestNewContainerLegacy_ParametersMapping(t *testing.T) {
 func TestContainer_Close(t *testing.T) {
 	t.Parallel()
 
-	logrusLogger := logrus.New()
-	logger := adapter.NewLoggerAdapter(logrusLogger)
+	testLogger := logger.NewSlogAdapter(slog.Default())
 
 	container := NewContainer(ContainerConfig{
-		Logger: logger,
+		Logger: testLogger,
 	})
 
 	// Close no debería fallar incluso con DB nil
@@ -183,11 +178,10 @@ func TestContainer_Close_WithNilLogger(t *testing.T) {
 func TestNewContainer_ProcessorRegistryIntegration(t *testing.T) {
 	t.Parallel()
 
-	logrusLogger := logrus.New()
-	logger := adapter.NewLoggerAdapter(logrusLogger)
+	testLogger := logger.NewSlogAdapter(slog.Default())
 
 	cfg := ContainerConfig{
-		Logger: logger,
+		Logger: testLogger,
 	}
 
 	container := NewContainer(cfg)
@@ -207,11 +201,10 @@ func TestNewContainer_ProcessorRegistryIntegration(t *testing.T) {
 func TestNewContainer_EventConsumerIntegration(t *testing.T) {
 	t.Parallel()
 
-	logrusLogger := logrus.New()
-	logger := adapter.NewLoggerAdapter(logrusLogger)
+	testLogger := logger.NewSlogAdapter(slog.Default())
 
 	cfg := ContainerConfig{
-		Logger: logger,
+		Logger: testLogger,
 	}
 
 	container := NewContainer(cfg)

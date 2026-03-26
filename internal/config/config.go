@@ -119,8 +119,10 @@ type PDFConfig struct {
 }
 
 type LoggingConfig struct {
-	Level  string `mapstructure:"level"`
-	Format string `mapstructure:"format"`
+	Level   string `mapstructure:"level"`
+	Format  string `mapstructure:"format"`
+	Env     string `mapstructure:"env"`
+	Version string `mapstructure:"version"`
 }
 
 type MetricsConfig struct {

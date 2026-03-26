@@ -83,21 +83,15 @@ func (b *ResourceBuilder) WithLogger() *ResourceBuilder {
 		return b
 	}
 
-	// Crear logger usando shared/bootstrap
-	loggerFactory := sharedBootstrap.NewDefaultLoggerFactory()
-
-	logrusLogger, err := loggerFactory.CreateLogger(
-		b.ctx,
-		"production",
-		"v1.0.0",
-	)
-	if err != nil {
-		b.err = fmt.Errorf("failed to create logger: %w", err)
-		return b
-	}
-
-	// Guardar referencia
-	b.logger = logrusLogger
+	// Crear logger usando shared/logger (slog centralizado)
+	slogLogger := logger.NewSlogProvider(logger.SlogConfig{
+		Level:   b.config.Logging.Level,
+		Format:  b.config.Logging.Format,
+		Service: "edugo-worker",
+		Env:     b.config.Logging.Env,
+		Version: b.config.Logging.Version,
+	})
+	b.logger = logger.NewSlogAdapter(slogLogger)
 
 	// Registrar cleanup
 	b.addCleanup(func() error {
@@ -105,7 +99,7 @@ func (b *ResourceBuilder) WithLogger() *ResourceBuilder {
 		return b.logger.Sync()
 	})
 
-	b.logger.Info("✅ Logger initialized successfully")
+	b.logger.Info("Logger initialized successfully")
 	return b
 }
 
