@@ -9,6 +9,7 @@ import (
 	sharedBootstrap "github.com/EduGoGroup/edugo-shared/bootstrap"
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
 	"github.com/EduGoGroup/edugo-shared/logger"
+	rabbit "github.com/EduGoGroup/edugo-shared/messaging/rabbit"
 	sharedMetrics "github.com/EduGoGroup/edugo-shared/metrics"
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
 	"github.com/EduGoGroup/edugo-worker/internal/client"
@@ -29,6 +30,7 @@ type Resources struct {
 	Logger            logger.Logger
 	PostgreSQL        *sql.DB
 	MongoDB           *mongo.Database
+	RabbitMQConn      *rabbit.Connection
 	RabbitMQChannel   *amqp.Channel
 	AuthClient        *client.AuthClient
 	LifecycleManager  *lifecycle.Manager
@@ -44,12 +46,13 @@ type ResourceBuilder struct {
 	ctx    context.Context
 
 	// Recursos de infraestructura base
-	logger        logger.Logger
-	sqlDB         *sql.DB
-	mongoClient   *mongo.Client
-	mongodb       *mongo.Database
-	rabbitConn    *amqp.Connection
-	rabbitChannel *amqp.Channel
+	logger           logger.Logger
+	sqlDB            *sql.DB
+	mongoClient      *mongo.Client
+	mongodb          *mongo.Database
+	rabbitSharedConn *rabbit.Connection
+	rabbitConn       *amqp.Connection
+	rabbitChannel    *amqp.Channel
 
 	// Servicios de infraestructura externa
 	storageClient storage.Client
@@ -216,7 +219,7 @@ func (b *ResourceBuilder) WithMongoDB() *ResourceBuilder {
 	return b
 }
 
-// WithRabbitMQ configura la conexión a RabbitMQ
+// WithRabbitMQ configura la conexión a RabbitMQ usando el wrapper compartido
 func (b *ResourceBuilder) WithRabbitMQ() *ResourceBuilder {
 	if b.err != nil {
 		return b
@@ -229,41 +232,23 @@ func (b *ResourceBuilder) WithRabbitMQ() *ResourceBuilder {
 
 	b.logger.Info("connecting to RabbitMQ")
 
-	// Crear factory
-	rabbitFactory := sharedBootstrap.NewDefaultRabbitMQFactory()
-
-	// Crear conexión
-	conn, err := rabbitFactory.CreateConnection(b.ctx, sharedBootstrap.RabbitMQConfig{
-		URL: b.config.Messaging.RabbitMQ.URL,
-	})
+	// Crear conexión usando el wrapper compartido que gestiona conexión + canal
+	rabbitConn, err := rabbit.Connect(b.config.Messaging.RabbitMQ.URL)
 	if err != nil {
 		b.err = fmt.Errorf("failed to connect to RabbitMQ: %w", err)
 		return b
 	}
 
-	// Crear channel
-	channel, err := rabbitFactory.CreateChannel(conn)
-	if err != nil {
-		if closeErr := conn.Close(); closeErr != nil {
-			b.logger.Error("failed to close RabbitMQ connection after channel error", "error", closeErr.Error())
-		}
-		b.err = fmt.Errorf("failed to create RabbitMQ channel: %w", err)
-		return b
-	}
+	// Guardar referencias: derivamos las raw desde el wrapper compartido
+	b.rabbitSharedConn = rabbitConn
+	b.rabbitConn = rabbitConn.GetConnection()
+	b.rabbitChannel = rabbitConn.GetChannel()
 
-	// Guardar referencias
-	b.rabbitConn = conn
-	b.rabbitChannel = channel
-
-	// Registrar cleanup (orden inverso: channel antes que connection)
+	// Registrar cleanup: cerrar el wrapper compartido cierra canal + conexión
 	b.addCleanup(func() error {
-		b.logger.Info("closing RabbitMQ channel")
-		if err := b.rabbitChannel.Close(); err != nil {
-			return fmt.Errorf("failed to close RabbitMQ channel: %w", err)
-		}
 		b.logger.Info("closing RabbitMQ connection")
-		if err := b.rabbitConn.Close(); err != nil {
-			return fmt.Errorf("failed to close RabbitMQ connection: %w", err)
+		if err := b.rabbitSharedConn.Close(); err != nil {
+			return fmt.Errorf("failed to close RabbitMQ: %w", err)
 		}
 		return nil
 	})
@@ -527,6 +512,7 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 		Logger:            b.logger,
 		PostgreSQL:        b.sqlDB,
 		MongoDB:           b.mongodb,
+		RabbitMQConn:      b.rabbitSharedConn,
 		RabbitMQChannel:   b.rabbitChannel,
 		AuthClient:        b.authClient,
 		LifecycleManager:  b.lifecycleManager,
