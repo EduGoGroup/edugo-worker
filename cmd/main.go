@@ -245,4 +245,3 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 
 	return nil
 }
-
