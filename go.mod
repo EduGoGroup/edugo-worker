@@ -10,7 +10,7 @@ require (
 	github.com/EduGoGroup/edugo-shared/database/postgres v0.51.2
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.50.3
 	github.com/EduGoGroup/edugo-shared/logger v0.51.0
-	github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.50.3
+	github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.50.4
 	github.com/EduGoGroup/edugo-shared/metrics v0.2.0
 	github.com/EduGoGroup/edugo-shared/testing v0.51.0
 	github.com/aws/aws-sdk-go-v2 v1.41.4
