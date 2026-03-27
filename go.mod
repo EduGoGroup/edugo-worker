@@ -4,14 +4,14 @@ go 1.25.3
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.55.0
+	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.56.0
 	github.com/EduGoGroup/edugo-shared/bootstrap v0.51.0
-	github.com/EduGoGroup/edugo-shared/common v0.57.0
+	github.com/EduGoGroup/edugo-shared/common v0.58.0
 	github.com/EduGoGroup/edugo-shared/database/postgres v0.51.2
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.50.3
 	github.com/EduGoGroup/edugo-shared/logger v0.51.0
 	github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.50.4
-	github.com/EduGoGroup/edugo-shared/metrics v0.2.0
+	github.com/EduGoGroup/edugo-shared/metrics v0.3.0
 	github.com/EduGoGroup/edugo-shared/testing v0.51.0
 	github.com/aws/aws-sdk-go-v2 v1.41.5
 	github.com/aws/aws-sdk-go-v2/config v1.32.13
