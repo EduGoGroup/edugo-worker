@@ -113,6 +113,8 @@ func (gs *GracefulShutdown) WaitForSignal() error {
 	signal.Notify(sigChan, syscall.SIGINT, syscall.SIGTERM)
 
 	sig := <-sigChan
+	signal.Stop(sigChan)
+
 	if gs.logger != nil {
 		gs.logger.Info("Señal de shutdown recibida", "signal", sig.String())
 	}

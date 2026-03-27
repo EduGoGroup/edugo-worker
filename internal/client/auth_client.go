@@ -11,6 +11,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log/slog"
 	"net/http"
 	"sync"
 	"time"
@@ -86,7 +87,7 @@ func NewAuthClient(config AuthClientConfig) *AuthClient {
 			return counts.Requests >= 3 && failureRatio >= 0.6
 		},
 		OnStateChange: func(name string, from, to gobreaker.State) {
-			fmt.Printf("[WorkerAuthClient] Circuit breaker '%s': %s -> %s\n", name, from, to)
+			slog.Info("circuit breaker state change", "breaker", name, "from", from.String(), "to", to.String())
 		},
 	}
 
@@ -371,6 +372,7 @@ type tokenCache struct {
 	entries map[string]*cacheEntry
 	ttl     time.Duration
 	mutex   sync.RWMutex
+	stopCh  chan struct{}
 }
 
 type cacheEntry struct {
@@ -382,6 +384,7 @@ func newTokenCache(ttl time.Duration) *tokenCache {
 	cache := &tokenCache{
 		entries: make(map[string]*cacheEntry),
 		ttl:     ttl,
+		stopCh:  make(chan struct{}),
 	}
 
 	// Iniciar limpieza periódica de entries expirados
@@ -423,9 +426,19 @@ func (c *tokenCache) cleanupLoop() {
 	ticker := time.NewTicker(1 * time.Minute)
 	defer ticker.Stop()
 
-	for range ticker.C {
-		c.cleanup()
+	for {
+		select {
+		case <-ticker.C:
+			c.cleanup()
+		case <-c.stopCh:
+			return
+		}
 	}
+}
+
+// Stop detiene la goroutine de limpieza del cache
+func (c *tokenCache) Stop() {
+	close(c.stopCh)
 }
 
 // cleanup elimina todos los entries expirados
