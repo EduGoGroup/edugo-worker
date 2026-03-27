@@ -20,6 +20,13 @@ messaging:
     exchanges:
       materials: "edugo.materials"
     prefetch_count: 5
+    dlq:
+      enabled: true
+      max_retries: 3
+      retry_delay: "5s"
+      dlx_exchange: "edugo_dlx"
+      dlx_routing_key: "edugo.material.uploaded.dlq"
+      use_exponential_backoff: true
 
 nlp:
   # Provider activo: "openai", "anthropic", "mock"

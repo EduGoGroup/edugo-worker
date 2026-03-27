@@ -3,6 +3,8 @@ package config
 import (
 	"fmt"
 	"time"
+
+	rabbit "github.com/EduGoGroup/edugo-shared/messaging/rabbit"
 )
 
 type Config struct {
@@ -50,6 +52,33 @@ type RabbitMQConfig struct {
 	Queues        QueuesConfig   `mapstructure:"queues"`
 	Exchanges     ExchangeConfig `mapstructure:"exchanges"`
 	PrefetchCount int            `mapstructure:"prefetch_count"`
+	DLQ           DLQConfig      `mapstructure:"dlq"`
+}
+
+// DLQConfig configura el Dead Letter Queue del worker
+type DLQConfig struct {
+	Enabled               bool   `mapstructure:"enabled"`
+	MaxRetries            int    `mapstructure:"max_retries"`
+	RetryDelay            string `mapstructure:"retry_delay"`
+	DLXExchange           string `mapstructure:"dlx_exchange"`
+	DLXRoutingKey         string `mapstructure:"dlx_routing_key"`
+	UseExponentialBackoff bool   `mapstructure:"use_exponential_backoff"`
+}
+
+// ToShared convierte la configuración local a la estructura compartida de rabbit.DLQConfig
+func (c DLQConfig) ToShared() rabbit.DLQConfig {
+	delay, _ := time.ParseDuration(c.RetryDelay)
+	if delay == 0 {
+		delay = 5 * time.Second
+	}
+	return rabbit.DLQConfig{
+		Enabled:               c.Enabled,
+		MaxRetries:            c.MaxRetries,
+		RetryDelay:            delay,
+		DLXExchange:           c.DLXExchange,
+		DLXRoutingKey:         c.DLXRoutingKey,
+		UseExponentialBackoff: c.UseExponentialBackoff,
+	}
 }
 
 type QueuesConfig struct {
@@ -283,6 +312,32 @@ func (c *Config) GetHealthConfigWithDefaults() HealthConfig {
 	if cfg.Timeouts.RabbitMQ == 0 {
 		cfg.Timeouts.RabbitMQ = 3 * time.Second
 	}
+	return cfg
+}
+
+// GetDLQConfigWithDefaults retorna la configuración DLQ con valores por defecto
+func (c *Config) GetDLQConfigWithDefaults() DLQConfig {
+	cfg := c.Messaging.RabbitMQ.DLQ
+
+	if !cfg.Enabled {
+		cfg.Enabled = true
+	}
+	if cfg.MaxRetries == 0 {
+		cfg.MaxRetries = 3
+	}
+	if cfg.RetryDelay == "" {
+		cfg.RetryDelay = "5s"
+	}
+	if cfg.DLXExchange == "" {
+		cfg.DLXExchange = "edugo_dlx"
+	}
+	if cfg.DLXRoutingKey == "" {
+		cfg.DLXRoutingKey = "edugo.material.uploaded.dlq"
+	}
+	if !cfg.UseExponentialBackoff {
+		cfg.UseExponentialBackoff = true
+	}
+
 	return cfg
 }
 

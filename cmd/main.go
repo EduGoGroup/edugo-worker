@@ -2,11 +2,12 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
-	"sync"
 	"time"
 
+	rabbit "github.com/EduGoGroup/edugo-shared/messaging/rabbit"
 	"github.com/EduGoGroup/edugo-worker/internal/bootstrap"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/metrics"
@@ -84,135 +85,97 @@ func main() {
 		resources.Logger.Info("⚠️  Rate limiter deshabilitado")
 	}
 
-	// 5. Consumir mensajes
-	msgs, err := resources.RabbitMQChannel.Consume(
-		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded, // queue
-		"",    // consumer
-		false, // auto-ack
-		false, // exclusive
-		false, // no-local
-		false, // no-wait
-		nil,   // args
-	)
-	if err != nil {
-		resources.Logger.Error("Error registrando consumer", "error", err.Error())
+	// 5. Crear consumer compartido con soporte DLQ
+	prefetchCount := cfg.Messaging.RabbitMQ.PrefetchCount
+	if prefetchCount == 0 {
+		prefetchCount = 5
+	}
+
+	dlqCfg := cfg.GetDLQConfigWithDefaults().ToShared()
+
+	consumerCfg := rabbit.ConsumerConfig{
+		Name:          "edugo-worker",
+		AutoAck:       false,
+		PrefetchCount: prefetchCount,
+		DLQ:           dlqCfg,
+	}
+
+	consumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, consumerCfg).(*rabbit.RabbitMQConsumer)
+	if !ok {
+		log.Fatal("failed to create RabbitMQ consumer: unexpected type")
+	}
+
+	// 6. Crear handler con rate limiting integrado
+	handler := func(ctx context.Context, body []byte) error {
+		if rateLimiter != nil {
+			eventType := "unknown"
+			var base struct {
+				EventType string `json:"event_type"`
+			}
+			if err := json.Unmarshal(body, &base); err == nil && base.EventType != "" {
+				eventType = base.EventType
+			}
+
+			start := time.Now()
+			if err := rateLimiter.Wait(ctx, eventType); err != nil {
+				return fmt.Errorf("rate limiter interrupted: %w", err)
+			}
+			waitDuration := time.Since(start).Seconds()
+			metrics.RecordRateLimiterWait(eventType, waitDuration)
+			metrics.RecordRateLimiterAllowed(eventType)
+			if tokens := rateLimiter.Tokens(eventType); tokens >= 0 {
+				metrics.UpdateRateLimiterTokens(eventType, tokens)
+			}
+		}
+
+		resources.Logger.Info("Mensaje recibido", "size", len(body))
+		if err := resources.ProcessorRegistry.Process(ctx, body); err != nil {
+			resources.Logger.Error("Error procesando evento", "error", err.Error())
+			return err
+		}
+		resources.Logger.Info("Evento procesado exitosamente")
+		return nil
+	}
+
+	// 7. Iniciar consumo con soporte DLQ
+	consumerCtx, cancelConsumer := context.WithCancel(ctx)
+	if err := consumer.ConsumeWithDLQ(consumerCtx, cfg.Messaging.RabbitMQ.Queues.MaterialUploaded, handler); err != nil {
+		resources.Logger.Error("Error iniciando consumer", "error", err.Error())
 		log.Fatal(err)
 	}
 
-	resources.Logger.Info("✅ Worker escuchando eventos",
-		"queue", cfg.Messaging.RabbitMQ.Queues.MaterialUploaded)
+	resources.Logger.Info("Worker escuchando eventos",
+		"queue", cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
+		"prefetch_count", prefetchCount,
+		"dlq_enabled", dlqCfg.Enabled,
+		"max_retries", dlqCfg.MaxRetries)
 
-	// 6. Configurar graceful shutdown
+	// 8. Configurar graceful shutdown
 	shutdownCfg := cfg.GetShutdownConfigWithDefaults()
 	gracefulShutdown := shutdown.NewGracefulShutdown(shutdownCfg.Timeout, resources.Logger)
 
-	// 7. Procesar mensajes con rate limiting
-	var processingWG sync.WaitGroup
-	consumerCtx, cancelConsumer := context.WithCancel(ctx)
+	// 9. Registrar tareas de shutdown en orden inverso de inicialización
+	// Ultimo en inicializarse, primero en cerrarse (LIFO)
 
-	go func() {
-		for msg := range msgs {
-			// Incrementar contador antes del check de contexto para evitar race condition
-			processingWG.Add(1)
-
-			// Si el contexto está cancelado, no procesar más mensajes
-			select {
-			case <-consumerCtx.Done():
-				// Rechazar mensaje para que se reintente después del shutdown
-				processingWG.Done()
-				if err := msg.Nack(false, true); err != nil {
-					resources.Logger.Error("Error en Nack durante shutdown", "error", err.Error())
-				}
-				return
-			default:
-			}
-
-			go func(m amqp.Delivery) {
-				defer processingWG.Done()
-
-				// Extraer tipo de evento del routing key
-				eventType := m.RoutingKey
-				if eventType == "" {
-					eventType = "unknown"
-				}
-
-				// Aplicar rate limiting si está habilitado
-				if rateLimiter != nil {
-					start := time.Now()
-
-					if err := rateLimiter.Wait(consumerCtx, eventType); err != nil {
-						resources.Logger.Warn("Rate limiter interrumpido",
-							"event_type", eventType,
-							"error", err.Error())
-
-						// Rechazar mensaje para que se reintente después
-						if err := m.Nack(false, true); err != nil {
-							resources.Logger.Error("Error en Nack después de rate limit",
-								"error", err.Error())
-						}
-						return
-					}
-
-					// Registrar métricas de rate limiting (siempre registramos la espera para no perder precisión)
-					waitDuration := time.Since(start).Seconds()
-					metrics.RecordRateLimiterWait(eventType, waitDuration)
-					metrics.RecordRateLimiterAllowed(eventType)
-
-					// Actualizar tokens disponibles
-					tokens := rateLimiter.Tokens(eventType)
-					if tokens >= 0 {
-						metrics.UpdateRateLimiterTokens(eventType, tokens)
-					}
-				}
-
-				// Procesar mensaje
-				if err := processMessage(m, resources, cfg); err != nil {
-					resources.Logger.Error("Error procesando mensaje",
-						"event_type", eventType,
-						"error", err.Error())
-
-					if err := m.Nack(false, true); err != nil {
-						resources.Logger.Error("Error en Nack", "error", err.Error())
-					}
-				} else {
-					if err := m.Ack(false); err != nil {
-						resources.Logger.Error("Error en Ack", "error", err.Error())
-					}
-				}
-			}(msg)
-		}
-	}()
-
-	// 8. Registrar tareas de shutdown en orden inverso de inicialización
-	// Último en inicializarse, primero en cerrarse (LIFO)
-
-	// 8.1 Detener consumer (dejar de aceptar nuevos mensajes)
+	// 9.1 Detener consumer (dejar de aceptar nuevos mensajes)
 	gracefulShutdown.Register("consumer", func(shutdownCtx context.Context) error {
 		resources.Logger.Info("Deteniendo consumer de mensajes...")
 		cancelConsumer()
+		consumer.Stop()
 
 		if shutdownCfg.WaitForMessages {
 			resources.Logger.Info("Esperando que terminen los mensajes en proceso...")
-
-			// Esperar con timeout
-			done := make(chan struct{})
-			go func() {
-				processingWG.Wait()
-				close(done)
-			}()
-
-			select {
-			case <-done:
-				resources.Logger.Info("✅ Todos los mensajes fueron procesados")
-			case <-shutdownCtx.Done():
-				resources.Logger.Warn("⚠️  Timeout esperando mensajes en proceso")
+			if err := consumer.Wait(); err != nil {
+				resources.Logger.Warn("Consumer detenido con error", "error", err.Error())
+			} else {
+				resources.Logger.Info("Todos los mensajes fueron procesados")
 			}
 		}
 
 		return nil
 	})
 
-	// 8.2 Cerrar servidor de métricas
+	// 9.2 Cerrar servidor de metricas
 	gracefulShutdown.Register("metrics_server", func(shutdownCtx context.Context) error {
 		resources.Logger.Info("Cerrando servidor de métricas...")
 		if resources.MetricsServer != nil {
@@ -221,14 +184,14 @@ func main() {
 		return nil
 	})
 
-	// 8.3 Ejecutar cleanup de recursos (RabbitMQ, MongoDB, PostgreSQL, etc.)
+	// 9.3 Ejecutar cleanup de recursos (RabbitMQ, MongoDB, PostgreSQL, etc.)
 	gracefulShutdown.Register("infrastructure_cleanup", func(shutdownCtx context.Context) error {
 		resources.Logger.Info("Ejecutando cleanup de infraestructura...")
 		return cleanup()
 	})
 
-	// 9. Esperar señal de shutdown y ejecutar
-	resources.Logger.Info("✅ Worker listo - esperando mensajes...")
+	// 10. Esperar senal de shutdown y ejecutar
+	resources.Logger.Info("Worker listo - esperando mensajes...")
 
 	if err := gracefulShutdown.WaitForSignal(); err != nil {
 		resources.Logger.Error("❌ Errores durante shutdown", "error", err.Error())
@@ -280,21 +243,5 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 		return fmt.Errorf("error binding cola: %w", err)
 	}
 
-	return nil
-}
-
-// processMessage procesa un mensaje de RabbitMQ
-func processMessage(msg amqp.Delivery, resources *bootstrap.Resources, cfg *config.Config) error {
-	ctx := context.Background()
-
-	resources.Logger.Info("📥 Mensaje recibido", "size", len(msg.Body))
-
-	// Usar el ProcessorRegistry para procesar el evento
-	if err := resources.ProcessorRegistry.Process(ctx, msg.Body); err != nil {
-		resources.Logger.Error("Error procesando evento", "error", err.Error())
-		return err
-	}
-
-	resources.Logger.Info("✅ Evento procesado exitosamente")
 	return nil
 }
