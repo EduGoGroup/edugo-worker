@@ -3,6 +3,7 @@ package processor
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"time"
 
 	mongoentities "github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
@@ -60,20 +61,29 @@ func (p *MaterialDeletedProcessor) recordSharedMetrics(start time.Time, err erro
 func (p *MaterialDeletedProcessor) processEvent(ctx context.Context, event dto.MaterialDeletedEvent) error {
 	p.logger.Info("processing material deleted", "material_id", event.MaterialID)
 
-	materialID, _ := valueobject.MaterialIDFromString(event.MaterialID)
+	materialID, err := valueobject.MaterialIDFromString(event.MaterialID)
+	if err != nil {
+		return fmt.Errorf("invalid material_id %q: %w", event.MaterialID, err)
+	}
+
+	var errs []error
 
 	// Eliminar summary
 	summaryCol := p.mongodb.Collection(mongoentities.MaterialSummary{}.CollectionName())
-	_, err := summaryCol.DeleteOne(ctx, bson.M{"material_id": materialID.String()})
-	if err != nil {
-		p.logger.Error("failed to delete summary", "error", err)
+	if _, err := summaryCol.DeleteOne(ctx, bson.M{"material_id": materialID.String()}); err != nil {
+		p.logger.Error("failed to delete summary", "material_id", event.MaterialID, "error", err)
+		errs = append(errs, fmt.Errorf("delete summary: %w", err))
 	}
 
 	// Eliminar assessment
 	assessmentCol := p.mongodb.Collection(mongoentities.MaterialAssessment{}.CollectionName())
-	_, err = assessmentCol.DeleteOne(ctx, bson.M{"material_id": materialID.String()})
-	if err != nil {
-		p.logger.Error("failed to delete assessment", "error", err)
+	if _, err := assessmentCol.DeleteOne(ctx, bson.M{"material_id": materialID.String()}); err != nil {
+		p.logger.Error("failed to delete assessment", "material_id", event.MaterialID, "error", err)
+		errs = append(errs, fmt.Errorf("delete assessment: %w", err))
+	}
+
+	if len(errs) > 0 {
+		return fmt.Errorf("material cleanup partial failure: %v", errs)
 	}
 
 	p.logger.Info("material cleanup completed", "material_id", event.MaterialID)
