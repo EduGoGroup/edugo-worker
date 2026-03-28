@@ -151,11 +151,12 @@ func main() {
 		"max_retries", dlqCfg.MaxRetries)
 
 	// 7b. Iniciar consumer de notificaciones de evaluaciones
+	assessmentDlqCfg := cfg.GetAssessmentDLQConfigWithDefaults().ToShared()
 	assessmentConsumerCfg := rabbit.ConsumerConfig{
 		Name:          "edugo-worker-assessments",
 		AutoAck:       false,
 		PrefetchCount: prefetchCount,
-		DLQ:           dlqCfg,
+		DLQ:           assessmentDlqCfg,
 	}
 
 	assessmentConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, assessmentConsumerCfg).(*rabbit.RabbitMQConsumer)
@@ -170,7 +171,8 @@ func main() {
 	}
 
 	resources.Logger.Info("Assessment notifications consumer started",
-		"queue", cfg.Messaging.RabbitMQ.Queues.AssessmentNotifications)
+		"queue", cfg.Messaging.RabbitMQ.Queues.AssessmentNotifications,
+		"dlq_routing_key", assessmentDlqCfg.DLXRoutingKey)
 
 	// 8. Configurar graceful shutdown
 	shutdownCfg := cfg.GetShutdownConfigWithDefaults()
@@ -229,9 +231,11 @@ func main() {
 
 // setupRabbitMQ configura exchange, queue y bindings
 func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
-	// Declarar exchange
+	exchanges := cfg.GetExchangesConfigWithDefaults()
+
+	// Declarar exchange de materiales
 	if err := ch.ExchangeDeclare(
-		cfg.Messaging.RabbitMQ.Exchanges.Materials,
+		exchanges.Materials,
 		"topic",
 		true,  // durable
 		false, // auto-deleted
@@ -239,10 +243,23 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 		false, // no-wait
 		nil,
 	); err != nil {
-		return fmt.Errorf("error declarando exchange: %w", err)
+		return fmt.Errorf("error declarando materials exchange: %w", err)
 	}
 
-	// Declarar cola
+	// Declarar exchange de evaluaciones
+	if err := ch.ExchangeDeclare(
+		exchanges.Assessments,
+		"topic",
+		true,  // durable
+		false, // auto-deleted
+		false, // internal
+		false, // no-wait
+		nil,
+	); err != nil {
+		return fmt.Errorf("error declarando assessments exchange: %w", err)
+	}
+
+	// Declarar cola de materiales
 	_, err := ch.QueueDeclare(
 		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
 		true,  // durable
@@ -258,11 +275,11 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 		return fmt.Errorf("error declarando cola: %w", err)
 	}
 
-	// Bind cola
+	// Bind cola de materiales
 	if err := ch.QueueBind(
 		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
 		"material.uploaded",
-		cfg.Messaging.RabbitMQ.Exchanges.Materials,
+		exchanges.Materials,
 		false,
 		nil,
 	); err != nil {
@@ -284,12 +301,12 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 		return fmt.Errorf("error declaring assessment notifications queue: %w", err)
 	}
 
-	// Bind routing keys de eventos de evaluaciones
+	// Bind routing keys de eventos de evaluaciones al exchange de assessments
 	for _, routingKey := range []string{"assessment.assigned", "assessment.attempt_recorded", "assessment.reviewed"} {
 		if err := ch.QueueBind(
 			cfg.Messaging.RabbitMQ.Queues.AssessmentNotifications,
 			routingKey,
-			cfg.Messaging.RabbitMQ.Exchanges.Materials,
+			exchanges.Assessments,
 			false,
 			nil,
 		); err != nil {

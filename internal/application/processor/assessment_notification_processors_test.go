@@ -300,6 +300,59 @@ func TestAssessmentAttemptNotifProcessor_InvalidJSON(t *testing.T) {
 	assert.Contains(t, err.Error(), "invalid event payload")
 }
 
+func TestAssessmentAttemptNotifProcessor_DBError(t *testing.T) {
+	// Arrange
+	db, dbMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	logger := newTestLogger()
+	nc := NewNotificationCreator(db, logger)
+	proc := NewAssessmentAttemptNotifProcessor(nc, logger)
+
+	teacherID := uuid.New()
+	attemptID := uuid.New()
+
+	event := dto.AssessmentAttemptNotifEvent{
+		EventID:      "evt-012",
+		EventType:    "assessment.attempt_recorded",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.AssessmentAttemptNotifPayload{
+			AttemptID:    attemptID.String(),
+			AssessmentID: uuid.New().String(),
+			StudentID:    uuid.New().String(),
+			SchoolID:     uuid.New().String(),
+			Score:        85.0,
+			TotalPoints:  100.0,
+			TeacherID:    teacherID.String(),
+			Title:        "Quiz Fallido",
+		},
+	}
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	dbMock.ExpectExec("INSERT INTO notifications.notifications").
+		WithArgs(
+			sqlmock.AnyArg(),
+			teacherID,
+			"assessment_attempt_recorded",
+			"Evaluacion enviada",
+			"Un estudiante ha enviado: Quiz Fallido",
+			"assessment_attempt",
+			attemptID,
+		).
+		WillReturnError(fmt.Errorf("connection refused"))
+
+	// Act
+	err = proc.Process(context.Background(), payload)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create assessment attempt notification")
+	assert.NoError(t, dbMock.ExpectationsWereMet())
+}
+
 // --- AssessmentReviewedNotifProcessor tests ---
 
 func TestAssessmentReviewedNotifProcessor_EventType(t *testing.T) {
@@ -418,4 +471,58 @@ func TestAssessmentReviewedNotifProcessor_InvalidJSON(t *testing.T) {
 
 	assert.Error(t, err)
 	assert.Contains(t, err.Error(), "invalid event payload")
+}
+
+func TestAssessmentReviewedNotifProcessor_DBError(t *testing.T) {
+	// Arrange
+	db, dbMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	logger := newTestLogger()
+	nc := NewNotificationCreator(db, logger)
+	proc := NewAssessmentReviewedNotifProcessor(nc, logger)
+
+	studentID := uuid.New()
+	attemptID := uuid.New()
+
+	event := dto.AssessmentReviewedNotifEvent{
+		EventID:      "evt-022",
+		EventType:    "assessment.reviewed",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.AssessmentReviewedNotifPayload{
+			AttemptID:    attemptID.String(),
+			AssessmentID: uuid.New().String(),
+			ReviewerID:   uuid.New().String(),
+			SchoolID:     uuid.New().String(),
+			FinalScore:   92.5,
+			TotalPoints:  100.0,
+			Status:       "reviewed",
+			StudentID:    studentID.String(),
+			Title:        "Examen Fallido de Lengua",
+		},
+	}
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	dbMock.ExpectExec("INSERT INTO notifications.notifications").
+		WithArgs(
+			sqlmock.AnyArg(),
+			studentID,
+			"assessment_reviewed",
+			"Evaluacion calificada",
+			"Tu evaluacion ha sido calificada: Examen Fallido de Lengua",
+			"assessment_attempt",
+			attemptID,
+		).
+		WillReturnError(fmt.Errorf("connection refused"))
+
+	// Act
+	err = proc.Process(context.Background(), payload)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to create assessment reviewed notification")
+	assert.NoError(t, dbMock.ExpectationsWereMet())
 }

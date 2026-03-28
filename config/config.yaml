@@ -20,6 +20,7 @@ messaging:
       assessment_notifications: "edugo.assessment.notifications"
     exchanges:
       materials: "edugo.materials"
+      assessments: "edugo.assessments"
     prefetch_count: 5
     dlq:
       enabled: true

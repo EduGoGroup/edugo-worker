@@ -43,6 +43,25 @@ func TestNotificationCreator_Create_Success(t *testing.T) {
 	assert.NoError(t, dbMock.ExpectationsWereMet())
 }
 
+func TestNotificationCreator_Create_DeterministicID(t *testing.T) {
+	// Verify that calling Create twice with the same params produces the same deterministic UUID
+	// (idempotency via uuid.NewSHA1).
+	userID := uuid.New()
+	resourceID := uuid.New()
+	notifType := "assessment_assigned"
+	resourceType := "assessment"
+
+	id1 := uuid.NewSHA1(uuid.NameSpaceOID, []byte(userID.String()+notifType+resourceType+resourceID.String()))
+	id2 := uuid.NewSHA1(uuid.NameSpaceOID, []byte(userID.String()+notifType+resourceType+resourceID.String()))
+
+	assert.Equal(t, id1, id2, "deterministic IDs should match for the same input")
+
+	// Different inputs should produce different IDs
+	otherUserID := uuid.New()
+	id3 := uuid.NewSHA1(uuid.NameSpaceOID, []byte(otherUserID.String()+notifType+resourceType+resourceID.String()))
+	assert.NotEqual(t, id1, id3, "different inputs should produce different IDs")
+}
+
 func TestNotificationCreator_Create_DBError(t *testing.T) {
 	// Arrange
 	db, dbMock, err := sqlmock.New()

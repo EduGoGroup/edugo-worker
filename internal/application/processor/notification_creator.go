@@ -21,10 +21,14 @@ func NewNotificationCreator(db *sql.DB, logger logger.Logger) *NotificationCreat
 }
 
 // Create inserts a single notification row into notifications.notifications.
+// The notification ID is derived deterministically from (userID, notifType, resourceType, resourceID)
+// so that duplicate events (e.g. DLQ retries) produce the same ID and are silently ignored
+// via ON CONFLICT (id) DO NOTHING.
 func (nc *NotificationCreator) Create(ctx context.Context, userID uuid.UUID, notifType, title, body, resourceType string, resourceID uuid.UUID) error {
-	id := uuid.New()
+	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte(userID.String()+notifType+resourceType+resourceID.String()))
 	query := `INSERT INTO notifications.notifications (id, user_id, type, title, body, resource_type, resource_id, is_read, created_at)
-	          VALUES ($1, $2, $3, $4, $5, $6, $7, false, NOW())`
+	          VALUES ($1, $2, $3, $4, $5, $6, $7, false, NOW())
+	          ON CONFLICT (id) DO NOTHING`
 
 	_, err := nc.db.ExecContext(ctx, query, id, userID, notifType, title, body, resourceType, resourceID)
 	if err != nil {
