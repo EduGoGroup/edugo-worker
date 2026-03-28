@@ -82,8 +82,9 @@ func (c DLQConfig) ToShared() rabbit.DLQConfig {
 }
 
 type QueuesConfig struct {
-	MaterialUploaded  string `mapstructure:"material_uploaded"`
-	AssessmentAttempt string `mapstructure:"assessment_attempt"`
+	MaterialUploaded        string `mapstructure:"material_uploaded"`
+	AssessmentAttempt       string `mapstructure:"assessment_attempt"`
+	AssessmentNotifications string `mapstructure:"assessment_notifications"`
 }
 
 type ExchangeConfig struct {

@@ -17,6 +17,7 @@ messaging:
     queues:
       material_uploaded: "edugo.material.uploaded"
       assessment_attempt: "edugo.assessment.attempt"
+      assessment_notifications: "edugo.assessment.notifications"
     exchanges:
       materials: "edugo.materials"
     prefetch_count: 5

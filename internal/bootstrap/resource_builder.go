@@ -366,6 +366,12 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(b.logger)
 	studentEnrolledProc := processor.NewStudentEnrolledProcessor(b.logger)
 
+	// Crear notification creator y processors de notificaciones
+	notifCreator := processor.NewNotificationCreator(b.sqlDB, b.logger)
+	assessmentAssignedNotifProc := processor.NewAssessmentAssignedNotifProcessor(notifCreator, b.logger)
+	assessmentAttemptNotifProc := processor.NewAssessmentAttemptNotifProcessor(notifCreator, b.logger)
+	assessmentReviewedNotifProc := processor.NewAssessmentReviewedNotifProcessor(notifCreator, b.logger)
+
 	// Crear registry
 	registry := processor.NewRegistry(b.logger)
 
@@ -375,6 +381,11 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	registry.Register(materialDeletedProc)
 	registry.Register(assessmentAttemptProc)
 	registry.Register(studentEnrolledProc)
+
+	// Registrar processors de notificaciones de evaluaciones
+	registry.Register(assessmentAssignedNotifProc)
+	registry.Register(assessmentAttemptNotifProc)
+	registry.Register(assessmentReviewedNotifProc)
 
 	// Guardar referencia
 	b.processorRegistry = registry
