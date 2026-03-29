@@ -23,7 +23,7 @@ func TestAssessmentAssignedNotifProcessor_EventType(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	nc := NewNotificationCreator(db, logger)
-	proc := NewAssessmentAssignedNotifProcessor(nc, logger)
+	proc := NewAssessmentAssignedNotifProcessor(db, nc, logger)
 
 	assert.Equal(t, "assessment.assigned", proc.EventType())
 }
@@ -36,7 +36,7 @@ func TestAssessmentAssignedNotifProcessor_StudentTarget_Success(t *testing.T) {
 
 	logger := newTestLogger()
 	nc := NewNotificationCreator(db, logger)
-	proc := NewAssessmentAssignedNotifProcessor(nc, logger)
+	proc := NewAssessmentAssignedNotifProcessor(db, nc, logger)
 
 	studentID := uuid.New()
 	assessmentID := uuid.New()
@@ -79,7 +79,7 @@ func TestAssessmentAssignedNotifProcessor_StudentTarget_Success(t *testing.T) {
 	assert.NoError(t, dbMock.ExpectationsWereMet())
 }
 
-func TestAssessmentAssignedNotifProcessor_UnitTarget_Skips(t *testing.T) {
+func TestAssessmentAssignedNotifProcessor_UnitTarget_Success(t *testing.T) {
 	// Arrange
 	db, dbMock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -87,10 +87,86 @@ func TestAssessmentAssignedNotifProcessor_UnitTarget_Skips(t *testing.T) {
 
 	logger := newTestLogger()
 	nc := NewNotificationCreator(db, logger)
-	proc := NewAssessmentAssignedNotifProcessor(nc, logger)
+	proc := NewAssessmentAssignedNotifProcessor(db, nc, logger)
+
+	unitID := uuid.New()
+	assessmentID := uuid.New()
+	student1 := uuid.New()
+	student2 := uuid.New()
 
 	event := dto.AssessmentAssignedNotifEvent{
 		EventID:      "evt-002",
+		EventType:    "assessment.assigned",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.AssessmentAssignedNotifPayload{
+			AssessmentID: assessmentID.String(),
+			AssignmentID: uuid.New().String(),
+			SchoolID:     uuid.New().String(),
+			AssignedByID: uuid.New().String(),
+			TargetType:   "unit",
+			TargetID:     unitID.String(),
+			Title:        "Examen de Historia",
+		},
+	}
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	// Expect membership query to return 2 students
+	rows := sqlmock.NewRows([]string{"user_id"}).
+		AddRow(student1).
+		AddRow(student2)
+	dbMock.ExpectQuery("SELECT user_id FROM academic.memberships").
+		WithArgs(unitID).
+		WillReturnRows(rows)
+
+	// Expect one INSERT per student
+	dbMock.ExpectExec("INSERT INTO notifications.notifications").
+		WithArgs(
+			sqlmock.AnyArg(),
+			student1,
+			"assessment_assigned",
+			"Nueva evaluacion asignada",
+			"Te han asignado: Examen de Historia",
+			"assessment",
+			assessmentID,
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	dbMock.ExpectExec("INSERT INTO notifications.notifications").
+		WithArgs(
+			sqlmock.AnyArg(),
+			student2,
+			"assessment_assigned",
+			"Nueva evaluacion asignada",
+			"Te han asignado: Examen de Historia",
+			"assessment",
+			assessmentID,
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Act
+	err = proc.Process(context.Background(), payload)
+
+	// Assert
+	assert.NoError(t, err)
+	assert.NoError(t, dbMock.ExpectationsWereMet())
+}
+
+func TestAssessmentAssignedNotifProcessor_UnitTarget_NoStudents(t *testing.T) {
+	// Arrange
+	db, dbMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	logger := newTestLogger()
+	nc := NewNotificationCreator(db, logger)
+	proc := NewAssessmentAssignedNotifProcessor(db, nc, logger)
+
+	unitID := uuid.New()
+
+	event := dto.AssessmentAssignedNotifEvent{
+		EventID:      "evt-002b",
 		EventType:    "assessment.assigned",
 		EventVersion: "1.0.0",
 		Timestamp:    time.Now(),
@@ -100,8 +176,170 @@ func TestAssessmentAssignedNotifProcessor_UnitTarget_Skips(t *testing.T) {
 			SchoolID:     uuid.New().String(),
 			AssignedByID: uuid.New().String(),
 			TargetType:   "unit",
-			TargetID:     uuid.New().String(),
+			TargetID:     unitID.String(),
 			Title:        "Examen de Historia",
+		},
+	}
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	// Return empty result set
+	rows := sqlmock.NewRows([]string{"user_id"})
+	dbMock.ExpectQuery("SELECT user_id FROM academic.memberships").
+		WithArgs(unitID).
+		WillReturnRows(rows)
+
+	// Act
+	err = proc.Process(context.Background(), payload)
+
+	// Assert — no INSERT should have been called
+	assert.NoError(t, err)
+	assert.NoError(t, dbMock.ExpectationsWereMet())
+}
+
+func TestAssessmentAssignedNotifProcessor_UnitTarget_PartialDBError(t *testing.T) {
+	// Arrange
+	db, dbMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	logger := newTestLogger()
+	nc := NewNotificationCreator(db, logger)
+	proc := NewAssessmentAssignedNotifProcessor(db, nc, logger)
+
+	unitID := uuid.New()
+	assessmentID := uuid.New()
+	student1 := uuid.New()
+	student2 := uuid.New()
+
+	event := dto.AssessmentAssignedNotifEvent{
+		EventID:      "evt-002c",
+		EventType:    "assessment.assigned",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.AssessmentAssignedNotifPayload{
+			AssessmentID: assessmentID.String(),
+			AssignmentID: uuid.New().String(),
+			SchoolID:     uuid.New().String(),
+			AssignedByID: uuid.New().String(),
+			TargetType:   "unit",
+			TargetID:     unitID.String(),
+			Title:        "Examen Parcial Fallido",
+		},
+	}
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	// Return 2 students
+	rows := sqlmock.NewRows([]string{"user_id"}).
+		AddRow(student1).
+		AddRow(student2)
+	dbMock.ExpectQuery("SELECT user_id FROM academic.memberships").
+		WithArgs(unitID).
+		WillReturnRows(rows)
+
+	// First student succeeds
+	dbMock.ExpectExec("INSERT INTO notifications.notifications").
+		WithArgs(
+			sqlmock.AnyArg(),
+			student1,
+			"assessment_assigned",
+			"Nueva evaluacion asignada",
+			"Te han asignado: Examen Parcial Fallido",
+			"assessment",
+			assessmentID,
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Second student fails
+	dbMock.ExpectExec("INSERT INTO notifications.notifications").
+		WithArgs(
+			sqlmock.AnyArg(),
+			student2,
+			"assessment_assigned",
+			"Nueva evaluacion asignada",
+			"Te han asignado: Examen Parcial Fallido",
+			"assessment",
+			assessmentID,
+		).
+		WillReturnError(fmt.Errorf("connection refused"))
+
+	// Act
+	err = proc.Process(context.Background(), payload)
+
+	// Assert — partial failure
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "failed to notify 1/2 students")
+	assert.NoError(t, dbMock.ExpectationsWereMet())
+}
+
+func TestAssessmentAssignedNotifProcessor_UnitTarget_QueryError(t *testing.T) {
+	// Arrange
+	db, dbMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	logger := newTestLogger()
+	nc := NewNotificationCreator(db, logger)
+	proc := NewAssessmentAssignedNotifProcessor(db, nc, logger)
+
+	unitID := uuid.New()
+
+	event := dto.AssessmentAssignedNotifEvent{
+		EventID:      "evt-002d",
+		EventType:    "assessment.assigned",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.AssessmentAssignedNotifPayload{
+			AssessmentID: uuid.New().String(),
+			AssignmentID: uuid.New().String(),
+			SchoolID:     uuid.New().String(),
+			AssignedByID: uuid.New().String(),
+			TargetType:   "unit",
+			TargetID:     unitID.String(),
+			Title:        "Examen Query Fallida",
+		},
+	}
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	// Membership query fails
+	dbMock.ExpectQuery("SELECT user_id FROM academic.memberships").
+		WithArgs(unitID).
+		WillReturnError(fmt.Errorf("connection refused"))
+
+	// Act
+	err = proc.Process(context.Background(), payload)
+
+	// Assert
+	assert.Error(t, err)
+	assert.Contains(t, err.Error(), "resolving unit students")
+	assert.NoError(t, dbMock.ExpectationsWereMet())
+}
+
+func TestAssessmentAssignedNotifProcessor_UnsupportedTargetType(t *testing.T) {
+	// Arrange
+	db, dbMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	logger := newTestLogger()
+	nc := NewNotificationCreator(db, logger)
+	proc := NewAssessmentAssignedNotifProcessor(db, nc, logger)
+
+	event := dto.AssessmentAssignedNotifEvent{
+		EventID:      "evt-002e",
+		EventType:    "assessment.assigned",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: dto.AssessmentAssignedNotifPayload{
+			AssessmentID: uuid.New().String(),
+			AssignmentID: uuid.New().String(),
+			SchoolID:     uuid.New().String(),
+			AssignedByID: uuid.New().String(),
+			TargetType:   "school",
+			TargetID:     uuid.New().String(),
+			Title:        "Examen Global",
 		},
 	}
 	payload, err := json.Marshal(event)
@@ -110,7 +348,7 @@ func TestAssessmentAssignedNotifProcessor_UnitTarget_Skips(t *testing.T) {
 	// Act
 	err = proc.Process(context.Background(), payload)
 
-	// Assert — no INSERT should have been called
+	// Assert — unsupported target_type is silently skipped
 	assert.NoError(t, err)
 	assert.NoError(t, dbMock.ExpectationsWereMet())
 }
@@ -122,7 +360,7 @@ func TestAssessmentAssignedNotifProcessor_InvalidJSON(t *testing.T) {
 
 	logger := newTestLogger()
 	nc := NewNotificationCreator(db, logger)
-	proc := NewAssessmentAssignedNotifProcessor(nc, logger)
+	proc := NewAssessmentAssignedNotifProcessor(db, nc, logger)
 
 	err = proc.Process(context.Background(), []byte(`{"invalid json}`))
 
@@ -138,7 +376,7 @@ func TestAssessmentAssignedNotifProcessor_DBError(t *testing.T) {
 
 	logger := newTestLogger()
 	nc := NewNotificationCreator(db, logger)
-	proc := NewAssessmentAssignedNotifProcessor(nc, logger)
+	proc := NewAssessmentAssignedNotifProcessor(db, nc, logger)
 
 	studentID := uuid.New()
 	assessmentID := uuid.New()

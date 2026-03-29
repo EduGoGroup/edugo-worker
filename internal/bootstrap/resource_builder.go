@@ -368,7 +368,7 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 
 	// Crear notification creator y processors de notificaciones
 	notifCreator := processor.NewNotificationCreator(b.sqlDB, b.logger)
-	assessmentAssignedNotifProc := processor.NewAssessmentAssignedNotifProcessor(notifCreator, b.logger)
+	assessmentAssignedNotifProc := processor.NewAssessmentAssignedNotifProcessor(b.sqlDB, notifCreator, b.logger)
 	assessmentAttemptNotifProc := processor.NewAssessmentAttemptNotifProcessor(notifCreator, b.logger)
 	assessmentReviewedNotifProc := processor.NewAssessmentReviewedNotifProcessor(notifCreator, b.logger)
 
