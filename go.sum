@@ -6,8 +6,8 @@ github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c h1:udKWzYgxTojEK
 github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7OputlJIzU=
 github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
-github.com/EduGoGroup/edugo-infrastructure/mongodb v0.56.0 h1:gQ1CengR27mjrj3J0ME75LeReOc3xVku1+ijZVGTgQg=
-github.com/EduGoGroup/edugo-infrastructure/mongodb v0.56.0/go.mod h1:NtAoIT2idANiKkrQSXtdnp/nQjggjzsMNX7YqLGAucs=
+github.com/EduGoGroup/edugo-infrastructure/mongodb v0.57.0 h1:O+A91XOZ7ovX8qAK3pVovT2wsaM0dlkHyAJ8brqnyt4=
+github.com/EduGoGroup/edugo-infrastructure/mongodb v0.57.0/go.mod h1:NtAoIT2idANiKkrQSXtdnp/nQjggjzsMNX7YqLGAucs=
 github.com/EduGoGroup/edugo-shared/bootstrap v0.51.0 h1:D8CkHC07QbXTtlafyQ3mytljkYoaKBjqW7QdGPq1+PQ=
 github.com/EduGoGroup/edugo-shared/bootstrap v0.51.0/go.mod h1:AbOsuSZymJcv4NZR3g06yAif9tdMN7hAbSkaFcmCJ7g=
 github.com/EduGoGroup/edugo-shared/common v0.58.0 h1:WGT/scHP1H1/AtKfNAaeI/eG12PIPiVai2smbKApq1Y=
