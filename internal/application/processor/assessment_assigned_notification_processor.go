@@ -166,7 +166,7 @@ func (p *AssessmentAssignedNotifProcessor) resolveStudentIDs(ctx context.Context
 	if err != nil {
 		return nil, fmt.Errorf("querying enrolled students: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var studentIDs []uuid.UUID
 	for rows.Next() {
