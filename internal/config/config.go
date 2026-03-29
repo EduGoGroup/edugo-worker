@@ -82,12 +82,14 @@ func (c DLQConfig) ToShared() rabbit.DLQConfig {
 }
 
 type QueuesConfig struct {
-	MaterialUploaded  string `mapstructure:"material_uploaded"`
-	AssessmentAttempt string `mapstructure:"assessment_attempt"`
+	MaterialUploaded        string `mapstructure:"material_uploaded"`
+	AssessmentAttempt       string `mapstructure:"assessment_attempt"`
+	AssessmentNotifications string `mapstructure:"assessment_notifications"`
 }
 
 type ExchangeConfig struct {
-	Materials string `mapstructure:"materials"`
+	Materials   string `mapstructure:"materials"`
+	Assessments string `mapstructure:"assessments"`
 }
 
 type NLPConfig struct {
@@ -338,6 +340,26 @@ func (c *Config) GetDLQConfigWithDefaults() DLQConfig {
 		cfg.UseExponentialBackoff = true
 	}
 
+	return cfg
+}
+
+// GetAssessmentDLQConfigWithDefaults retorna la configuración DLQ específica para assessment notifications
+func (c *Config) GetAssessmentDLQConfigWithDefaults() DLQConfig {
+	// Reusar la misma configuración base pero con routing key propio
+	cfg := c.GetDLQConfigWithDefaults()
+	cfg.DLXRoutingKey = "edugo.assessment.notification.dlq"
+	return cfg
+}
+
+// GetExchangesConfigWithDefaults retorna la configuración de exchanges con valores por defecto
+func (c *Config) GetExchangesConfigWithDefaults() ExchangeConfig {
+	cfg := c.Messaging.RabbitMQ.Exchanges
+	if cfg.Materials == "" {
+		cfg.Materials = "edugo.materials"
+	}
+	if cfg.Assessments == "" {
+		cfg.Assessments = "edugo.assessments"
+	}
 	return cfg
 }
 
