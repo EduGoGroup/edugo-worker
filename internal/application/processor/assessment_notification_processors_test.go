@@ -116,7 +116,7 @@ func TestAssessmentAssignedNotifProcessor_UnitTarget_Success(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"user_id"}).
 		AddRow(student1).
 		AddRow(student2)
-	dbMock.ExpectQuery("SELECT user_id FROM academic.memberships").
+	dbMock.ExpectQuery("SELECT DISTINCT user_id FROM academic.memberships").
 		WithArgs(unitID).
 		WillReturnRows(rows)
 
@@ -185,7 +185,7 @@ func TestAssessmentAssignedNotifProcessor_UnitTarget_NoStudents(t *testing.T) {
 
 	// Return empty result set
 	rows := sqlmock.NewRows([]string{"user_id"})
-	dbMock.ExpectQuery("SELECT user_id FROM academic.memberships").
+	dbMock.ExpectQuery("SELECT DISTINCT user_id FROM academic.memberships").
 		WithArgs(unitID).
 		WillReturnRows(rows)
 
@@ -234,7 +234,7 @@ func TestAssessmentAssignedNotifProcessor_UnitTarget_PartialDBError(t *testing.T
 	rows := sqlmock.NewRows([]string{"user_id"}).
 		AddRow(student1).
 		AddRow(student2)
-	dbMock.ExpectQuery("SELECT user_id FROM academic.memberships").
+	dbMock.ExpectQuery("SELECT DISTINCT user_id FROM academic.memberships").
 		WithArgs(unitID).
 		WillReturnRows(rows)
 
@@ -304,7 +304,7 @@ func TestAssessmentAssignedNotifProcessor_UnitTarget_QueryError(t *testing.T) {
 	require.NoError(t, err)
 
 	// Membership query fails
-	dbMock.ExpectQuery("SELECT user_id FROM academic.memberships").
+	dbMock.ExpectQuery("SELECT DISTINCT user_id FROM academic.memberships").
 		WithArgs(unitID).
 		WillReturnError(fmt.Errorf("connection refused"))
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 
 	"github.com/EduGoGroup/edugo-shared/common/errors"
@@ -119,6 +120,11 @@ func (p *AssessmentAssignedNotifProcessor) notifyUnit(ctx context.Context, pl dt
 	title := "Nueva evaluacion asignada"
 	body := fmt.Sprintf("Te han asignado: %s", pl.Title)
 
+	// TODO: Replace individual Create calls with a batch INSERT (NotificationCreator.CreateBatch)
+	// once the NotificationCreator API supports it. Currently, each Create() computes a
+	// deterministic SHA1-based UUID internally, making it non-trivial to build a multi-row
+	// INSERT externally without duplicating that logic. For typical class sizes (< 50 students)
+	// the overhead is acceptable, but for large units this should be optimised.
 	var errs []error
 	for _, studentID := range studentIDs {
 		if err := p.nc.Create(ctx, studentID, "assessment_assigned", title, body, "assessment", assessmentID); err != nil {
@@ -139,7 +145,8 @@ func (p *AssessmentAssignedNotifProcessor) notifyUnit(ctx context.Context, pl dt
 	)
 
 	if len(errs) > 0 {
-		return fmt.Errorf("failed to notify %d/%d students in unit %s", len(errs), len(studentIDs), unitID)
+		summary := fmt.Errorf("failed to notify %d/%d students in unit %s", len(errs), len(studentIDs), unitID)
+		return stderrors.Join(append([]error{summary}, errs...)...)
 	}
 	return nil
 }
@@ -147,7 +154,7 @@ func (p *AssessmentAssignedNotifProcessor) notifyUnit(ctx context.Context, pl dt
 // resolveStudentIDs returns the user IDs of all active students enrolled in
 // the given academic unit by querying academic.memberships.
 func (p *AssessmentAssignedNotifProcessor) resolveStudentIDs(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error) {
-	const query = `SELECT user_id FROM academic.memberships
+	const query = `SELECT DISTINCT user_id FROM academic.memberships
 	               WHERE academic_unit_id = $1 AND role = 'student' AND is_active = true`
 
 	rows, err := p.db.QueryContext(ctx, query, unitID)
