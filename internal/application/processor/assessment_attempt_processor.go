@@ -18,7 +18,7 @@ func NewAssessmentAttemptProcessor(logger logger.Logger) *AssessmentAttemptProce
 }
 
 func (p *AssessmentAttemptProcessor) EventType() string {
-	return "assessment_attempt"
+	return "assessment.attempt"
 }
 
 func (p *AssessmentAttemptProcessor) Process(ctx context.Context, payload []byte) error {

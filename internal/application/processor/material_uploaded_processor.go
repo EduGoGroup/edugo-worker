@@ -82,7 +82,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 
 	// 1. Actualizar estado a processing
 	_, err = p.db.ExecContext(ctx,
-		"UPDATE materials SET processing_status = $1, updated_at = NOW() WHERE id = $2",
+		"UPDATE content.materials SET status = $1, updated_at = NOW() WHERE id = $2",
 		enum.ProcessingStatusProcessing.String(),
 		materialID.String(),
 	)
@@ -228,7 +228,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		// Actualizar estado a completed
 		pgStart := time.Now()
 		_, err = tx.ExecContext(ctx,
-			"UPDATE materials SET processing_status = $1, updated_at = NOW() WHERE id = $2",
+			"UPDATE content.materials SET status = $1, updated_at = NOW() WHERE id = $2",
 			enum.ProcessingStatusCompleted.String(),
 			materialID.String(),
 		)
@@ -253,24 +253,6 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	return nil
 }
 
-// bsonDocumentSection es el formato BSON para secciones del documento.
-// Corresponde al campo "sections" de MaterialSummary en MongoDB.
-// Se define localmente porque la entidad canónica en edugo-infrastructure
-// aún no incluye este campo (pendiente PR #124).
-type bsonDocumentSection struct {
-	Index   int    `bson:"index"`
-	Title   string `bson:"title"`
-	Content string `bson:"content"`
-	Preview string `bson:"preview"`
-}
-
-// materialSummaryWithSections extiende MaterialSummary con el campo Sections.
-// Embebe la entidad canónica y agrega secciones como campo BSON adicional.
-type materialSummaryWithSections struct {
-	mongoentities.MaterialSummary `bson:",inline"`
-	Sections                      []bsonDocumentSection `bson:"sections,omitempty"`
-}
-
 // buildSummaryDocWithSections construye el documento MaterialSummary con secciones a partir del output del NLP.
 // El NLP devuelve MainIdeas []string y KeyConcepts map[string]string;
 // se mapean al schema canónico (Summary string, KeyPoints []string).
@@ -281,7 +263,7 @@ func (p *MaterialUploadedProcessor) buildSummaryDocWithSections(
 	sourceText string,
 	processingMs int,
 	now time.Time,
-) materialSummaryWithSections {
+) mongoentities.MaterialSummary {
 	// Convertir MainIdeas a un párrafo de resumen principal
 	summaryText := strings.Join(summary.MainIdeas, ". ")
 
@@ -291,12 +273,12 @@ func (p *MaterialUploadedProcessor) buildSummaryDocWithSections(
 		keyPoints = append(keyPoints, concept)
 	}
 
-	// Convertir secciones NLP a formato BSON
-	var bsonSections []bsonDocumentSection
+	// Convertir secciones NLP a entidad canónica
+	var docSections []mongoentities.DocumentSection
 	if len(sections) > 0 {
-		bsonSections = make([]bsonDocumentSection, len(sections))
+		docSections = make([]mongoentities.DocumentSection, len(sections))
 		for i, s := range sections {
-			bsonSections[i] = bsonDocumentSection{
+			docSections[i] = mongoentities.DocumentSection{
 				Index:   s.Index,
 				Title:   s.Title,
 				Content: s.Content,
@@ -305,30 +287,28 @@ func (p *MaterialUploadedProcessor) buildSummaryDocWithSections(
 		}
 	}
 
-	return materialSummaryWithSections{
-		MaterialSummary: mongoentities.MaterialSummary{
-			MaterialID:       materialID,
-			Summary:          summaryText,
-			KeyPoints:        keyPoints,
-			Language:         "es",
-			WordCount:        summary.WordCount,
-			Version:          1,
-			AIModel:          p.aiModel,
-			ProcessingTimeMs: processingMs,
-			Metadata: &mongoentities.SummaryMetadata{
-				SourceLength: len(sourceText),
-			},
-			CreatedAt: now,
-			UpdatedAt: now,
+	return mongoentities.MaterialSummary{
+		MaterialID:       materialID,
+		Summary:          summaryText,
+		KeyPoints:        keyPoints,
+		Language:         "es",
+		WordCount:        summary.WordCount,
+		Version:          1,
+		AIModel:          p.aiModel,
+		ProcessingTimeMs: processingMs,
+		Metadata: &mongoentities.SummaryMetadata{
+			SourceLength: len(sourceText),
 		},
-		Sections: bsonSections,
+		Sections:  docSections,
+		CreatedAt: now,
+		UpdatedAt: now,
 	}
 }
 
 // updateStatusToFailed actualiza el estado del material a failed
 func (p *MaterialUploadedProcessor) updateStatusToFailed(ctx context.Context, materialID string) {
 	_, err := p.db.ExecContext(ctx,
-		"UPDATE materials SET processing_status = $1, updated_at = NOW() WHERE id = $2",
+		"UPDATE content.materials SET status = $1, updated_at = NOW() WHERE id = $2",
 		enum.ProcessingStatusFailed.String(),
 		materialID,
 	)
@@ -339,7 +319,7 @@ func (p *MaterialUploadedProcessor) updateStatusToFailed(ctx context.Context, ma
 
 // EventType implementa la interfaz Processor
 func (p *MaterialUploadedProcessor) EventType() string {
-	return "material_uploaded"
+	return "material.uploaded"
 }
 
 // Process implementa la interfaz Processor
