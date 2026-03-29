@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	stderrors "errors"
 	"fmt"
+	"time"
 
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/logger"
@@ -94,6 +95,10 @@ func (p *AssessmentAssignedNotifProcessor) notifyStudent(ctx context.Context, pl
 // creates a notification for each one. Partial failures are aggregated and
 // returned as a single error; students that succeed are not rolled back.
 func (p *AssessmentAssignedNotifProcessor) notifyUnit(ctx context.Context, pl dto.AssessmentAssignedNotifPayload) error {
+	// Timeout for bulk notification operations (200 students * ~50ms each = ~10s max)
+	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
+	defer cancel()
+
 	unitID, err := uuid.Parse(pl.TargetID)
 	if err != nil {
 		return fmt.Errorf("invalid target_id (unit): %w", err)
@@ -110,7 +115,7 @@ func (p *AssessmentAssignedNotifProcessor) notifyUnit(ctx context.Context, pl dt
 	}
 
 	if len(studentIDs) == 0 {
-		p.logger.Warn("unit has no enrolled students",
+		p.logger.Info("unit has no enrolled students",
 			"unit_id", unitID.String(),
 			"assessment_id", assessmentID.String(),
 		)
