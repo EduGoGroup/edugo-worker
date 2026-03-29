@@ -82,7 +82,7 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 
 	// 1. Actualizar estado a processing
 	_, err = p.db.ExecContext(ctx,
-		"UPDATE materials SET processing_status = $1, updated_at = NOW() WHERE id = $2",
+		"UPDATE content.materials SET status = $1, updated_at = NOW() WHERE id = $2",
 		enum.ProcessingStatusProcessing.String(),
 		materialID.String(),
 	)
@@ -192,35 +192,22 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		return errors.NewInternalError("failed to generate summary", err)
 	}
 
-	// 5. Generar quiz con NLP con retry logic
-	p.logger.Debug("generando quiz con NLP")
-	nlpQuizStart := time.Now()
-
-	var quiz *nlp.Quiz
-	err = WithRetry(ctx, retryCfg, func() error {
-		var quizErr error
-		quiz, quizErr = p.nlpClient.GenerateQuiz(ctx, extractedText, 10)
-		return quizErr
+	// 5. Extraer secciones del texto (opcional — no falla el pipeline)
+	p.logger.Debug("extrayendo secciones del texto")
+	var documentSections []nlp.DocumentSection
+	sectionsErr := WithRetry(ctx, retryCfg, func() error {
+		var extractErr error
+		documentSections, extractErr = p.nlpClient.ExtractSections(ctx, extractedText)
+		return extractErr
 	})
-
-	nlpQuizStatus := "success"
-	if err != nil {
-		nlpQuizStatus = "error"
-	}
-	estimatedQuizTokens := estimateTokens(extractedText)
-	metrics.RecordOpenAIRequest(nlpQuizStatus, time.Since(nlpQuizStart).Seconds(), estimatedQuizTokens)
-	quizProcessingMs := int(time.Since(nlpQuizStart).Milliseconds())
-
-	if err != nil {
-		p.updateStatusToFailed(ctx, materialID.String())
-		p.logger.Error("error generando quiz con NLP",
-			"error", err,
-			"errorType", classifyError(err),
-			"textLength", len(extractedText),
+	if sectionsErr != nil {
+		p.logger.Warn("error extrayendo secciones, continuando sin secciones",
+			"error", sectionsErr,
+			"material_id", event.GetMaterialID(),
 		)
-		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
-		metrics.RecordEventProcessed("material_uploaded", "nlp_quiz_error")
-		return errors.NewInternalError("failed to generate quiz", err)
+		documentSections = nil
+	} else {
+		p.logger.Info("secciones extraídas", "count", len(documentSections))
 	}
 
 	// 6. Guardar en MongoDB usando entidades canónicas
@@ -228,9 +215,9 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	err = postgres.WithTransaction(ctx, p.db, func(tx *sql.Tx) error {
 		now := time.Now()
 
-		// Guardar resumen en MongoDB usando la entidad canónica MaterialSummary
+		// Guardar resumen + secciones en MongoDB
 		mongoStart := time.Now()
-		summaryDoc := p.buildSummaryDoc(event.GetMaterialID(), summary, extractedText, summaryProcessingMs, now)
+		summaryDoc := p.buildSummaryDocWithSections(event.GetMaterialID(), summary, documentSections, extractedText, summaryProcessingMs, now)
 		summaryCol := p.mongodb.Collection(mongoentities.MaterialSummary{}.CollectionName())
 		_, err = summaryCol.InsertOne(ctx, summaryDoc)
 		metrics.RecordDatabaseOperation("mongodb", "insert", time.Since(mongoStart).Seconds(), err == nil)
@@ -238,20 +225,10 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 			return fmt.Errorf("inserting summary: %w", err)
 		}
 
-		// Guardar quiz en MongoDB usando la entidad canónica MaterialAssessment
-		mongoStart = time.Now()
-		assessmentDoc := p.buildAssessmentDoc(event.GetMaterialID(), quiz, extractedText, quizProcessingMs, now)
-		assessmentCol := p.mongodb.Collection(mongoentities.MaterialAssessment{}.CollectionName())
-		_, err = assessmentCol.InsertOne(ctx, assessmentDoc)
-		metrics.RecordDatabaseOperation("mongodb", "insert", time.Since(mongoStart).Seconds(), err == nil)
-		if err != nil {
-			return fmt.Errorf("inserting assessment: %w", err)
-		}
-
 		// Actualizar estado a completed
 		pgStart := time.Now()
 		_, err = tx.ExecContext(ctx,
-			"UPDATE materials SET processing_status = $1, updated_at = NOW() WHERE id = $2",
+			"UPDATE content.materials SET status = $1, updated_at = NOW() WHERE id = $2",
 			enum.ProcessingStatusCompleted.String(),
 			materialID.String(),
 		)
@@ -276,12 +253,13 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	return nil
 }
 
-// buildSummaryDoc construye el documento MaterialSummary a partir del output del NLP.
+// buildSummaryDocWithSections construye el documento MaterialSummary con secciones a partir del output del NLP.
 // El NLP devuelve MainIdeas []string y KeyConcepts map[string]string;
 // se mapean al schema canónico (Summary string, KeyPoints []string).
-func (p *MaterialUploadedProcessor) buildSummaryDoc(
+func (p *MaterialUploadedProcessor) buildSummaryDocWithSections(
 	materialID string,
 	summary *nlp.Summary,
+	sections []nlp.DocumentSection,
 	sourceText string,
 	processingMs int,
 	now time.Time,
@@ -293,6 +271,20 @@ func (p *MaterialUploadedProcessor) buildSummaryDoc(
 	keyPoints := make([]string, 0, len(summary.KeyConcepts))
 	for concept := range summary.KeyConcepts {
 		keyPoints = append(keyPoints, concept)
+	}
+
+	// Convertir secciones NLP a entidad canónica
+	var docSections []mongoentities.DocumentSection
+	if len(sections) > 0 {
+		docSections = make([]mongoentities.DocumentSection, len(sections))
+		for i, s := range sections {
+			docSections[i] = mongoentities.DocumentSection{
+				Index:   s.Index,
+				Title:   s.Title,
+				Content: s.Content,
+				Preview: s.Preview,
+			}
+		}
 	}
 
 	return mongoentities.MaterialSummary{
@@ -307,55 +299,7 @@ func (p *MaterialUploadedProcessor) buildSummaryDoc(
 		Metadata: &mongoentities.SummaryMetadata{
 			SourceLength: len(sourceText),
 		},
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-}
-
-// buildAssessmentDoc construye el documento MaterialAssessment a partir del output del NLP.
-func (p *MaterialUploadedProcessor) buildAssessmentDoc(
-	materialID string,
-	quiz *nlp.Quiz,
-	sourceText string,
-	processingMs int,
-	now time.Time,
-) mongoentities.MaterialAssessment {
-	questions := make([]mongoentities.Question, len(quiz.Questions))
-	totalPoints := 0
-
-	for i, q := range quiz.Questions {
-		options := make([]mongoentities.Option, len(q.Options))
-		for j, opt := range q.Options {
-			options[j] = mongoentities.Option{
-				OptionID:   fmt.Sprintf("opt_%d", j+1),
-				OptionText: opt,
-			}
-		}
-		questions[i] = mongoentities.Question{
-			QuestionID:    q.ID,
-			QuestionText:  q.QuestionText,
-			QuestionType:  q.QuestionType,
-			Options:       options,
-			CorrectAnswer: q.CorrectAnswer,
-			Explanation:   q.Explanation,
-			Points:        q.Points,
-			Difficulty:    q.Difficulty,
-		}
-		totalPoints += q.Points
-	}
-
-	return mongoentities.MaterialAssessment{
-		MaterialID:       materialID,
-		Questions:        questions,
-		TotalQuestions:   len(questions),
-		TotalPoints:      totalPoints,
-		Version:          1,
-		AIModel:          p.aiModel,
-		ProcessingTimeMs: processingMs,
-		Metadata: &mongoentities.AssessmentMetadata{
-			SourceLength:     len(sourceText),
-			EstimatedTimeMin: len(questions) * 2,
-		},
+		Sections:  docSections,
 		CreatedAt: now,
 		UpdatedAt: now,
 	}
@@ -364,7 +308,7 @@ func (p *MaterialUploadedProcessor) buildAssessmentDoc(
 // updateStatusToFailed actualiza el estado del material a failed
 func (p *MaterialUploadedProcessor) updateStatusToFailed(ctx context.Context, materialID string) {
 	_, err := p.db.ExecContext(ctx,
-		"UPDATE materials SET processing_status = $1, updated_at = NOW() WHERE id = $2",
+		"UPDATE content.materials SET status = $1, updated_at = NOW() WHERE id = $2",
 		enum.ProcessingStatusFailed.String(),
 		materialID,
 	)
@@ -375,7 +319,7 @@ func (p *MaterialUploadedProcessor) updateStatusToFailed(ctx context.Context, ma
 
 // EventType implementa la interfaz Processor
 func (p *MaterialUploadedProcessor) EventType() string {
-	return "material_uploaded"
+	return "material.uploaded"
 }
 
 // Process implementa la interfaz Processor

@@ -2,12 +2,12 @@ package constants
 
 // EventType constants - Tipos de eventos de auditoría
 const (
-	EventTypeMaterialUploaded  = "material_uploaded"
-	EventTypeMaterialReprocess = "material_reprocess"
-	EventTypeMaterialDeleted   = "material_deleted"
-	EventTypeAssessmentAttempt = "assessment_attempt"
-	EventTypeStudentEnrolled   = "student_enrolled"
-	EventTypeStudentUnenrolled = "student_unenrolled"
+	EventTypeMaterialUploaded  = "material.uploaded"
+	EventTypeMaterialReprocess = "material.reprocess"
+	EventTypeMaterialDeleted   = "material.deleted"
+	EventTypeAssessmentAttempt = "assessment.attempt"
+	EventTypeStudentEnrolled   = "student.enrolled"
+	EventTypeStudentUnenrolled = "student.unenrolled"
 )
 
 // EventStatus constants - Estados de procesamiento de eventos

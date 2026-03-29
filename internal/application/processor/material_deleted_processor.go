@@ -31,7 +31,7 @@ func NewMaterialDeletedProcessor(mongodb *mongo.Database, logger logger.Logger, 
 }
 
 func (p *MaterialDeletedProcessor) EventType() string {
-	return "material_deleted"
+	return "material.deleted"
 }
 
 func (p *MaterialDeletedProcessor) Process(ctx context.Context, payload []byte) error {

@@ -2,6 +2,8 @@ package fallback
 
 import (
 	"context"
+	"fmt"
+	"strings"
 	"testing"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
@@ -312,6 +314,157 @@ func TestSmartClient_InterfaceCompliance(t *testing.T) {
 		// Si esto compila, el test pasa
 		assert.NotNil(t, client, "El cliente debe ser no nulo")
 		assert.Implements(t, (*nlp.Client)(nil), client, "Debe implementar la interfaz nlp.Client")
+	})
+}
+
+func TestSmartClient_ExtractSections(t *testing.T) {
+	log := createTestLogger()
+	client := NewSmartClient(log)
+	ctx := context.Background()
+
+	t.Run("texto con títulos en MAYÚSCULAS", func(t *testing.T) {
+		text := `INTRODUCCIÓN
+
+La fotosíntesis es un proceso fundamental en la naturaleza.
+Permite a las plantas convertir la luz solar en energía química.
+
+DESARROLLO
+
+El proceso ocurre en los cloroplastos de las células vegetales.
+La clorofila es el pigmento responsable de capturar la energía lumínica.
+El agua y el dióxido de carbono son los reactivos principales.
+
+CONCLUSIÓN
+
+La fotosíntesis es esencial para la vida en la Tierra.
+Sin este proceso, no habría oxígeno en la atmósfera.`
+
+		sections, err := client.ExtractSections(ctx, text)
+		require.NoError(t, err)
+		require.NotNil(t, sections)
+		assert.GreaterOrEqual(t, len(sections), 2, "debe detectar al menos 2 secciones tituladas")
+
+		// Verificar que las secciones tienen estructura válida
+		for i, section := range sections {
+			assert.Equal(t, i, section.Index, "índice debe ser secuencial")
+			assert.NotEmpty(t, section.Title, "cada sección debe tener título")
+			assert.NotEmpty(t, section.Content, "cada sección debe tener contenido")
+			assert.NotEmpty(t, section.Preview, "cada sección debe tener preview")
+		}
+
+		// Verificar que se detectaron los títulos
+		titles := make([]string, len(sections))
+		for i, s := range sections {
+			titles[i] = s.Title
+		}
+		assert.Contains(t, titles, "INTRODUCCIÓN")
+		assert.Contains(t, titles, "DESARROLLO")
+		assert.Contains(t, titles, "CONCLUSIÓN")
+	})
+
+	t.Run("texto con secciones numeradas", func(t *testing.T) {
+		text := `1. Primera sección
+
+Este es el contenido de la primera sección del documento.
+Contiene información importante sobre el tema principal.
+
+2. Segunda sección
+
+Aquí se desarrolla el segundo punto del documento.
+Se amplían los conceptos presentados anteriormente.
+
+3. Tercera sección
+
+Finalmente, se presentan las conclusiones y recomendaciones.
+El análisis demuestra la importancia del tema.`
+
+		sections, err := client.ExtractSections(ctx, text)
+		require.NoError(t, err)
+		require.NotNil(t, sections)
+		assert.GreaterOrEqual(t, len(sections), 3, "debe detectar al menos 3 secciones numeradas")
+
+		for i, section := range sections {
+			assert.Equal(t, i, section.Index)
+			assert.NotEmpty(t, section.Title)
+			assert.NotEmpty(t, section.Content)
+			assert.NotEmpty(t, section.Preview)
+		}
+	})
+
+	t.Run("texto sin estructura genera secciones genéricas", func(t *testing.T) {
+		// Generar texto largo sin estructura (~1500 words)
+		var words []string
+		sampleWords := []string{"educación", "aprendizaje", "conocimiento", "estudiante", "profesor",
+			"clase", "escuela", "libro", "ciencia", "tecnología", "desarrollo", "metodología",
+			"investigación", "análisis", "resultado", "conclusión", "proceso", "evaluación"}
+		for i := 0; i < 1500; i++ {
+			words = append(words, sampleWords[i%len(sampleWords)])
+		}
+		text := ""
+		for i, w := range words {
+			text += w
+			if i < len(words)-1 {
+				text += " "
+			}
+		}
+
+		sections, err := client.ExtractSections(ctx, text)
+		require.NoError(t, err)
+		require.NotNil(t, sections)
+		assert.GreaterOrEqual(t, len(sections), 2, "debe crear al menos 2 secciones genéricas")
+		assert.LessOrEqual(t, len(sections), 5, "no debe crear demasiadas secciones para ~1500 palabras")
+
+		for _, section := range sections {
+			assert.Contains(t, section.Title, "Sección", "secciones genéricas deben titularse 'Sección N'")
+			assert.NotEmpty(t, section.Content)
+			assert.NotEmpty(t, section.Preview)
+		}
+	})
+
+	t.Run("texto muy corto retorna 1 sección", func(t *testing.T) {
+		text := "Este es un texto muy corto con menos de cien palabras. Solo sirve para verificar el caso base."
+
+		sections, err := client.ExtractSections(ctx, text)
+		require.NoError(t, err)
+		require.NotNil(t, sections)
+		assert.Len(t, sections, 1, "texto corto debe generar exactamente 1 sección")
+		assert.Equal(t, 0, sections[0].Index)
+		assert.NotEmpty(t, sections[0].Content)
+		assert.NotEmpty(t, sections[0].Preview)
+	})
+
+	t.Run("texto con 60+ secciones potenciales se limita a 50", func(t *testing.T) {
+		// Generar texto con 60 títulos en mayúsculas
+		var parts []string
+		for i := 1; i <= 60; i++ {
+			title := fmt.Sprintf("SECCIÓN NÚMERO %d", i)
+			body := fmt.Sprintf("Contenido de la sección %d con información relevante.", i)
+			parts = append(parts, title+"\n\n"+body)
+		}
+		text := strings.Join(parts, "\n\n")
+
+		sections, err := client.ExtractSections(ctx, text)
+		require.NoError(t, err)
+		require.NotNil(t, sections)
+		assert.LessOrEqual(t, len(sections), 50, "no debe exceder 50 secciones")
+		assert.GreaterOrEqual(t, len(sections), 1, "debe tener al menos 1 sección")
+
+		// Verificar índices secuenciales
+		for i, section := range sections {
+			assert.Equal(t, i, section.Index, "índices deben ser secuenciales tras merge")
+		}
+	})
+
+	t.Run("texto vacío retorna nil", func(t *testing.T) {
+		sections, err := client.ExtractSections(ctx, "")
+		require.NoError(t, err)
+		assert.Nil(t, sections)
+	})
+
+	t.Run("texto con solo espacios retorna nil", func(t *testing.T) {
+		sections, err := client.ExtractSections(ctx, "   \n\n   \t   ")
+		require.NoError(t, err)
+		assert.Nil(t, sections)
 	})
 }
 

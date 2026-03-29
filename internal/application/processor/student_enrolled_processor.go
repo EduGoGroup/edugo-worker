@@ -18,7 +18,7 @@ func NewStudentEnrolledProcessor(logger logger.Logger) *StudentEnrolledProcessor
 }
 
 func (p *StudentEnrolledProcessor) EventType() string {
-	return "student_enrolled"
+	return "student.enrolled"
 }
 
 func (p *StudentEnrolledProcessor) Process(ctx context.Context, payload []byte) error {

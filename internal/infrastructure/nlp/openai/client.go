@@ -219,6 +219,12 @@ func (c *Client) GenerateQuiz(ctx context.Context, text string, questionCount in
 	return quiz, nil
 }
 
+// ExtractSections no está implementado para el proveedor OpenAI.
+// Se usa el SmartFallback para extracción de secciones por heurística.
+func (c *Client) ExtractSections(ctx context.Context, text string) ([]nlp.DocumentSection, error) {
+	return nil, fmt.Errorf("ExtractSections not implemented for OpenAI provider")
+}
+
 // HealthCheck verifica la salud del servicio OpenAI
 func (c *Client) HealthCheck(ctx context.Context) error {
 	c.logger.Debug("ejecutando health check de OpenAI")

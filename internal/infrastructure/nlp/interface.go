@@ -14,6 +14,9 @@ type Client interface {
 	// GenerateQuiz genera un quiz basado en el texto
 	GenerateQuiz(ctx context.Context, text string, questionCount int) (*Quiz, error)
 
+	// ExtractSections divide el texto en secciones temáticas
+	ExtractSections(ctx context.Context, text string) ([]DocumentSection, error)
+
 	// HealthCheck verifica la salud del servicio
 	HealthCheck(ctx context.Context) error
 }
@@ -33,6 +36,15 @@ type Section struct {
 	Title   string   `json:"title"`
 	Content string   `json:"content"`
 	Points  []string `json:"points"`
+}
+
+// DocumentSection representa una sección temática extraída del documento.
+// Se usa para dividir materiales largos en secciones navegables.
+type DocumentSection struct {
+	Index   int    `json:"index"`
+	Title   string `json:"title"`
+	Content string `json:"content"`
+	Preview string `json:"preview"`
 }
 
 // Quiz representa un cuestionario generado
