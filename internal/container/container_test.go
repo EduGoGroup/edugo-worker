@@ -47,11 +47,11 @@ func TestNewContainer(t *testing.T) {
 
 	// Verificar eventos específicos esperados
 	expectedEvents := []string{
-		"material_uploaded",
-		"material_deleted",
-		"material_reprocess",
-		"assessment_attempt",
-		"student_enrolled",
+		"material.uploaded",
+		"material.deleted",
+		"material.reprocess",
+		"assessment.attempt",
+		"student.enrolled",
 	}
 
 	for _, expectedEvent := range expectedEvents {

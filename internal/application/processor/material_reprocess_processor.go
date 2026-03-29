@@ -30,7 +30,7 @@ func (p *MaterialReprocessProcessor) processEvent(ctx context.Context, event dto
 
 // EventType implementa la interfaz Processor
 func (p *MaterialReprocessProcessor) EventType() string {
-	return "material_reprocess"
+	return "material.reprocess"
 }
 
 // Process implementa la interfaz Processor

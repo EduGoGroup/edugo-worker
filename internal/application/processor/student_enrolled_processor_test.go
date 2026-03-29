@@ -21,7 +21,7 @@ func TestStudentEnrolledProcessor_EventType(t *testing.T) {
 	processor := NewStudentEnrolledProcessor(logger)
 
 	eventType := processor.EventType()
-	assert.Equal(t, "student_enrolled", eventType)
+	assert.Equal(t, "student.enrolled", eventType)
 }
 
 func TestStudentEnrolledProcessor_Process_Success(t *testing.T) {
@@ -109,5 +109,5 @@ func TestNewStudentEnrolledProcessor(t *testing.T) {
 	// Assert
 	assert.NotNil(t, processor)
 	assert.NotNil(t, processor.logger)
-	assert.Equal(t, "student_enrolled", processor.EventType())
+	assert.Equal(t, "student.enrolled", processor.EventType())
 }

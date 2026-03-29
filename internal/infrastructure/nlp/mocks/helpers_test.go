@@ -131,6 +131,19 @@ func TestNewFlakeyMockClient(t *testing.T) {
 	assert.NoError(t, err)
 	assert.NotNil(t, quiz)
 
+	// Primeras 2 llamadas a ExtractSections deben fallar
+	for i := 0; i < failCount; i++ {
+		sections, err := mockClient.ExtractSections(ctx, text)
+		assert.Error(t, err, "intento %d debería fallar", i+1)
+		assert.ErrorIs(t, err, customErr)
+		assert.Nil(t, sections)
+	}
+
+	// Tercera llamada debe tener éxito
+	sections, err := mockClient.ExtractSections(ctx, text)
+	assert.NoError(t, err)
+	assert.NotNil(t, sections)
+
 	// HealthCheck siempre debe funcionar
 	err = mockClient.HealthCheck(ctx)
 	assert.NoError(t, err)

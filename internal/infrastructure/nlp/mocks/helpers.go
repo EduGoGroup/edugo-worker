@@ -24,6 +24,11 @@ func NewSuccessfulMockClient(t *testing.T) *MockClient {
 		Return(CreateMockQuiz(5), nil).
 		Maybe()
 
+	// Mock para ExtractSections
+	mockClient.On("ExtractSections", mock.Anything, mock.Anything).
+		Return(CreateMockDocumentSections(), nil).
+		Maybe()
+
 	// Mock para HealthCheck
 	mockClient.On("HealthCheck", mock.Anything).
 		Return(nil).
@@ -41,6 +46,10 @@ func NewFailingMockClient(t *testing.T, err error) *MockClient {
 		Maybe()
 
 	mockClient.On("GenerateQuiz", mock.Anything, mock.Anything, mock.Anything).
+		Return(nil, err).
+		Maybe()
+
+	mockClient.On("ExtractSections", mock.Anything, mock.Anything).
 		Return(nil, err).
 		Maybe()
 
@@ -95,6 +104,16 @@ func NewFlakeyMockClient(t *testing.T, failCount int, failErr error) *MockClient
 	}
 	mockClient.On("GenerateQuiz", mock.Anything, mock.Anything, mock.Anything).
 		Return(CreateMockQuiz(5), nil).
+		Maybe()
+
+	// ExtractSections falla N veces
+	for i := 0; i < failCount; i++ {
+		mockClient.On("ExtractSections", mock.Anything, mock.Anything).
+			Return(nil, failErr).
+			Once()
+	}
+	mockClient.On("ExtractSections", mock.Anything, mock.Anything).
+		Return(CreateMockDocumentSections(), nil).
 		Maybe()
 
 	// HealthCheck siempre funciona
@@ -222,5 +241,29 @@ func CreateCustomMockSummary(mainIdeas []string, keyConcepts map[string]string, 
 		Glossary:    make(map[string]string),
 		WordCount:   100,
 		GeneratedAt: time.Now(),
+	}
+}
+
+// CreateMockDocumentSections crea secciones de documento de prueba
+func CreateMockDocumentSections() []nlp.DocumentSection {
+	return []nlp.DocumentSection{
+		{
+			Index:   0,
+			Title:   "Introducción",
+			Content: "Contenido de la sección de introducción del documento.",
+			Preview: "Contenido de la sección de introducción del documento.",
+		},
+		{
+			Index:   1,
+			Title:   "Desarrollo",
+			Content: "Contenido de la sección de desarrollo del documento.",
+			Preview: "Contenido de la sección de desarrollo del documento.",
+		},
+		{
+			Index:   2,
+			Title:   "Conclusión",
+			Content: "Contenido de la sección de conclusión del documento.",
+			Preview: "Contenido de la sección de conclusión del documento.",
+		},
 	}
 }

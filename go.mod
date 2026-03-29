@@ -4,7 +4,7 @@ go 1.25.3
 
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.56.0
+	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.57.0
 	github.com/EduGoGroup/edugo-shared/bootstrap v0.51.0
 	github.com/EduGoGroup/edugo-shared/common v0.58.0
 	github.com/EduGoGroup/edugo-shared/database/postgres v0.51.2
