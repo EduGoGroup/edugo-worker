@@ -112,3 +112,66 @@ type StudentEnrolledEvent struct {
 	UnitID    string    `json:"unit_id"`
 	Timestamp time.Time `json:"timestamp"`
 }
+
+// AssessmentAssignedNotifEvent represents the assessment.assigned event for notification processing.
+type AssessmentAssignedNotifEvent struct {
+	EventID      string                         `json:"event_id"`
+	EventType    string                         `json:"event_type"`
+	EventVersion string                         `json:"event_version"`
+	Timestamp    time.Time                      `json:"timestamp"`
+	Payload      AssessmentAssignedNotifPayload `json:"payload"`
+}
+
+// AssessmentAssignedNotifPayload contains the data for an assessment assignment notification.
+type AssessmentAssignedNotifPayload struct {
+	AssessmentID string `json:"assessment_id"`
+	AssignmentID string `json:"assignment_id"`
+	SchoolID     string `json:"school_id"`
+	AssignedByID string `json:"assigned_by_id"`
+	TargetType   string `json:"target_type"`
+	TargetID     string `json:"target_id"`
+	Title        string `json:"title"`
+}
+
+// AssessmentAttemptNotifEvent represents the assessment.attempt_recorded event for notification processing.
+type AssessmentAttemptNotifEvent struct {
+	EventID      string                        `json:"event_id"`
+	EventType    string                        `json:"event_type"`
+	EventVersion string                        `json:"event_version"`
+	Timestamp    time.Time                     `json:"timestamp"`
+	Payload      AssessmentAttemptNotifPayload `json:"payload"`
+}
+
+// AssessmentAttemptNotifPayload contains the data for an assessment attempt notification.
+type AssessmentAttemptNotifPayload struct {
+	AttemptID    string  `json:"attempt_id"`
+	AssessmentID string  `json:"assessment_id"`
+	StudentID    string  `json:"student_id"`
+	SchoolID     string  `json:"school_id"`
+	Score        float64 `json:"score"`
+	TotalPoints  float64 `json:"total_points"`
+	TeacherID    string  `json:"teacher_id"`
+	Title        string  `json:"title"`
+}
+
+// AssessmentReviewedNotifEvent represents the assessment.reviewed event for notification processing.
+type AssessmentReviewedNotifEvent struct {
+	EventID      string                         `json:"event_id"`
+	EventType    string                         `json:"event_type"`
+	EventVersion string                         `json:"event_version"`
+	Timestamp    time.Time                      `json:"timestamp"`
+	Payload      AssessmentReviewedNotifPayload `json:"payload"`
+}
+
+// AssessmentReviewedNotifPayload contains the data for an assessment reviewed notification.
+type AssessmentReviewedNotifPayload struct {
+	AttemptID    string  `json:"attempt_id"`
+	AssessmentID string  `json:"assessment_id"`
+	ReviewerID   string  `json:"reviewer_id"`
+	SchoolID     string  `json:"school_id"`
+	FinalScore   float64 `json:"final_score"`
+	TotalPoints  float64 `json:"total_points"`
+	Status       string  `json:"status"`
+	StudentID    string  `json:"student_id"`
+	Title        string  `json:"title"`
+}

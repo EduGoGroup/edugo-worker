@@ -150,6 +150,30 @@ func main() {
 		"dlq_enabled", dlqCfg.Enabled,
 		"max_retries", dlqCfg.MaxRetries)
 
+	// 7b. Iniciar consumer de notificaciones de evaluaciones
+	assessmentDlqCfg := cfg.GetAssessmentDLQConfigWithDefaults().ToShared()
+	assessmentConsumerCfg := rabbit.ConsumerConfig{
+		Name:          "edugo-worker-assessments",
+		AutoAck:       false,
+		PrefetchCount: prefetchCount,
+		DLQ:           assessmentDlqCfg,
+	}
+
+	assessmentConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, assessmentConsumerCfg).(*rabbit.RabbitMQConsumer)
+	if !ok {
+		log.Fatal("failed to create assessment consumer: unexpected type")
+	}
+
+	assessmentConsumerCtx, cancelAssessmentConsumer := context.WithCancel(ctx)
+	if err := assessmentConsumer.ConsumeWithDLQ(assessmentConsumerCtx, cfg.Messaging.RabbitMQ.Queues.AssessmentNotifications, handler); err != nil {
+		resources.Logger.Error("Error iniciando assessment consumer", "error", err.Error())
+		log.Fatal(err)
+	}
+
+	resources.Logger.Info("Assessment notifications consumer started",
+		"queue", cfg.Messaging.RabbitMQ.Queues.AssessmentNotifications,
+		"dlq_routing_key", assessmentDlqCfg.DLXRoutingKey)
+
 	// 8. Configurar graceful shutdown
 	shutdownCfg := cfg.GetShutdownConfigWithDefaults()
 	gracefulShutdown := shutdown.NewGracefulShutdown(shutdownCfg.Timeout, resources.Logger)
@@ -157,19 +181,23 @@ func main() {
 	// 9. Registrar tareas de shutdown en orden inverso de inicialización
 	// Ultimo en inicializarse, primero en cerrarse (LIFO)
 
-	// 9.1 Detener consumer (dejar de aceptar nuevos mensajes)
+	// 9.1 Detener consumers (dejar de aceptar nuevos mensajes)
 	gracefulShutdown.Register("consumer", func(shutdownCtx context.Context) error {
-		resources.Logger.Info("Deteniendo consumer de mensajes...")
+		resources.Logger.Info("Deteniendo consumers de mensajes...")
 		cancelConsumer()
+		cancelAssessmentConsumer()
 		consumer.Stop()
+		assessmentConsumer.Stop()
 
 		if shutdownCfg.WaitForMessages {
 			resources.Logger.Info("Esperando que terminen los mensajes en proceso...")
 			if err := consumer.Wait(); err != nil {
-				resources.Logger.Warn("Consumer detenido con error", "error", err.Error())
-			} else {
-				resources.Logger.Info("Todos los mensajes fueron procesados")
+				resources.Logger.Warn("Material consumer detenido con error", "error", err.Error())
 			}
+			if err := assessmentConsumer.Wait(); err != nil {
+				resources.Logger.Warn("Assessment consumer detenido con error", "error", err.Error())
+			}
+			resources.Logger.Info("Todos los mensajes fueron procesados")
 		}
 
 		return nil
@@ -203,9 +231,11 @@ func main() {
 
 // setupRabbitMQ configura exchange, queue y bindings
 func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
-	// Declarar exchange
+	exchanges := cfg.GetExchangesConfigWithDefaults()
+
+	// Declarar exchange de materiales
 	if err := ch.ExchangeDeclare(
-		cfg.Messaging.RabbitMQ.Exchanges.Materials,
+		exchanges.Materials,
 		"topic",
 		true,  // durable
 		false, // auto-deleted
@@ -213,10 +243,23 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 		false, // no-wait
 		nil,
 	); err != nil {
-		return fmt.Errorf("error declarando exchange: %w", err)
+		return fmt.Errorf("error declarando materials exchange: %w", err)
 	}
 
-	// Declarar cola
+	// Declarar exchange de evaluaciones
+	if err := ch.ExchangeDeclare(
+		exchanges.Assessments,
+		"topic",
+		true,  // durable
+		false, // auto-deleted
+		false, // internal
+		false, // no-wait
+		nil,
+	); err != nil {
+		return fmt.Errorf("error declarando assessments exchange: %w", err)
+	}
+
+	// Declarar cola de materiales
 	_, err := ch.QueueDeclare(
 		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
 		true,  // durable
@@ -232,15 +275,43 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 		return fmt.Errorf("error declarando cola: %w", err)
 	}
 
-	// Bind cola
+	// Bind cola de materiales
 	if err := ch.QueueBind(
 		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
 		"material.uploaded",
-		cfg.Messaging.RabbitMQ.Exchanges.Materials,
+		exchanges.Materials,
 		false,
 		nil,
 	); err != nil {
 		return fmt.Errorf("error binding cola: %w", err)
+	}
+
+	// Declarar cola de notificaciones de evaluaciones
+	_, err = ch.QueueDeclare(
+		cfg.Messaging.RabbitMQ.Queues.AssessmentNotifications,
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		amqp.Table{
+			"x-dead-letter-exchange": "edugo_dlq",
+		},
+	)
+	if err != nil {
+		return fmt.Errorf("error declaring assessment notifications queue: %w", err)
+	}
+
+	// Bind routing keys de eventos de evaluaciones al exchange de assessments
+	for _, routingKey := range []string{"assessment.assigned", "assessment.attempt_recorded", "assessment.reviewed"} {
+		if err := ch.QueueBind(
+			cfg.Messaging.RabbitMQ.Queues.AssessmentNotifications,
+			routingKey,
+			exchanges.Assessments,
+			false,
+			nil,
+		); err != nil {
+			return fmt.Errorf("error binding routing key %s: %w", routingKey, err)
+		}
 	}
 
 	return nil
