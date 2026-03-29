@@ -26,7 +26,7 @@ func TestMaterialUploadedProcessor_EventType(t *testing.T) {
 
 	eventType := processor.EventType()
 
-	assert.Equal(t, "material_uploaded", eventType)
+	assert.Equal(t, "material.uploaded", eventType)
 }
 
 func TestMaterialUploadedProcessor_Process_InvalidJSON(t *testing.T) {
@@ -92,12 +92,12 @@ func TestMaterialUploadedProcessor_Process_StorageDownloadError(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	// Mock para actualizar estado a processing
-	dbMock.ExpectExec("UPDATE materials SET processing_status").
+	dbMock.ExpectExec("UPDATE content\\.materials SET status").
 		WithArgs("processing", "550e8400-e29b-41d4-a716-446655440000").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// Mock para actualizar estado a failed (cuando falla el download)
-	dbMock.ExpectExec("UPDATE materials SET processing_status").
+	dbMock.ExpectExec("UPDATE content\\.materials SET status").
 		WithArgs("failed", "550e8400-e29b-41d4-a716-446655440000").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -144,12 +144,12 @@ func TestMaterialUploadedProcessor_Process_PDFExtractionError(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	// Mock para actualizar estado a processing
-	dbMock.ExpectExec("UPDATE materials SET processing_status").
+	dbMock.ExpectExec("UPDATE content\\.materials SET status").
 		WithArgs("processing", "550e8400-e29b-41d4-a716-446655440000").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// Mock para actualizar estado a failed
-	dbMock.ExpectExec("UPDATE materials SET processing_status").
+	dbMock.ExpectExec("UPDATE content\\.materials SET status").
 		WithArgs("failed", "550e8400-e29b-41d4-a716-446655440000").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -205,12 +205,12 @@ func TestMaterialUploadedProcessor_Process_NLPSummaryError(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	// Mock para actualizar estado a processing
-	dbMock.ExpectExec("UPDATE materials SET processing_status").
+	dbMock.ExpectExec("UPDATE content\\.materials SET status").
 		WithArgs("processing", "550e8400-e29b-41d4-a716-446655440000").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// Mock para actualizar estado a failed
-	dbMock.ExpectExec("UPDATE materials SET processing_status").
+	dbMock.ExpectExec("UPDATE content\\.materials SET status").
 		WithArgs("failed", "550e8400-e29b-41d4-a716-446655440000").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
@@ -278,8 +278,13 @@ func TestMaterialUploadedProcessor_Process_ExtractSectionsError_ContinuesWithout
 	defer func() { _ = db.Close() }()
 
 	// Mock para actualizar estado a processing
-	dbMock.ExpectExec("UPDATE materials SET processing_status").
+	dbMock.ExpectExec("UPDATE content\\.materials SET status").
 		WithArgs("processing", "550e8400-e29b-41d4-a716-446655440000").
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Mock para actualizar estado a failed (cuando falla MongoDB insert)
+	dbMock.ExpectExec("UPDATE content\\.materials SET status").
+		WithArgs("failed", "550e8400-e29b-41d4-a716-446655440000").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// Mock storage client
