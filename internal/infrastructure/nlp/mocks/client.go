@@ -22,6 +22,65 @@ func (_m *MockClient) EXPECT() *MockClient_Expecter {
 	return &MockClient_Expecter{mock: &_m.Mock}
 }
 
+// ExtractSections provides a mock function with given fields: ctx, text
+func (_m *MockClient) ExtractSections(ctx context.Context, text string) ([]nlp.DocumentSection, error) {
+	ret := _m.Called(ctx, text)
+
+	if len(ret) == 0 {
+		panic("no return value specified for ExtractSections")
+	}
+
+	var r0 []nlp.DocumentSection
+	var r1 error
+	if rf, ok := ret.Get(0).(func(context.Context, string) ([]nlp.DocumentSection, error)); ok {
+		return rf(ctx, text)
+	}
+	if rf, ok := ret.Get(0).(func(context.Context, string) []nlp.DocumentSection); ok {
+		r0 = rf(ctx, text)
+	} else {
+		if ret.Get(0) != nil {
+			r0 = ret.Get(0).([]nlp.DocumentSection)
+		}
+	}
+
+	if rf, ok := ret.Get(1).(func(context.Context, string) error); ok {
+		r1 = rf(ctx, text)
+	} else {
+		r1 = ret.Error(1)
+	}
+
+	return r0, r1
+}
+
+// MockClient_ExtractSections_Call is a *mock.Call that shadows Run/Return methods with type explicit version for method 'ExtractSections'
+type MockClient_ExtractSections_Call struct {
+	*mock.Call
+}
+
+// ExtractSections is a helper method to define mock.On call
+//   - ctx context.Context
+//   - text string
+func (_e *MockClient_Expecter) ExtractSections(ctx interface{}, text interface{}) *MockClient_ExtractSections_Call {
+	return &MockClient_ExtractSections_Call{Call: _e.mock.On("ExtractSections", ctx, text)}
+}
+
+func (_c *MockClient_ExtractSections_Call) Run(run func(ctx context.Context, text string)) *MockClient_ExtractSections_Call {
+	_c.Call.Run(func(args mock.Arguments) {
+		run(args[0].(context.Context), args[1].(string))
+	})
+	return _c
+}
+
+func (_c *MockClient_ExtractSections_Call) Return(_a0 []nlp.DocumentSection, _a1 error) *MockClient_ExtractSections_Call {
+	_c.Call.Return(_a0, _a1)
+	return _c
+}
+
+func (_c *MockClient_ExtractSections_Call) RunAndReturn(run func(context.Context, string) ([]nlp.DocumentSection, error)) *MockClient_ExtractSections_Call {
+	_c.Call.Return(run)
+	return _c
+}
+
 // GenerateQuiz provides a mock function with given fields: ctx, text, questionCount
 func (_m *MockClient) GenerateQuiz(ctx context.Context, text string, questionCount int) (*nlp.Quiz, error) {
 	ret := _m.Called(ctx, text, questionCount)

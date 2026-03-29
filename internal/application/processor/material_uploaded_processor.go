@@ -192,35 +192,22 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 		return errors.NewInternalError("failed to generate summary", err)
 	}
 
-	// 5. Generar quiz con NLP con retry logic
-	p.logger.Debug("generando quiz con NLP")
-	nlpQuizStart := time.Now()
-
-	var quiz *nlp.Quiz
-	err = WithRetry(ctx, retryCfg, func() error {
-		var quizErr error
-		quiz, quizErr = p.nlpClient.GenerateQuiz(ctx, extractedText, 10)
-		return quizErr
+	// 5. Extraer secciones del texto (opcional — no falla el pipeline)
+	p.logger.Debug("extrayendo secciones del texto")
+	var documentSections []nlp.DocumentSection
+	sectionsErr := WithRetry(ctx, retryCfg, func() error {
+		var extractErr error
+		documentSections, extractErr = p.nlpClient.ExtractSections(ctx, extractedText)
+		return extractErr
 	})
-
-	nlpQuizStatus := "success"
-	if err != nil {
-		nlpQuizStatus = "error"
-	}
-	estimatedQuizTokens := estimateTokens(extractedText)
-	metrics.RecordOpenAIRequest(nlpQuizStatus, time.Since(nlpQuizStart).Seconds(), estimatedQuizTokens)
-	quizProcessingMs := int(time.Since(nlpQuizStart).Milliseconds())
-
-	if err != nil {
-		p.updateStatusToFailed(ctx, materialID.String())
-		p.logger.Error("error generando quiz con NLP",
-			"error", err,
-			"errorType", classifyError(err),
-			"textLength", len(extractedText),
+	if sectionsErr != nil {
+		p.logger.Warn("error extrayendo secciones, continuando sin secciones",
+			"error", sectionsErr,
+			"material_id", event.GetMaterialID(),
 		)
-		//nolint:staticcheck // Deprecated intencional, se mantiene por compatibilidad
-		metrics.RecordEventProcessed("material_uploaded", "nlp_quiz_error")
-		return errors.NewInternalError("failed to generate quiz", err)
+		documentSections = nil
+	} else {
+		p.logger.Info("secciones extraídas", "count", len(documentSections))
 	}
 
 	// 6. Guardar en MongoDB usando entidades canónicas
@@ -228,24 +215,14 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	err = postgres.WithTransaction(ctx, p.db, func(tx *sql.Tx) error {
 		now := time.Now()
 
-		// Guardar resumen en MongoDB usando la entidad canónica MaterialSummary
+		// Guardar resumen + secciones en MongoDB
 		mongoStart := time.Now()
-		summaryDoc := p.buildSummaryDoc(event.GetMaterialID(), summary, extractedText, summaryProcessingMs, now)
+		summaryDoc := p.buildSummaryDocWithSections(event.GetMaterialID(), summary, documentSections, extractedText, summaryProcessingMs, now)
 		summaryCol := p.mongodb.Collection(mongoentities.MaterialSummary{}.CollectionName())
 		_, err = summaryCol.InsertOne(ctx, summaryDoc)
 		metrics.RecordDatabaseOperation("mongodb", "insert", time.Since(mongoStart).Seconds(), err == nil)
 		if err != nil {
 			return fmt.Errorf("inserting summary: %w", err)
-		}
-
-		// Guardar quiz en MongoDB usando la entidad canónica MaterialAssessment
-		mongoStart = time.Now()
-		assessmentDoc := p.buildAssessmentDoc(event.GetMaterialID(), quiz, extractedText, quizProcessingMs, now)
-		assessmentCol := p.mongodb.Collection(mongoentities.MaterialAssessment{}.CollectionName())
-		_, err = assessmentCol.InsertOne(ctx, assessmentDoc)
-		metrics.RecordDatabaseOperation("mongodb", "insert", time.Since(mongoStart).Seconds(), err == nil)
-		if err != nil {
-			return fmt.Errorf("inserting assessment: %w", err)
 		}
 
 		// Actualizar estado a completed
@@ -276,16 +253,35 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	return nil
 }
 
-// buildSummaryDoc construye el documento MaterialSummary a partir del output del NLP.
+// bsonDocumentSection es el formato BSON para secciones del documento.
+// Corresponde al campo "sections" de MaterialSummary en MongoDB.
+// Se define localmente porque la entidad canónica en edugo-infrastructure
+// aún no incluye este campo (pendiente PR #124).
+type bsonDocumentSection struct {
+	Index   int    `bson:"index"`
+	Title   string `bson:"title"`
+	Content string `bson:"content"`
+	Preview string `bson:"preview"`
+}
+
+// materialSummaryWithSections extiende MaterialSummary con el campo Sections.
+// Embebe la entidad canónica y agrega secciones como campo BSON adicional.
+type materialSummaryWithSections struct {
+	mongoentities.MaterialSummary `bson:",inline"`
+	Sections                      []bsonDocumentSection `bson:"sections,omitempty"`
+}
+
+// buildSummaryDocWithSections construye el documento MaterialSummary con secciones a partir del output del NLP.
 // El NLP devuelve MainIdeas []string y KeyConcepts map[string]string;
 // se mapean al schema canónico (Summary string, KeyPoints []string).
-func (p *MaterialUploadedProcessor) buildSummaryDoc(
+func (p *MaterialUploadedProcessor) buildSummaryDocWithSections(
 	materialID string,
 	summary *nlp.Summary,
+	sections []nlp.DocumentSection,
 	sourceText string,
 	processingMs int,
 	now time.Time,
-) mongoentities.MaterialSummary {
+) materialSummaryWithSections {
 	// Convertir MainIdeas a un párrafo de resumen principal
 	summaryText := strings.Join(summary.MainIdeas, ". ")
 
@@ -295,69 +291,37 @@ func (p *MaterialUploadedProcessor) buildSummaryDoc(
 		keyPoints = append(keyPoints, concept)
 	}
 
-	return mongoentities.MaterialSummary{
-		MaterialID:       materialID,
-		Summary:          summaryText,
-		KeyPoints:        keyPoints,
-		Language:         "es",
-		WordCount:        summary.WordCount,
-		Version:          1,
-		AIModel:          p.aiModel,
-		ProcessingTimeMs: processingMs,
-		Metadata: &mongoentities.SummaryMetadata{
-			SourceLength: len(sourceText),
-		},
-		CreatedAt: now,
-		UpdatedAt: now,
-	}
-}
-
-// buildAssessmentDoc construye el documento MaterialAssessment a partir del output del NLP.
-func (p *MaterialUploadedProcessor) buildAssessmentDoc(
-	materialID string,
-	quiz *nlp.Quiz,
-	sourceText string,
-	processingMs int,
-	now time.Time,
-) mongoentities.MaterialAssessment {
-	questions := make([]mongoentities.Question, len(quiz.Questions))
-	totalPoints := 0
-
-	for i, q := range quiz.Questions {
-		options := make([]mongoentities.Option, len(q.Options))
-		for j, opt := range q.Options {
-			options[j] = mongoentities.Option{
-				OptionID:   fmt.Sprintf("opt_%d", j+1),
-				OptionText: opt,
+	// Convertir secciones NLP a formato BSON
+	var bsonSections []bsonDocumentSection
+	if len(sections) > 0 {
+		bsonSections = make([]bsonDocumentSection, len(sections))
+		for i, s := range sections {
+			bsonSections[i] = bsonDocumentSection{
+				Index:   s.Index,
+				Title:   s.Title,
+				Content: s.Content,
+				Preview: s.Preview,
 			}
 		}
-		questions[i] = mongoentities.Question{
-			QuestionID:    q.ID,
-			QuestionText:  q.QuestionText,
-			QuestionType:  q.QuestionType,
-			Options:       options,
-			CorrectAnswer: q.CorrectAnswer,
-			Explanation:   q.Explanation,
-			Points:        q.Points,
-			Difficulty:    q.Difficulty,
-		}
-		totalPoints += q.Points
 	}
 
-	return mongoentities.MaterialAssessment{
-		MaterialID:       materialID,
-		Questions:        questions,
-		TotalQuestions:   len(questions),
-		TotalPoints:      totalPoints,
-		Version:          1,
-		AIModel:          p.aiModel,
-		ProcessingTimeMs: processingMs,
-		Metadata: &mongoentities.AssessmentMetadata{
-			SourceLength:     len(sourceText),
-			EstimatedTimeMin: len(questions) * 2,
+	return materialSummaryWithSections{
+		MaterialSummary: mongoentities.MaterialSummary{
+			MaterialID:       materialID,
+			Summary:          summaryText,
+			KeyPoints:        keyPoints,
+			Language:         "es",
+			WordCount:        summary.WordCount,
+			Version:          1,
+			AIModel:          p.aiModel,
+			ProcessingTimeMs: processingMs,
+			Metadata: &mongoentities.SummaryMetadata{
+				SourceLength: len(sourceText),
+			},
+			CreatedAt: now,
+			UpdatedAt: now,
 		},
-		CreatedAt: now,
-		UpdatedAt: now,
+		Sections: bsonSections,
 	}
 }
 

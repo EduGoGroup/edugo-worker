@@ -54,6 +54,23 @@ func (c *ClientWithCircuitBreaker) GenerateQuiz(ctx context.Context, text string
 	return quiz, nil
 }
 
+// ExtractSections extrae secciones con protección de circuit breaker
+func (c *ClientWithCircuitBreaker) ExtractSections(ctx context.Context, text string) ([]DocumentSection, error) {
+	var sections []DocumentSection
+	var err error
+
+	executeErr := c.circuitBreaker.Execute(ctx, func(ctx context.Context) error {
+		sections, err = c.client.ExtractSections(ctx, text)
+		return err
+	})
+
+	if executeErr != nil {
+		return nil, executeErr
+	}
+
+	return sections, nil
+}
+
 // HealthCheck verifica la salud del servicio con protección de circuit breaker
 func (c *ClientWithCircuitBreaker) HealthCheck(ctx context.Context) error {
 	return c.circuitBreaker.Execute(ctx, func(ctx context.Context) error {

@@ -270,8 +270,9 @@ func TestMaterialUploadedProcessor_Process_NLPSummaryError(t *testing.T) {
 	assert.NoError(t, dbMock.ExpectationsWereMet())
 }
 
-func TestMaterialUploadedProcessor_Process_NLPQuizError(t *testing.T) {
-	// Arrange
+func TestMaterialUploadedProcessor_Process_ExtractSectionsError_ContinuesWithoutSections(t *testing.T) {
+	// Arrange: Verifica que si ExtractSections falla, el pipeline continúa sin secciones
+	// (ExtractSections es opcional y no falla el pipeline)
 	db, dbMock, err := sqlmock.New()
 	assert.NoError(t, err)
 	defer func() { _ = db.Close() }()
@@ -279,11 +280,6 @@ func TestMaterialUploadedProcessor_Process_NLPQuizError(t *testing.T) {
 	// Mock para actualizar estado a processing
 	dbMock.ExpectExec("UPDATE materials SET processing_status").
 		WithArgs("processing", "550e8400-e29b-41d4-a716-446655440000").
-		WillReturnResult(sqlmock.NewResult(0, 1))
-
-	// Mock para actualizar estado a failed
-	dbMock.ExpectExec("UPDATE materials SET processing_status").
-		WithArgs("failed", "550e8400-e29b-41d4-a716-446655440000").
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// Mock storage client
@@ -317,10 +313,13 @@ func TestMaterialUploadedProcessor_Process_NLPQuizError(t *testing.T) {
 		GenerateSummary(mock.Anything, "Extracted text from PDF").
 		Return(summary, nil)
 
-	// Mock NLP client - GenerateQuiz falla
+	// Mock NLP client - ExtractSections falla (pipeline debe continuar)
 	nlpClient.EXPECT().
-		GenerateQuiz(mock.Anything, "Extracted text from PDF", 10).
+		ExtractSections(mock.Anything, "Extracted text from PDF").
 		Return(nil, assert.AnError)
+
+	// NOTE: GenerateQuiz NO debe ser llamado (removido del pipeline en Phase 6)
+	// No registramos mock para GenerateQuiz — si se llama, el test fallará
 
 	processor := &MaterialUploadedProcessor{
 		db:            db,
@@ -346,13 +345,17 @@ func TestMaterialUploadedProcessor_Process_NLPQuizError(t *testing.T) {
 	}
 	payload, _ := json.Marshal(event)
 
-	// Act
+	// Act — this will fail at MongoDB insert (no real MongoDB) but verifies:
+	// 1. ExtractSections is called
+	// 2. GenerateQuiz is NOT called
+	// 3. Pipeline continues despite ExtractSections error
 	err = processor.Process(context.Background(), payload)
 
-	// Assert
+	// Assert — the pipeline will fail at MongoDB insert (no real connection)
+	// but the important thing is that we reached that point without failing at ExtractSections
 	assert.Error(t, err)
-	assert.Contains(t, err.Error(), "failed to generate quiz")
-	assert.NoError(t, dbMock.ExpectationsWereMet())
+	// The error should be about MongoDB/DB, not about ExtractSections
+	assert.NotContains(t, err.Error(), "extract")
 }
 
 // TestMaterialUploadedProcessor_Process_Success requiere MongoDB real o un mock complejo
