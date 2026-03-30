@@ -363,7 +363,6 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		b.logger,
 		b.sharedMetrics,
 	)
-	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(b.logger)
 	studentEnrolledProc := processor.NewStudentEnrolledProcessor(b.logger)
 
 	// Crear notification creator y processors de notificaciones
@@ -372,6 +371,9 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	assessmentAttemptNotifProc := processor.NewAssessmentAttemptNotifProcessor(notifCreator, b.logger)
 	assessmentReviewedNotifProc := processor.NewAssessmentReviewedNotifProcessor(notifCreator, b.logger)
 
+	// Create composite attempt processor: analytics + notification delegation
+	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(b.sqlDB, assessmentAttemptNotifProc, b.logger)
+
 	// Crear registry
 	registry := processor.NewRegistry(b.logger)
 
@@ -379,12 +381,11 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	registry.Register(materialUploadedProc)
 	registry.Register(processor.NewMaterialReprocessProcessor(materialUploadedProc, b.logger))
 	registry.Register(materialDeletedProc)
-	registry.Register(assessmentAttemptProc)
 	registry.Register(studentEnrolledProc)
 
-	// Registrar processors de notificaciones de evaluaciones
+	// Registrar processors de evaluaciones
 	registry.Register(assessmentAssignedNotifProc)
-	registry.Register(assessmentAttemptNotifProc)
+	registry.Register(assessmentAttemptProc) // handles analytics + notifications for assessment.attempt_recorded
 	registry.Register(assessmentReviewedNotifProc)
 
 	// Guardar referencia
