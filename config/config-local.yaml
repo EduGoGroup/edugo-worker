@@ -36,3 +36,15 @@ api_admin:
 metrics:
   enabled: true
   port: 9090
+
+# Almacenamiento S3 (MinIO local)
+storage:
+  provider: "s3"
+  timeout: "30s"
+  s3:
+    region: "us-east-1"
+    bucket: "edugo-materials"
+    endpoint: "http://localhost:9000"
+    access_key_id: "minioadmin"
+    secret_access_key: "minioadmin"
+    use_path_style: true
