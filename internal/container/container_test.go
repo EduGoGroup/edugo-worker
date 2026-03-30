@@ -50,7 +50,7 @@ func TestNewContainer(t *testing.T) {
 		"material.uploaded",
 		"material.deleted",
 		"material.reprocess",
-		"assessment.attempt",
+		"assessment.attempt_recorded",
 		"student.enrolled",
 	}
 

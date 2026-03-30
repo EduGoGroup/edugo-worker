@@ -68,8 +68,10 @@ func NewContainer(cfg ContainerConfig) *Container {
 		AIModel:       cfg.AIModel,
 	})
 	materialDeletedProc := processor.NewMaterialDeletedProcessor(cfg.MongoDB, cfg.Logger, nil)
-	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(cfg.Logger)
 	studentEnrolledProc := processor.NewStudentEnrolledProcessor(cfg.Logger)
+
+	// Create composite attempt processor (analytics + notifications)
+	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(cfg.DB, nil, cfg.Logger)
 
 	// Crear ProcessorRegistry y registrar todos los processors
 	c.ProcessorRegistry = processor.NewRegistry(cfg.Logger)

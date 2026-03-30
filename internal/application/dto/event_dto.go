@@ -88,16 +88,6 @@ func (e MaterialUploadedEvent) GetAuthorID() string {
 	return e.Payload.TeacherID
 }
 
-// AssessmentAttemptEvent evento cuando se intenta un quiz
-type AssessmentAttemptEvent struct {
-	EventType  string                 `json:"event_type"`
-	MaterialID string                 `json:"material_id"`
-	UserID     string                 `json:"user_id"`
-	Answers    map[string]interface{} `json:"answers"`
-	Score      float64                `json:"score"`
-	Timestamp  time.Time              `json:"timestamp"`
-}
-
 // MaterialDeletedEvent evento cuando se elimina un material
 type MaterialDeletedEvent struct {
 	EventType  string    `json:"event_type"`
@@ -133,25 +123,29 @@ type AssessmentAssignedNotifPayload struct {
 	Title        string `json:"title"`
 }
 
-// AssessmentAttemptNotifEvent represents the assessment.attempt_recorded event for notification processing.
-type AssessmentAttemptNotifEvent struct {
-	EventID      string                        `json:"event_id"`
-	EventType    string                        `json:"event_type"`
-	EventVersion string                        `json:"event_version"`
-	Timestamp    time.Time                     `json:"timestamp"`
-	Payload      AssessmentAttemptNotifPayload `json:"payload"`
+// AssessmentAttemptEvent represents the assessment.attempt_recorded event.
+// Used by both the analytics processor and the notification processor.
+type AssessmentAttemptEvent struct {
+	EventID      string                   `json:"event_id"`
+	EventType    string                   `json:"event_type"`
+	EventVersion string                   `json:"event_version"`
+	Timestamp    time.Time                `json:"timestamp"`
+	Payload      AssessmentAttemptPayload `json:"payload"`
 }
 
-// AssessmentAttemptNotifPayload contains the data for an assessment attempt notification.
-type AssessmentAttemptNotifPayload struct {
-	AttemptID    string  `json:"attempt_id"`
-	AssessmentID string  `json:"assessment_id"`
-	StudentID    string  `json:"student_id"`
-	SchoolID     string  `json:"school_id"`
-	Score        float64 `json:"score"`
-	TotalPoints  float64 `json:"total_points"`
-	TeacherID    string  `json:"teacher_id"`
-	Title        string  `json:"title"`
+// AssessmentAttemptPayload contains the data for an assessment attempt.
+type AssessmentAttemptPayload struct {
+	AttemptID       string  `json:"attempt_id"`
+	AssessmentID    string  `json:"assessment_id"`
+	StudentID       string  `json:"student_id"`
+	SchoolID        string  `json:"school_id"`
+	Score           float64 `json:"score"`
+	TotalPoints     float64 `json:"total_points"`
+	Percentage      float64 `json:"percentage,omitempty"`
+	DurationSeconds int     `json:"duration_seconds,omitempty"`
+	TeacherID       string  `json:"teacher_id"`
+	Title           string  `json:"title"`
+	SubmittedAt     string  `json:"submitted_at,omitempty"`
 }
 
 // AssessmentReviewedNotifEvent represents the assessment.reviewed event for notification processing.
