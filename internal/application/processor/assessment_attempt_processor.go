@@ -73,18 +73,26 @@ func (p *AssessmentAttemptProcessor) processEvent(ctx context.Context, event dto
 		"total_points", pl.TotalPoints,
 	)
 
-	// 1. Insert analytics record
-	if err := p.insertAnalytics(ctx, event); err != nil {
+	// 1. Insert analytics record (returns true if new row was inserted)
+	inserted, err := p.insertAnalytics(ctx, event)
+	if err != nil {
 		return fmt.Errorf("inserting analytics: %w", err)
 	}
 
-	// 2. Update cumulative assessment stats
-	if err := p.updateAssessmentStats(ctx, event); err != nil {
-		p.logger.Error("failed to update assessment stats (non-fatal)",
-			"assessment_id", pl.AssessmentID,
-			"error", err.Error(),
+	// 2. Update cumulative assessment stats (only if analytics was newly inserted,
+	//    to preserve idempotency — replayed events must not double-count stats)
+	if inserted {
+		if err := p.updateAssessmentStats(ctx, event); err != nil {
+			p.logger.Error("failed to update assessment stats (non-fatal)",
+				"assessment_id", pl.AssessmentID,
+				"error", err.Error(),
+			)
+			// Non-fatal: analytics already recorded
+		}
+	} else {
+		p.logger.Info("duplicate event detected, skipping stats update",
+			"attempt_id", pl.AttemptID,
 		)
-		// Non-fatal: analytics already recorded
 	}
 
 	// 3. Detect low score (< 50%)
@@ -116,7 +124,8 @@ func (p *AssessmentAttemptProcessor) processEvent(ctx context.Context, event dto
 }
 
 // insertAnalytics inserts a row into assessment.attempt_analytics with SHA1 idempotency.
-func (p *AssessmentAttemptProcessor) insertAnalytics(ctx context.Context, event dto.AssessmentAttemptEvent) error {
+// Returns true if a new row was inserted, false if the row already existed (duplicate event).
+func (p *AssessmentAttemptProcessor) insertAnalytics(ctx context.Context, event dto.AssessmentAttemptEvent) (bool, error) {
 	pl := event.Payload
 
 	// Deterministic ID for idempotency
@@ -124,26 +133,23 @@ func (p *AssessmentAttemptProcessor) insertAnalytics(ctx context.Context, event 
 
 	attemptID, err := uuid.Parse(pl.AttemptID)
 	if err != nil {
-		return fmt.Errorf("invalid attempt_id: %w", err)
+		return false, fmt.Errorf("invalid attempt_id: %w", err)
 	}
 	assessmentID, err := uuid.Parse(pl.AssessmentID)
 	if err != nil {
-		return fmt.Errorf("invalid assessment_id: %w", err)
+		return false, fmt.Errorf("invalid assessment_id: %w", err)
 	}
 	studentID, err := uuid.Parse(pl.StudentID)
 	if err != nil {
-		return fmt.Errorf("invalid student_id: %w", err)
+		return false, fmt.Errorf("invalid student_id: %w", err)
 	}
 	schoolID, err := uuid.Parse(pl.SchoolID)
 	if err != nil {
-		return fmt.Errorf("invalid school_id: %w", err)
+		return false, fmt.Errorf("invalid school_id: %w", err)
 	}
 
-	// Calculate percentage if not provided
-	percentage := pl.Percentage
-	if percentage == 0 && pl.TotalPoints > 0 {
-		percentage = (pl.Score / pl.TotalPoints) * 100
-	}
+	// Calculate percentage
+	percentage := calculatePercentage(pl.Percentage, pl.Score, pl.TotalPoints)
 
 	// Parse submitted_at or use event timestamp
 	submittedAt := event.Timestamp
@@ -158,20 +164,28 @@ func (p *AssessmentAttemptProcessor) insertAnalytics(ctx context.Context, event 
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
 		ON CONFLICT (id) DO NOTHING`
 
-	_, err = p.db.ExecContext(ctx, query,
+	result, err := p.db.ExecContext(ctx, query,
 		id, attemptID, assessmentID, studentID, schoolID,
 		pl.Score, pl.TotalPoints, percentage,
 		nilIfZero(pl.DurationSeconds), submittedAt,
 	)
 	if err != nil {
-		return fmt.Errorf("failed to insert analytics: %w", err)
+		return false, fmt.Errorf("failed to insert analytics: %w", err)
 	}
 
-	p.logger.Info("analytics record inserted",
-		"analytics_id", id.String(),
-		"attempt_id", pl.AttemptID,
-	)
-	return nil
+	rowsAffected, err := result.RowsAffected()
+	if err != nil {
+		return false, fmt.Errorf("failed to check rows affected: %w", err)
+	}
+
+	inserted := rowsAffected > 0
+	if inserted {
+		p.logger.Info("analytics record inserted",
+			"analytics_id", id.String(),
+			"attempt_id", pl.AttemptID,
+		)
+	}
+	return inserted, nil
 }
 
 // updateAssessmentStats updates cumulative statistics for the assessment using UPSERT.
@@ -183,10 +197,7 @@ func (p *AssessmentAttemptProcessor) updateAssessmentStats(ctx context.Context, 
 		return fmt.Errorf("invalid assessment_id: %w", err)
 	}
 
-	percentage := pl.Percentage
-	if percentage == 0 && pl.TotalPoints > 0 {
-		percentage = (pl.Score / pl.TotalPoints) * 100
-	}
+	percentage := calculatePercentage(pl.Percentage, pl.Score, pl.TotalPoints)
 
 	query := `INSERT INTO assessment.assessment_stats (id, assessment_id, attempt_count, average_score, average_percentage, updated_at)
 		VALUES ($1, $2, 1, $3, $4, NOW())
@@ -207,6 +218,19 @@ func (p *AssessmentAttemptProcessor) updateAssessmentStats(ctx context.Context, 
 		"assessment_id", pl.AssessmentID,
 	)
 	return nil
+}
+
+// calculatePercentage computes the percentage from score/totalPoints.
+// Uses the provided percentage if positive; otherwise calculates from score and totalPoints.
+// This correctly handles the edge case where a student scores 0 (percentage should be 0, not recalculated).
+func calculatePercentage(provided, score, totalPoints float64) float64 {
+	if provided > 0 {
+		return provided
+	}
+	if totalPoints > 0 {
+		return (score / totalPoints) * 100
+	}
+	return 0
 }
 
 // nilIfZero returns nil for zero values, allowing NULL in the DB.

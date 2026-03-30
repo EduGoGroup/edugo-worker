@@ -142,16 +142,13 @@ func TestAssessmentAttemptProcessor_DuplicateEvent_Idempotent(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Second call: analytics INSERT does nothing (ON CONFLICT DO NOTHING = 0 rows)
+	// Stats UPSERT should NOT be called because analytics was not inserted (idempotency)
 	dbMock.ExpectExec("INSERT INTO assessment.attempt_analytics").
 		WithArgs(
 			sqlmock.AnyArg(), attemptID, assessmentID, studentID, schoolID,
 			70.0, 100.0, 70.0, nil, sqlmock.AnyArg(),
 		).
-		WillReturnResult(sqlmock.NewResult(0, 0)) // 0 rows = idempotent
-
-	dbMock.ExpectExec("INSERT INTO assessment.assessment_stats").
-		WithArgs(sqlmock.AnyArg(), assessmentID, 70.0, 70.0).
-		WillReturnResult(sqlmock.NewResult(0, 1))
+		WillReturnResult(sqlmock.NewResult(0, 0)) // 0 rows = duplicate, skip stats
 
 	err = proc.Process(context.Background(), payload)
 	assert.NoError(t, err)
