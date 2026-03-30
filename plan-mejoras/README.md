@@ -26,25 +26,12 @@ Este plan organiza la implementación de mejoras en **4 fases**, cada una con su
 ## 🎯 Estructura de Fases
 
 ```
-FASE 0: Actualización de Dependencias (Prerequisito) ✅
-  ├── Actualizar edugo-infrastructure a última versión
-  ├── Actualizar edugo-shared a última versión
-  └── Validar compilación y tests
+📂 ARCHIVADO (Fases Completadas)
+  ├── FASE 0: Actualización de Dependencias ✅
+  ├── FASE 1: Funcionalidad Crítica ✅
+  ├── FASE 2: Integraciones Externas ✅
+  └── FASE 2.5: Homologación Material Assessment ✅
 
-FASE 1: Funcionalidad Crítica (2-3 semanas) ✅
-  ├── Implementar routing real de eventos
-  ├── Eliminar código deprecado
-  └── Refactorizar bootstrap
-
-FASE 2: Integraciones Externas (3-4 semanas) ✅
-  ├── Implementar cliente OpenAI
-  ├── Implementar extracción PDF
-  └── Implementar cliente S3
-
-FASE 2.5: Homologación Material Assessment (1-2 días) ✅
-  ├── Verificar uso de colección material_assessment_worker
-  ├── Actualizar dependencia edugo-infrastructure
-  └── Validar compatibilidad con nuevo esquema
 
 FASE 3: Testing y Calidad (2-3 semanas)
   ├── Aumentar cobertura de tests
@@ -77,22 +64,8 @@ FASE 6: Sistemas de Notificaciones (3-4 semanas) 🆕 [PT-009]
 ```
 plan-mejoras/
 ├── README.md                    # Este archivo
-├── fase-0/                      # Actualización dependencias
-│   ├── README.md
-│   ├── TAREAS.md
-│   └── VALIDACION.md
-├── fase-1/                      # Funcionalidad crítica
-│   ├── README.md
-│   ├── TAREAS.md
-│   └── VALIDACION.md
-├── fase-2/                      # Integraciones externas
-│   ├── README.md
-│   ├── TAREAS.md
-│   └── VALIDACION.md
-├── fase-2.5/                    # Homologación material_assessment
-│   ├── README.md
-│   ├── TAREAS.md
-│   └── VALIDACION.md
+├── archivado/                   # Fases completadas (0, 1, 2, 2.5)
+
 ├── fase-3/                      # Testing y calidad
 │   ├── README.md
 │   ├── TAREAS.md
