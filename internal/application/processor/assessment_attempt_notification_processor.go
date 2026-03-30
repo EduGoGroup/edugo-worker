@@ -28,14 +28,14 @@ func (p *AssessmentAttemptNotifProcessor) EventType() string {
 }
 
 func (p *AssessmentAttemptNotifProcessor) Process(ctx context.Context, payload []byte) error {
-	var event dto.AssessmentAttemptNotifEvent
+	var event dto.AssessmentAttemptEvent
 	if err := json.Unmarshal(payload, &event); err != nil {
 		return errors.NewValidationError("invalid event payload")
 	}
 	return p.processEvent(ctx, event)
 }
 
-func (p *AssessmentAttemptNotifProcessor) processEvent(ctx context.Context, event dto.AssessmentAttemptNotifEvent) error {
+func (p *AssessmentAttemptNotifProcessor) processEvent(ctx context.Context, event dto.AssessmentAttemptEvent) error {
 	pl := event.Payload
 
 	p.logger.Info("processing assessment.attempt_recorded notification",

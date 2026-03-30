@@ -30,15 +30,23 @@ func (nc *NotificationCreator) Create(ctx context.Context, userID uuid.UUID, not
 	          VALUES ($1, $2, $3, $4, $5, $6, $7, false, NOW())
 	          ON CONFLICT (id) DO NOTHING`
 
-	_, err := nc.db.ExecContext(ctx, query, id, userID, notifType, title, body, resourceType, resourceID)
+	result, err := nc.db.ExecContext(ctx, query, id, userID, notifType, title, body, resourceType, resourceID)
 	if err != nil {
 		return fmt.Errorf("failed to insert notification: %w", err)
 	}
 
-	nc.logger.Info("notification created",
-		"notification_id", id.String(),
-		"user_id", userID.String(),
-		"type", notifType,
-	)
+	if rows, _ := result.RowsAffected(); rows > 0 {
+		nc.logger.Info("notification created",
+			"notification_id", id.String(),
+			"user_id", userID.String(),
+			"type", notifType,
+		)
+	} else {
+		nc.logger.Debug("notification already exists, skipped",
+			"notification_id", id.String(),
+			"user_id", userID.String(),
+			"type", notifType,
+		)
+	}
 	return nil
 }

@@ -447,12 +447,12 @@ func TestAssessmentAttemptNotifProcessor_WithTeacherID_Success(t *testing.T) {
 	teacherID := uuid.New()
 	attemptID := uuid.New()
 
-	event := dto.AssessmentAttemptNotifEvent{
+	event := dto.AssessmentAttemptEvent{
 		EventID:      "evt-010",
 		EventType:    "assessment.attempt_recorded",
 		EventVersion: "1.0.0",
 		Timestamp:    time.Now(),
-		Payload: dto.AssessmentAttemptNotifPayload{
+		Payload: dto.AssessmentAttemptPayload{
 			AttemptID:    attemptID.String(),
 			AssessmentID: uuid.New().String(),
 			StudentID:    uuid.New().String(),
@@ -496,12 +496,12 @@ func TestAssessmentAttemptNotifProcessor_MissingTeacherID_Skips(t *testing.T) {
 	nc := NewNotificationCreator(db, logger)
 	proc := NewAssessmentAttemptNotifProcessor(nc, logger)
 
-	event := dto.AssessmentAttemptNotifEvent{
+	event := dto.AssessmentAttemptEvent{
 		EventID:      "evt-011",
 		EventType:    "assessment.attempt_recorded",
 		EventVersion: "1.0.0",
 		Timestamp:    time.Now(),
-		Payload: dto.AssessmentAttemptNotifPayload{
+		Payload: dto.AssessmentAttemptPayload{
 			AttemptID:    uuid.New().String(),
 			AssessmentID: uuid.New().String(),
 			StudentID:    uuid.New().String(),
@@ -551,12 +551,12 @@ func TestAssessmentAttemptNotifProcessor_DBError(t *testing.T) {
 	teacherID := uuid.New()
 	attemptID := uuid.New()
 
-	event := dto.AssessmentAttemptNotifEvent{
+	event := dto.AssessmentAttemptEvent{
 		EventID:      "evt-012",
 		EventType:    "assessment.attempt_recorded",
 		EventVersion: "1.0.0",
 		Timestamp:    time.Now(),
-		Payload: dto.AssessmentAttemptNotifPayload{
+		Payload: dto.AssessmentAttemptPayload{
 			AttemptID:    attemptID.String(),
 			AssessmentID: uuid.New().String(),
 			StudentID:    uuid.New().String(),
