@@ -1,0 +1,326 @@
+name: Manual Release
+
+# Workflow 100% manual y controlado
+# Ejecutar desde GitHub UI: Actions → Manual Release → Run workflow
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'Versión a crear (sin v, ejemplo: 0.1.0)'
+        required: true
+        type: string
+      bump_type:
+        description: 'Tipo de incremento'
+        required: true
+        type: choice
+        options:
+          - patch  # 0.0.1 → 0.0.2 (bugfix)
+          - minor  # 0.0.1 → 0.1.0 (nueva feature)
+          - major  # 0.0.1 → 1.0.0 (breaking change o producción)
+
+permissions:
+  contents: write
+  packages: write
+
+env:
+  GO_VERSION: '1.25.0'
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  create-release:
+    name: Crear Release v${{ inputs.version }}
+    runs-on: ubuntu-latest
+
+    steps:
+      # Usar GitHub App Token en lugar de GITHUB_TOKEN porque:
+      # - GITHUB_TOKEN NO dispara workflows subsecuentes (limitación de seguridad de GitHub)
+      # - App Token SÍ dispara sync-main-to-dev.yml automáticamente después del push
+      # - Requiere secretos: APP_ID y APP_PRIVATE_KEY (configurados a nivel de organización)
+      - name: Generar token desde GitHub App
+        id: generate_token
+        uses: actions/create-github-app-token@v2.1.4  # Commit SHA: 6701853
+        with:
+          app-id: ${{ secrets.APP_ID }}
+          private-key: ${{ secrets.APP_PRIVATE_KEY }}
+
+      - name: Checkout código
+        uses: actions/checkout@v6
+        with:
+          ref: main
+          fetch-depth: 0
+          token: ${{ steps.generate_token.outputs.token }}
+
+      - name: Configurar Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Validar versión
+        id: validate
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          # Validar formato semver
+          if ! echo "$VERSION" | grep -qE '^[0-9]+\.[0-9]+\.[0-9]+$'; then
+            echo "❌ Error: Versión debe ser formato semver (ejemplo: 0.1.0)"
+            exit 1
+          fi
+
+          # Verificar que el tag no exista
+          if git tag -l | grep -q "^v$VERSION$"; then
+            echo "❌ Error: El tag v$VERSION ya existe"
+            exit 1
+          fi
+
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          echo "✅ Versión v$VERSION validada"
+
+      - name: Actualizar version.txt
+        run: |
+          VERSION="${{ steps.validate.outputs.version }}"
+          echo "$VERSION" > .github/version.txt
+          echo "✅ version.txt actualizado a $VERSION"
+
+      - name: Generar entrada de CHANGELOG
+        run: |
+          VERSION="${{ steps.validate.outputs.version }}"
+          BUMP_TYPE="${{ inputs.bump_type }}"
+          DATE=$(date +%Y-%m-%d)
+
+          # Crear entrada de CHANGELOG directamente
+          echo "## [$VERSION] - $DATE" > /tmp/changelog_entry.md
+          echo "" >> /tmp/changelog_entry.md
+          echo "### Tipo de Release: $BUMP_TYPE" >> /tmp/changelog_entry.md
+          echo "" >> /tmp/changelog_entry.md
+
+          # Agregar últimos commits
+          LAST_TAG=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
+          if [ -n "$LAST_TAG" ]; then
+            git log ${LAST_TAG}..HEAD --pretty=format:"- %s" --no-merges | head -20 >> /tmp/changelog_entry.md
+          else
+            git log --pretty=format:"- %s" --no-merges | head -20 >> /tmp/changelog_entry.md
+          fi
+
+          echo "" >> /tmp/changelog_entry.md
+          echo "" >> /tmp/changelog_entry.md
+          echo "---" >> /tmp/changelog_entry.md
+
+          # Insertar en CHANGELOG.md después de la cabecera
+          if [ -f CHANGELOG.md ]; then
+            # Guardar cabecera (primeras 6 líneas)
+            head -6 CHANGELOG.md > /tmp/changelog_header.md
+            # Guardar resto
+            tail -n +7 CHANGELOG.md > /tmp/changelog_rest.md
+            # Combinar: cabecera + nueva entrada + resto
+            cat /tmp/changelog_header.md > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            cat /tmp/changelog_entry.md >> CHANGELOG.md
+            cat /tmp/changelog_rest.md >> CHANGELOG.md
+          else
+            # Si no existe, crear nuevo
+            echo "# Changelog" > CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            echo "All notable changes to this project will be documented in this file." >> CHANGELOG.md
+            echo "" >> CHANGELOG.md
+            cat /tmp/changelog_entry.md >> CHANGELOG.md
+          fi
+
+          echo "✅ CHANGELOG.md actualizado"
+
+      - name: Commit cambios de versión
+        run: |
+          VERSION="${{ steps.validate.outputs.version }}"
+
+          git add .github/version.txt CHANGELOG.md
+          git commit -m "chore: release v$VERSION" -m "" -m "Actualizar version.txt y CHANGELOG.md para release v$VERSION" -m "" -m "🤖 Generated with [Claude Code](https://claude.com/claude-code)" -m "" -m "Co-Authored-By: Claude <noreply@anthropic.com>"
+          git push origin main
+
+          echo "✅ Commit de release pusheado a main"
+
+      - name: Crear y pushear tag
+        run: |
+          VERSION="${{ steps.validate.outputs.version }}"
+
+          git tag -a "v$VERSION" -m "Release v$VERSION"
+          git push origin "v$VERSION"
+
+          echo "✅ Tag v$VERSION creado y pusheado"
+
+      - name: Resumen
+        run: |
+          VERSION="${{ steps.validate.outputs.version }}"
+
+          echo "# 🎉 Release v$VERSION Iniciado" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Aspecto | Valor |" >> $GITHUB_STEP_SUMMARY
+          echo "|---------|-------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Versión | v$VERSION |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tipo | ${{ inputs.bump_type }} |" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag Creado | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "| Commit | ✅ |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## ⏳ Siguientes Jobs en Este Workflow" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "- ⏳ **Build Tests** → Validación completa del código" >> $GITHUB_STEP_SUMMARY
+          echo "- ⏳ **Build Docker** → Construcción de imagen multi-platform" >> $GITHUB_STEP_SUMMARY
+          echo "- ⏳ **Publish Docker** → Publicación en GHCR" >> $GITHUB_STEP_SUMMARY
+          echo "- ⏳ **Create GitHub Release** → Release notes automáticos" >> $GITHUB_STEP_SUMMARY
+
+  build-and-test:
+    name: Build y Tests
+    needs: create-release
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código en tag
+        uses: actions/checkout@v6
+        with:
+          ref: v${{ inputs.version }}
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+          cache: true
+
+      - name: Descargar dependencias
+        run: go mod download
+
+      - name: Ejecutar tests
+        run: go test -v -race ./...
+
+      - name: Compilar binario Linux amd64
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build \
+            -trimpath -ldflags="-s -w" \
+            -o ./main ./cmd/main.go
+
+      - name: Subir binario compilado
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-binary
+          path: ./main
+          retention-days: 1
+
+  build-docker-image:
+    name: Construir y Publicar Imagen Docker
+    needs: build-and-test
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código en tag
+        uses: actions/checkout@v6
+        with:
+          ref: v${{ inputs.version }}
+
+      - name: Descargar binario compilado (del job anterior)
+        uses: actions/download-artifact@v4
+        with:
+          name: api-binary
+          path: .
+
+      - name: Setup Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login a GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extraer metadata para Docker
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}
+          tags: |
+            type=raw,value=v${{ inputs.version }}
+            type=raw,value=${{ inputs.version }}
+            type=raw,value=latest
+
+      - name: Build and push Docker image
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          build-args: |
+            VERSION=v${{ inputs.version }}
+            BUILD_DATE=${{ github.event.repository.updated_at }}
+
+      - name: Resumen Docker
+        run: |
+          echo "# 🐳 Imagen Docker Publicada" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Registry:** ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Tags:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.meta.outputs.tags }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "**Pull:**" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v${{ inputs.version }}" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY
+
+  create-github-release:
+    name: Crear GitHub Release
+    needs: build-docker-image
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v6
+        with:
+          ref: v${{ inputs.version }}
+          fetch-depth: 0
+
+      - name: Extraer changelog para esta versión
+        id: changelog
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          if grep -q "## \[$VERSION\]" CHANGELOG.md; then
+            CHANGELOG=$(sed -n "/## \[$VERSION\]/,/## \[/p" CHANGELOG.md | sed '$d')
+            echo "$CHANGELOG" > /tmp/changelog.md
+          else
+            echo "Release v$VERSION" > /tmp/changelog.md
+          fi
+
+      - name: Crear GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          gh release create "v$VERSION" \
+            --title "Release v$VERSION" \
+            --notes-file /tmp/changelog.md \
+            --latest
+
+          echo "✅ GitHub Release v$VERSION creado"
+
+      - name: Resumen Final
+        run: |
+          VERSION="${{ inputs.version }}"
+
+          echo "# ✅ Release v$VERSION Completado" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "| Componente | Estado | Link |" >> $GITHUB_STEP_SUMMARY
+          echo "|------------|--------|------|" >> $GITHUB_STEP_SUMMARY
+          echo "| Tag Git | ✅ | https://github.com/${{ github.repository }}/releases/tag/v$VERSION |" >> $GITHUB_STEP_SUMMARY
+          echo "| GitHub Release | ✅ | https://github.com/${{ github.repository }}/releases/tag/v$VERSION |" >> $GITHUB_STEP_SUMMARY
+          echo "| Docker Image | ✅ | ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v$VERSION |" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "## 🚀 Desplegar" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`bash" >> $GITHUB_STEP_SUMMARY
+          echo "docker pull ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v$VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "docker run -p 8080:8080 ${{ env.REGISTRY }}/${{ env.IMAGE_NAME }}:v$VERSION" >> $GITHUB_STEP_SUMMARY
+          echo "\`\`\`" >> $GITHUB_STEP_SUMMARY

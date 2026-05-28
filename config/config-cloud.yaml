@@ -1,0 +1,27 @@
+database:
+  postgres:
+    host: "ep-green-frost-ado4abbi-pooler.c-2.us-east-1.aws.neon.tech"
+    user: "neondb_owner"
+    ssl_mode: "require"
+
+messaging:
+  rabbitmq:
+    url: "amqps://rgvtxvma:O_9EeTgx8IHDg3MW3UZuTGn1tdbdhsZR@chameleon.lmq.cloudamqp.com/rgvtxvma"
+
+storage:
+  provider: "s3"
+  timeout: "30s"
+  s3:
+    region: "auto"
+    bucket: "edugo-materials"
+    endpoint: "https://fa88e11fa0af310c2025d21c23aab6df.r2.cloudflarestorage.com"
+    access_key_id: "8036a0c0b63e2458eaf9966acd61eaed"
+    secret_access_key: "9e91ec224d48b4b9959dec49e341e2b89a1494bc36b8b8c5202969daa7f96871"
+    use_path_style: true
+
+logging:
+  level: "debug"
+  format: "json"
+
+api_identity:
+  base_url: "http://localhost:8070/api"

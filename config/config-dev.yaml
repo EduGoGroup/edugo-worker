@@ -1,0 +1,25 @@
+# Configuración Development Server
+# Usa variables de ambiente para secretos
+
+database:
+  postgres:
+    host: "dev-postgres.edugo.internal"
+
+  mongodb:
+    # URI completa desde ENV: MONGODB_URI
+
+messaging:
+  rabbitmq:
+    # URL completa desde ENV: RABBITMQ_URL
+
+logging:
+  level: "debug"
+  format: "json"
+
+# Autenticación centralizada con api-identity
+api_identity:
+  base_url: "http://api-identity:8070/api"
+  timeout: "5s"
+  cache_ttl: "60s"
+  cache_enabled: true
+  max_bulk_size: 50

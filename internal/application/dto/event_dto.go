@@ -1,0 +1,170 @@
+package dto
+
+import (
+	"strings"
+	"time"
+)
+
+// MaterialUploadedEvent representa el evento recibido de API Mobile
+// NOTA: Este es un mapeo TEMPORAL hasta implementar DTOs compartidos en edugo-shared
+type MaterialUploadedEvent struct {
+	// Campos del envelope (API Mobile usa Event wrapper)
+	EventID      string    `json:"event_id"`
+	EventType    string    `json:"event_type"`
+	EventVersion string    `json:"event_version"`
+	Timestamp    time.Time `json:"timestamp"`
+
+	// Payload anidado
+	Payload MaterialUploadedPayload `json:"payload"`
+}
+
+// MaterialUploadedPayload contiene los datos del material
+type MaterialUploadedPayload struct {
+	MaterialID    string                 `json:"material_id"`
+	SchoolID      string                 `json:"school_id"`
+	TeacherID     string                 `json:"teacher_id"` // API usa teacher_id
+	FileURL       string                 `json:"file_url"`   // API usa file_url (no s3_key)
+	FileSizeBytes int64                  `json:"file_size_bytes"`
+	FileType      string                 `json:"file_type"`
+	Metadata      map[string]interface{} `json:"metadata,omitempty"`
+}
+
+// GetMaterialID helper para acceder al material ID desde el payload
+func (e MaterialUploadedEvent) GetMaterialID() string {
+	return e.Payload.MaterialID
+}
+
+// GetS3Key helper para compatibilidad (extrae la key S3 desde FileURL)
+func (e MaterialUploadedEvent) GetS3Key() string {
+	// 1. Si hay metadata con s3_key, usar ese valor (preferido)
+	if e.Payload.Metadata != nil {
+		if key, ok := e.Payload.Metadata["s3_key"].(string); ok && key != "" {
+			return key
+		}
+	}
+
+	// 2. Intentar extraer key desde FileURL
+	fileURL := e.Payload.FileURL
+
+	// Formato s3://bucket/path/to/file.pdf
+	if strings.HasPrefix(fileURL, "s3://") {
+		// Remover prefijo s3://
+		rest := strings.TrimPrefix(fileURL, "s3://")
+		// Buscar el primer / para saltar el bucket
+		if idx := strings.Index(rest, "/"); idx != -1 {
+			return rest[idx+1:]
+		}
+	}
+
+	// Formato https con dominio conocido: S3, R2, o cualquier storage con bucket en el path
+	// Ejemplos:
+	//   https://s3.amazonaws.com/bucket/key
+	//   https://bucket.s3.amazonaws.com/key
+	//   https://xxx.r2.cloudflarestorage.com/bucket/key
+	if strings.HasPrefix(fileURL, "https://") || strings.HasPrefix(fileURL, "http://") {
+		if idx := strings.Index(fileURL, "//"); idx != -1 {
+			rest := fileURL[idx+2:]
+			if slashIdx := strings.Index(rest, "/"); slashIdx != -1 {
+				pathPart := rest[slashIdx+1:]
+				// pathPart = "bucket/path/to/file" — saltar el bucket
+				if strings.Contains(pathPart, "/") {
+					parts := strings.SplitN(pathPart, "/", 2)
+					if len(parts) >= 2 {
+						return parts[1]
+					}
+				}
+				return pathPart
+			}
+		}
+	}
+
+	// 3. Fallback: retornar FileURL completo (ya es un path relativo)
+	return fileURL
+}
+
+// GetAuthorID helper para mapear TeacherID → AuthorID
+func (e MaterialUploadedEvent) GetAuthorID() string {
+	return e.Payload.TeacherID
+}
+
+// MaterialDeletedEvent evento cuando se elimina un material
+type MaterialDeletedEvent struct {
+	EventType  string    `json:"event_type"`
+	MaterialID string    `json:"material_id"`
+	Timestamp  time.Time `json:"timestamp"`
+}
+
+// StudentEnrolledEvent evento cuando un estudiante se inscribe
+type StudentEnrolledEvent struct {
+	EventType string    `json:"event_type"`
+	StudentID string    `json:"student_id"`
+	UnitID    string    `json:"unit_id"`
+	Timestamp time.Time `json:"timestamp"`
+}
+
+// AssessmentAssignedNotifEvent represents the assessment.assigned event for notification processing.
+type AssessmentAssignedNotifEvent struct {
+	EventID      string                         `json:"event_id"`
+	EventType    string                         `json:"event_type"`
+	EventVersion string                         `json:"event_version"`
+	Timestamp    time.Time                      `json:"timestamp"`
+	Payload      AssessmentAssignedNotifPayload `json:"payload"`
+}
+
+// AssessmentAssignedNotifPayload contains the data for an assessment assignment notification.
+type AssessmentAssignedNotifPayload struct {
+	AssessmentID string `json:"assessment_id"`
+	AssignmentID string `json:"assignment_id"`
+	SchoolID     string `json:"school_id"`
+	AssignedByID string `json:"assigned_by_id"`
+	TargetType   string `json:"target_type"`
+	TargetID     string `json:"target_id"`
+	Title        string `json:"title"`
+}
+
+// AssessmentAttemptEvent represents the assessment.attempt_recorded event.
+// Used by both the analytics processor and the notification processor.
+type AssessmentAttemptEvent struct {
+	EventID      string                   `json:"event_id"`
+	EventType    string                   `json:"event_type"`
+	EventVersion string                   `json:"event_version"`
+	Timestamp    time.Time                `json:"timestamp"`
+	Payload      AssessmentAttemptPayload `json:"payload"`
+}
+
+// AssessmentAttemptPayload contains the data for an assessment attempt.
+type AssessmentAttemptPayload struct {
+	AttemptID       string  `json:"attempt_id"`
+	AssessmentID    string  `json:"assessment_id"`
+	StudentID       string  `json:"student_id"`
+	SchoolID        string  `json:"school_id"`
+	Score           float64 `json:"score"`
+	TotalPoints     float64 `json:"total_points"`
+	Percentage      float64 `json:"percentage,omitempty"`
+	DurationSeconds int     `json:"duration_seconds,omitempty"`
+	TeacherID       string  `json:"teacher_id"`
+	Title           string  `json:"title"`
+	SubmittedAt     string  `json:"submitted_at,omitempty"`
+}
+
+// AssessmentReviewedNotifEvent represents the assessment.reviewed event for notification processing.
+type AssessmentReviewedNotifEvent struct {
+	EventID      string                         `json:"event_id"`
+	EventType    string                         `json:"event_type"`
+	EventVersion string                         `json:"event_version"`
+	Timestamp    time.Time                      `json:"timestamp"`
+	Payload      AssessmentReviewedNotifPayload `json:"payload"`
+}
+
+// AssessmentReviewedNotifPayload contains the data for an assessment reviewed notification.
+type AssessmentReviewedNotifPayload struct {
+	AttemptID    string  `json:"attempt_id"`
+	AssessmentID string  `json:"assessment_id"`
+	ReviewerID   string  `json:"reviewer_id"`
+	SchoolID     string  `json:"school_id"`
+	FinalScore   float64 `json:"final_score"`
+	TotalPoints  float64 `json:"total_points"`
+	Status       string  `json:"status"`
+	StudentID    string  `json:"student_id"`
+	Title        string  `json:"title"`
+}

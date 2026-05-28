@@ -1,0 +1,7 @@
+# Solo el binario, los configs YAML y el Dockerfile van al contexto.
+# La compilación ocurre en el CI (Job 2), no en el Dockerfile.
+*
+!Dockerfile
+!main
+!config/
+!config/**

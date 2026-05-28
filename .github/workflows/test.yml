@@ -1,0 +1,63 @@
+name: Tests with Coverage
+
+# Manual o en PRs
+on:
+  workflow_dispatch: # Manual desde GitHub UI
+  pull_request:
+    branches: [main, dev]
+
+env:
+  GO_VERSION: "1.25.0"
+
+jobs:
+  # =====================================================
+  # MIGRADO: Job test-coverage usando workflow reusable
+  # Migrado en SPRINT-4 FASE 1 para usar workflows centralizados
+  # Ver: edugo-infrastructure/.github/workflows/reusable-go-test.yml
+  # NOTA: FASE 1 usa STUB - workflow reusable aún no existe
+  # FASE 2: Crear workflow real en infrastructure
+  # =====================================================
+  test-coverage:
+    name: Tests with Coverage
+    uses: EduGoGroup/edugo-infrastructure/.github/workflows/reusable-go-test.yml@main
+    with:
+      go-version: "1.25"
+      coverage-threshold: 0.0  # TODO: Aumentar a 33.0 cuando se implementen tests
+      use-services: true  # PostgreSQL + MongoDB + RabbitMQ
+    # LECCIONES APRENDIDAS APLICADAS:
+    # ✅ NO subdirectorio (reusable-go-test.yml en raíz)
+    # ✅ NO secrets GITHUB_TOKEN (nombre reservado)
+    # ✅ Compatible con Go 1.25
+    # Referencia: docs/cicd/SPRINT-4-LESSONS-LEARNED.md
+
+  integration-tests:
+    name: Integration Tests
+    runs-on: ubuntu-latest
+    if: github.event_name == 'workflow_dispatch' # Solo manual
+
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v6
+
+      - name: Setup Go
+        uses: actions/setup-go@v6
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Configurar acceso a repos privados
+        run: |
+          git config --global url."https://${{ secrets.GITHUB_TOKEN }}@github.com/".insteadOf "https://github.com/"
+        env:
+          GOPRIVATE: github.com/EduGoGroup/*
+
+      - name: Descargar dependencias
+        run: go mod download
+
+      - name: Ejecutar integration tests
+        run: |
+          if [ -d "test/integration" ]; then
+            echo "Ejecutando integration tests..."
+            go test -v -tags=integration ./test/integration/...
+          else
+            echo "No hay integration tests disponibles"
+          fi

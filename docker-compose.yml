@@ -1,0 +1,25 @@
+version: '3.8'
+
+services:
+  worker:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: edugo-worker
+    environment:
+      APP_ENV: ${APP_ENV:-local}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-edugo_pass}
+      MONGODB_URI: ${MONGODB_URI:-mongodb://edugo_admin:edugo_pass@mongodb:27017/edugo?authSource=admin}
+      RABBITMQ_URL: ${RABBITMQ_URL:-amqp://edugo_user:edugo_pass@rabbitmq:5672/}
+      OPENAI_API_KEY: ${OPENAI_API_KEY}
+    volumes:
+      - ./config:/app/config:ro
+      - ./logs:/app/logs
+    networks:
+      - edugo-network
+    restart: unless-stopped
+
+networks:
+  edugo-network:
+    external: true
+    name: edugo-network

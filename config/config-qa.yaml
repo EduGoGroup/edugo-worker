@@ -1,0 +1,26 @@
+# Configuración QA/Staging
+# Usa variables de ambiente para secretos
+
+database:
+  postgres:
+    host: "qa-postgres.edugo.internal"
+    max_connections: 50
+
+  mongodb:
+    # URI desde ENV: MONGODB_URI
+
+messaging:
+  rabbitmq:
+    # URL desde ENV: RABBITMQ_URL
+
+logging:
+  level: "info"
+  format: "json"
+
+# Autenticación centralizada con api-identity
+api_identity:
+  base_url: "http://api-identity:8070/api"
+  timeout: "5s"
+  cache_ttl: "60s"
+  cache_enabled: true
+  max_bulk_size: 50
