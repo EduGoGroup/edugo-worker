@@ -7,7 +7,7 @@ import (
 
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/logger"
-	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
+	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/google/uuid"
 )
 
@@ -28,14 +28,14 @@ func (p *AssessmentAttemptNotifProcessor) EventType() string {
 }
 
 func (p *AssessmentAttemptNotifProcessor) Process(ctx context.Context, payload []byte) error {
-	var event dto.AssessmentAttemptEvent
+	var event events.AssessmentAttemptRecordedEvent
 	if err := json.Unmarshal(payload, &event); err != nil {
 		return errors.NewValidationError("invalid event payload")
 	}
 	return p.processEvent(ctx, event)
 }
 
-func (p *AssessmentAttemptNotifProcessor) processEvent(ctx context.Context, event dto.AssessmentAttemptEvent) error {
+func (p *AssessmentAttemptNotifProcessor) processEvent(ctx context.Context, event events.AssessmentAttemptRecordedEvent) error {
 	pl := event.Payload
 
 	p.logger.Info("processing assessment.attempt_recorded notification",

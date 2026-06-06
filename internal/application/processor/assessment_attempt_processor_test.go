@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
+	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/google/uuid"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -39,27 +39,27 @@ func TestAssessmentAttemptProcessor_ValidEvent_Success(t *testing.T) {
 	studentID := uuid.New()
 	schoolID := uuid.New()
 
-	event := dto.AssessmentAttemptEvent{
+	event := events.AssessmentAttemptRecordedEvent{
 		EventID:      "evt-100",
 		EventType:    "assessment.attempt_recorded",
 		EventVersion: "1.0.0",
 		Timestamp:    time.Now(),
-		Payload: dto.AssessmentAttemptPayload{
-			AttemptID:       attemptID.String(),
-			AssessmentID:    assessmentID.String(),
-			StudentID:       studentID.String(),
-			SchoolID:        schoolID.String(),
-			Score:           85.0,
-			TotalPoints:     100.0,
-			DurationSeconds: 1200,
-			TeacherID:       uuid.New().String(),
-			Title:           "Examen de Matematicas",
+		Payload: events.AssessmentAttemptRecordedPayload{
+			AttemptID:    attemptID.String(),
+			AssessmentID: assessmentID.String(),
+			StudentID:    studentID.String(),
+			SchoolID:     schoolID.String(),
+			Score:        85.0,
+			TotalPoints:  100.0,
+			SubmittedAt:  time.Now(),
+			TeacherID:    uuid.New().String(),
+			Title:        "Examen de Matematicas",
 		},
 	}
 	payload, err := json.Marshal(event)
 	require.NoError(t, err)
 
-	// Expect analytics INSERT
+	// Expect analytics INSERT — duration_seconds siempre NULL (canonico no lo lleva)
 	dbMock.ExpectExec("INSERT INTO assessment.attempt_analytics").
 		WithArgs(
 			sqlmock.AnyArg(), // id (SHA1)
@@ -70,7 +70,7 @@ func TestAssessmentAttemptProcessor_ValidEvent_Success(t *testing.T) {
 			85.0,             // score
 			100.0,            // total_points
 			85.0,             // percentage (calculated)
-			1200,             // duration_seconds
+			nil,              // duration_seconds
 			sqlmock.AnyArg(), // submitted_at
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
@@ -107,18 +107,19 @@ func TestAssessmentAttemptProcessor_DuplicateEvent_Idempotent(t *testing.T) {
 	studentID := uuid.New()
 	schoolID := uuid.New()
 
-	event := dto.AssessmentAttemptEvent{
+	event := events.AssessmentAttemptRecordedEvent{
 		EventID:      "evt-101",
 		EventType:    "assessment.attempt_recorded",
 		EventVersion: "1.0.0",
 		Timestamp:    time.Now(),
-		Payload: dto.AssessmentAttemptPayload{
+		Payload: events.AssessmentAttemptRecordedPayload{
 			AttemptID:    attemptID.String(),
 			AssessmentID: assessmentID.String(),
 			StudentID:    studentID.String(),
 			SchoolID:     schoolID.String(),
 			Score:        70.0,
 			TotalPoints:  100.0,
+			SubmittedAt:  time.Now(),
 			TeacherID:    uuid.New().String(),
 			Title:        "Quiz de Ciencias",
 		},
@@ -164,11 +165,11 @@ func TestAssessmentAttemptProcessor_MissingAttemptID_ValidationError(t *testing.
 	logger := newTestLogger()
 	proc := NewAssessmentAttemptProcessor(db, nil, logger)
 
-	event := dto.AssessmentAttemptEvent{
+	event := events.AssessmentAttemptRecordedEvent{
 		EventID:   "evt-102",
 		EventType: "assessment.attempt_recorded",
 		Timestamp: time.Now(),
-		Payload: dto.AssessmentAttemptPayload{
+		Payload: events.AssessmentAttemptRecordedPayload{
 			AttemptID:    "", // missing
 			AssessmentID: uuid.New().String(),
 			StudentID:    uuid.New().String(),
@@ -193,11 +194,11 @@ func TestAssessmentAttemptProcessor_MissingAssessmentID_ValidationError(t *testi
 	logger := newTestLogger()
 	proc := NewAssessmentAttemptProcessor(db, nil, logger)
 
-	event := dto.AssessmentAttemptEvent{
+	event := events.AssessmentAttemptRecordedEvent{
 		EventID:   "evt-103",
 		EventType: "assessment.attempt_recorded",
 		Timestamp: time.Now(),
-		Payload: dto.AssessmentAttemptPayload{
+		Payload: events.AssessmentAttemptRecordedPayload{
 			AttemptID:    uuid.New().String(),
 			AssessmentID: "", // missing
 			StudentID:    uuid.New().String(),
@@ -222,11 +223,11 @@ func TestAssessmentAttemptProcessor_MissingStudentID_ValidationError(t *testing.
 	logger := newTestLogger()
 	proc := NewAssessmentAttemptProcessor(db, nil, logger)
 
-	event := dto.AssessmentAttemptEvent{
+	event := events.AssessmentAttemptRecordedEvent{
 		EventID:   "evt-104",
 		EventType: "assessment.attempt_recorded",
 		Timestamp: time.Now(),
-		Payload: dto.AssessmentAttemptPayload{
+		Payload: events.AssessmentAttemptRecordedPayload{
 			AttemptID:    uuid.New().String(),
 			AssessmentID: uuid.New().String(),
 			StudentID:    "", // missing
@@ -251,11 +252,11 @@ func TestAssessmentAttemptProcessor_MissingSchoolID_ValidationError(t *testing.T
 	logger := newTestLogger()
 	proc := NewAssessmentAttemptProcessor(db, nil, logger)
 
-	event := dto.AssessmentAttemptEvent{
+	event := events.AssessmentAttemptRecordedEvent{
 		EventID:   "evt-105",
 		EventType: "assessment.attempt_recorded",
 		Timestamp: time.Now(),
-		Payload: dto.AssessmentAttemptPayload{
+		Payload: events.AssessmentAttemptRecordedPayload{
 			AttemptID:    uuid.New().String(),
 			AssessmentID: uuid.New().String(),
 			StudentID:    uuid.New().String(),
@@ -294,11 +295,11 @@ func TestAssessmentAttemptProcessor_AnalyticsDBError(t *testing.T) {
 	logger := newTestLogger()
 	proc := NewAssessmentAttemptProcessor(db, nil, logger)
 
-	event := dto.AssessmentAttemptEvent{
+	event := events.AssessmentAttemptRecordedEvent{
 		EventID:   "evt-106",
 		EventType: "assessment.attempt_recorded",
 		Timestamp: time.Now(),
-		Payload: dto.AssessmentAttemptPayload{
+		Payload: events.AssessmentAttemptRecordedPayload{
 			AttemptID:    uuid.New().String(),
 			AssessmentID: uuid.New().String(),
 			StudentID:    uuid.New().String(),
@@ -343,11 +344,11 @@ func TestAssessmentAttemptProcessor_StatsError_NonFatal(t *testing.T) {
 	logger := newTestLogger()
 	proc := NewAssessmentAttemptProcessor(db, nil, logger)
 
-	event := dto.AssessmentAttemptEvent{
+	event := events.AssessmentAttemptRecordedEvent{
 		EventID:   "evt-107",
 		EventType: "assessment.attempt_recorded",
 		Timestamp: time.Now(),
-		Payload: dto.AssessmentAttemptPayload{
+		Payload: events.AssessmentAttemptRecordedPayload{
 			AttemptID:    uuid.New().String(),
 			AssessmentID: uuid.New().String(),
 			StudentID:    uuid.New().String(),
@@ -400,12 +401,12 @@ func TestAssessmentAttemptProcessor_WithNotificationSubProcessor(t *testing.T) {
 	studentID := uuid.New()
 	schoolID := uuid.New()
 
-	event := dto.AssessmentAttemptEvent{
+	event := events.AssessmentAttemptRecordedEvent{
 		EventID:      "evt-108",
 		EventType:    "assessment.attempt_recorded",
 		EventVersion: "1.0.0",
 		Timestamp:    time.Now(),
-		Payload: dto.AssessmentAttemptPayload{
+		Payload: events.AssessmentAttemptRecordedPayload{
 			AttemptID:    attemptID.String(),
 			AssessmentID: assessmentID.String(),
 			StudentID:    studentID.String(),
@@ -454,7 +455,7 @@ func TestAssessmentAttemptProcessor_WithNotificationSubProcessor(t *testing.T) {
 }
 
 func TestAssessmentAttemptProcessor_PercentageCalculation(t *testing.T) {
-	// When percentage is not provided, it should be calculated from score/total_points
+	// El payload canonico no transporta porcentaje: siempre se deriva de score/total_points.
 
 	db, dbMock, err := sqlmock.New()
 	require.NoError(t, err)
@@ -463,18 +464,17 @@ func TestAssessmentAttemptProcessor_PercentageCalculation(t *testing.T) {
 	logger := newTestLogger()
 	proc := NewAssessmentAttemptProcessor(db, nil, logger)
 
-	event := dto.AssessmentAttemptEvent{
+	event := events.AssessmentAttemptRecordedEvent{
 		EventID:   "evt-109",
 		EventType: "assessment.attempt_recorded",
 		Timestamp: time.Now(),
-		Payload: dto.AssessmentAttemptPayload{
+		Payload: events.AssessmentAttemptRecordedPayload{
 			AttemptID:    uuid.New().String(),
 			AssessmentID: uuid.New().String(),
 			StudentID:    uuid.New().String(),
 			SchoolID:     uuid.New().String(),
 			Score:        7.5,
 			TotalPoints:  10.0,
-			Percentage:   0, // not provided
 		},
 	}
 	payload, err := json.Marshal(event)

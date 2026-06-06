@@ -5,11 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"time"
 
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/logger"
-	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
+	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/google/uuid"
 )
 
@@ -33,7 +32,7 @@ func (p *AssessmentAttemptProcessor) EventType() string {
 }
 
 func (p *AssessmentAttemptProcessor) Process(ctx context.Context, payload []byte) error {
-	var event dto.AssessmentAttemptEvent
+	var event events.AssessmentAttemptRecordedEvent
 	if err := json.Unmarshal(payload, &event); err != nil {
 		return errors.NewValidationError("invalid event payload")
 	}
@@ -46,7 +45,7 @@ func (p *AssessmentAttemptProcessor) Process(ctx context.Context, payload []byte
 }
 
 // validatePayload checks that required fields are present.
-func (p *AssessmentAttemptProcessor) validatePayload(pl dto.AssessmentAttemptPayload) error {
+func (p *AssessmentAttemptProcessor) validatePayload(pl events.AssessmentAttemptRecordedPayload) error {
 	if pl.AttemptID == "" {
 		return errors.NewValidationError("attempt_id is required")
 	}
@@ -62,7 +61,7 @@ func (p *AssessmentAttemptProcessor) validatePayload(pl dto.AssessmentAttemptPay
 	return nil
 }
 
-func (p *AssessmentAttemptProcessor) processEvent(ctx context.Context, event dto.AssessmentAttemptEvent) error {
+func (p *AssessmentAttemptProcessor) processEvent(ctx context.Context, event events.AssessmentAttemptRecordedEvent) error {
 	pl := event.Payload
 
 	p.logger.Info("processing assessment.attempt_recorded",
@@ -125,7 +124,7 @@ func (p *AssessmentAttemptProcessor) processEvent(ctx context.Context, event dto
 
 // insertAnalytics inserts a row into assessment.attempt_analytics with SHA1 idempotency.
 // Returns true if a new row was inserted, false if the row already existed (duplicate event).
-func (p *AssessmentAttemptProcessor) insertAnalytics(ctx context.Context, event dto.AssessmentAttemptEvent) (bool, error) {
+func (p *AssessmentAttemptProcessor) insertAnalytics(ctx context.Context, event events.AssessmentAttemptRecordedEvent) (bool, error) {
 	pl := event.Payload
 
 	// Deterministic ID for idempotency
@@ -148,17 +147,16 @@ func (p *AssessmentAttemptProcessor) insertAnalytics(ctx context.Context, event 
 		return false, fmt.Errorf("invalid school_id: %w", err)
 	}
 
-	// Calculate percentage
-	percentage := calculatePercentage(pl.Percentage, pl.Score, pl.TotalPoints)
+	// El payload canonico no transporta porcentaje precalculado: se deriva de score/total.
+	percentage := calculatePercentage(0, pl.Score, pl.TotalPoints)
 
-	// Parse submitted_at or use event timestamp
-	submittedAt := event.Timestamp
-	if pl.SubmittedAt != "" {
-		if parsed, parseErr := time.Parse(time.RFC3339, pl.SubmittedAt); parseErr == nil {
-			submittedAt = parsed
-		}
+	// El payload canonico lleva submitted_at; si llega en cero se usa el timestamp del evento.
+	submittedAt := pl.SubmittedAt
+	if submittedAt.IsZero() {
+		submittedAt = event.Timestamp
 	}
 
+	// El payload canonico no transporta duracion del intento: duration_seconds queda NULL.
 	query := `INSERT INTO assessment.attempt_analytics
 		(id, attempt_id, assessment_id, student_id, school_id, score, total_points, percentage, duration_seconds, submitted_at)
 		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
@@ -167,7 +165,7 @@ func (p *AssessmentAttemptProcessor) insertAnalytics(ctx context.Context, event 
 	result, err := p.db.ExecContext(ctx, query,
 		id, attemptID, assessmentID, studentID, schoolID,
 		pl.Score, pl.TotalPoints, percentage,
-		nilIfZero(pl.DurationSeconds), submittedAt,
+		nil, submittedAt,
 	)
 	if err != nil {
 		return false, fmt.Errorf("failed to insert analytics: %w", err)
@@ -189,7 +187,7 @@ func (p *AssessmentAttemptProcessor) insertAnalytics(ctx context.Context, event 
 }
 
 // updateAssessmentStats updates cumulative statistics for the assessment using UPSERT.
-func (p *AssessmentAttemptProcessor) updateAssessmentStats(ctx context.Context, event dto.AssessmentAttemptEvent) error {
+func (p *AssessmentAttemptProcessor) updateAssessmentStats(ctx context.Context, event events.AssessmentAttemptRecordedEvent) error {
 	pl := event.Payload
 
 	assessmentID, err := uuid.Parse(pl.AssessmentID)
@@ -197,7 +195,7 @@ func (p *AssessmentAttemptProcessor) updateAssessmentStats(ctx context.Context, 
 		return fmt.Errorf("invalid assessment_id: %w", err)
 	}
 
-	percentage := calculatePercentage(pl.Percentage, pl.Score, pl.TotalPoints)
+	percentage := calculatePercentage(0, pl.Score, pl.TotalPoints)
 
 	query := `INSERT INTO assessment.assessment_stats (id, assessment_id, attempt_count, average_score, average_percentage, updated_at)
 		VALUES ($1, $2, 1, $3, $4, NOW())
@@ -231,12 +229,4 @@ func calculatePercentage(provided, score, totalPoints float64) float64 {
 		return (score / totalPoints) * 100
 	}
 	return 0
-}
-
-// nilIfZero returns nil for zero values, allowing NULL in the DB.
-func nilIfZero(v int) interface{} {
-	if v == 0 {
-		return nil
-	}
-	return v
 }
