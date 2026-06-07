@@ -4,7 +4,9 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
+	"math"
 
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/logger"
@@ -13,16 +15,18 @@ import (
 )
 
 // AssessmentAttemptProcessor handles "assessment.attempt_recorded" events.
-// It records analytics data in PostgreSQL and delegates notification creation
-// to the notification sub-processor.
+// Materializa un componente de nota auto_scored en academic.grade_item a partir
+// de un intento de evaluacion autocalificado, resolviendo cross-schema el periodo
+// y la oferta de la sesion, y delega la notificacion al sub-procesador.
 type AssessmentAttemptProcessor struct {
 	db        *sql.DB
 	notifProc *AssessmentAttemptNotifProcessor
 	logger    logger.Logger
 }
 
-// NewAssessmentAttemptProcessor creates a new processor with DB access for analytics
-// and an optional notification sub-processor for teacher notifications.
+// NewAssessmentAttemptProcessor creates a new processor with DB access for the
+// grade_item materialization and an optional notification sub-processor for the
+// teacher notification.
 func NewAssessmentAttemptProcessor(db *sql.DB, notifProc *AssessmentAttemptNotifProcessor, logger logger.Logger) *AssessmentAttemptProcessor {
 	return &AssessmentAttemptProcessor{db: db, notifProc: notifProc, logger: logger}
 }
@@ -52,8 +56,11 @@ func (p *AssessmentAttemptProcessor) validatePayload(pl events.AssessmentAttempt
 	if pl.AssessmentID == "" {
 		return errors.NewValidationError("assessment_id is required")
 	}
-	if pl.StudentID == "" {
-		return errors.NewValidationError("student_id is required")
+	if pl.StudentMembershipID == "" {
+		return errors.NewValidationError("student_membership_id is required")
+	}
+	if pl.SubjectID == "" {
+		return errors.NewValidationError("subject_id is required")
 	}
 	if pl.SchoolID == "" {
 		return errors.NewValidationError("school_id is required")
@@ -64,169 +71,196 @@ func (p *AssessmentAttemptProcessor) validatePayload(pl events.AssessmentAttempt
 func (p *AssessmentAttemptProcessor) processEvent(ctx context.Context, event events.AssessmentAttemptRecordedEvent) error {
 	pl := event.Payload
 
-	p.logger.Info("processing assessment.attempt_recorded",
+	p.logger.Info("procesando assessment.attempt_recorded",
 		"attempt_id", pl.AttemptID,
 		"assessment_id", pl.AssessmentID,
-		"student_id", pl.StudentID,
+		"student_membership_id", pl.StudentMembershipID,
+		"subject_id", pl.SubjectID,
+		"status", pl.Status,
 		"score", pl.Score,
-		"total_points", pl.TotalPoints,
+		"max_score", pl.MaxScore,
 	)
 
-	// 1. Insert analytics record (returns true if new row was inserted)
-	inserted, err := p.insertAnalytics(ctx, event)
-	if err != nil {
-		return fmt.Errorf("inserting analytics: %w", err)
-	}
-
-	// 2. Update cumulative assessment stats (only if analytics was newly inserted,
-	//    to preserve idempotency — replayed events must not double-count stats)
-	if inserted {
-		if err := p.updateAssessmentStats(ctx, event); err != nil {
-			p.logger.Error("failed to update assessment stats (non-fatal)",
-				"assessment_id", pl.AssessmentID,
-				"error", err.Error(),
-			)
-			// Non-fatal: analytics already recorded
-		}
-	} else {
-		p.logger.Info("duplicate event detected, skipping stats update",
+	// Paso 1 — Gate de status: solo un intento completado materializa nota.
+	// pending_review no genera nota hasta que finalize lo resuelva (R7).
+	if pl.Status != "completed" {
+		p.logger.Info("intento no completado, no se materializa nota",
 			"attempt_id", pl.AttemptID,
+			"status", pl.Status,
 		)
+		return nil
 	}
 
-	// 3. Detect low score (< 50%)
-	if pl.TotalPoints > 0 && pl.Score/pl.TotalPoints < 0.5 {
-		p.logger.Warn("low score detected",
+	// Paso 3 — Resolver period_id + offering_id cross-schema desde academic.
+	// Si el alumno no esta inscrito en la materia, se descarta best-effort (R5).
+	studentMembershipID, err := uuid.Parse(pl.StudentMembershipID)
+	if err != nil {
+		return fmt.Errorf("invalid student_membership_id: %w", err)
+	}
+	subjectID, err := uuid.Parse(pl.SubjectID)
+	if err != nil {
+		return fmt.Errorf("invalid subject_id: %w", err)
+	}
+
+	periodID, offeringID, found, err := p.resolveEnrollment(ctx, studentMembershipID, subjectID)
+	if err != nil {
+		return fmt.Errorf("resolviendo inscripcion del alumno: %w", err)
+	}
+	if !found {
+		p.logger.Warn("intento sin inscripcion activa, no se materializa nota (best-effort)",
 			"attempt_id", pl.AttemptID,
-			"student_id", pl.StudentID,
-			"score", pl.Score,
-			"total_points", pl.TotalPoints,
-			"percentage", pl.Score/pl.TotalPoints*100,
+			"student_membership_id", pl.StudentMembershipID,
+			"subject_id", pl.SubjectID,
 		)
+		return nil
 	}
 
-	// 4. Delegate notification creation to sub-processor
-	if p.notifProc != nil {
-		if err := p.notifProc.processEvent(ctx, event); err != nil {
-			p.logger.Error("failed to create attempt notification (non-fatal)",
-				"attempt_id", pl.AttemptID,
-				"error", err.Error(),
-			)
-			// Non-fatal: analytics already recorded
-		}
-	}
-
-	p.logger.Info("assessment.attempt_recorded processed successfully",
-		"attempt_id", pl.AttemptID,
-	)
-	return nil
-}
-
-// insertAnalytics inserts a row into assessment.attempt_analytics with SHA1 idempotency.
-// Returns true if a new row was inserted, false if the row already existed (duplicate event).
-func (p *AssessmentAttemptProcessor) insertAnalytics(ctx context.Context, event events.AssessmentAttemptRecordedEvent) (bool, error) {
-	pl := event.Payload
-
-	// Deterministic ID for idempotency
-	id := uuid.NewSHA1(uuid.NameSpaceOID, []byte(pl.AttemptID+"analytics"))
-
-	attemptID, err := uuid.Parse(pl.AttemptID)
-	if err != nil {
-		return false, fmt.Errorf("invalid attempt_id: %w", err)
-	}
-	assessmentID, err := uuid.Parse(pl.AssessmentID)
-	if err != nil {
-		return false, fmt.Errorf("invalid assessment_id: %w", err)
-	}
-	studentID, err := uuid.Parse(pl.StudentID)
-	if err != nil {
-		return false, fmt.Errorf("invalid student_id: %w", err)
-	}
-	schoolID, err := uuid.Parse(pl.SchoolID)
-	if err != nil {
-		return false, fmt.Errorf("invalid school_id: %w", err)
-	}
-
-	// El payload canonico no transporta porcentaje precalculado: se deriva de score/total.
-	percentage := calculatePercentage(0, pl.Score, pl.TotalPoints)
-
-	// El payload canonico lleva submitted_at; si llega en cero se usa el timestamp del evento.
-	submittedAt := pl.SubmittedAt
-	if submittedAt.IsZero() {
-		submittedAt = event.Timestamp
-	}
-
-	// El payload canonico no transporta duracion del intento: duration_seconds queda NULL.
-	query := `INSERT INTO assessment.attempt_analytics
-		(id, attempt_id, assessment_id, student_id, school_id, score, total_points, percentage, duration_seconds, submitted_at)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-		ON CONFLICT (id) DO NOTHING`
-
-	result, err := p.db.ExecContext(ctx, query,
-		id, attemptID, assessmentID, studentID, schoolID,
-		pl.Score, pl.TotalPoints, percentage,
-		nil, submittedAt,
-	)
-	if err != nil {
-		return false, fmt.Errorf("failed to insert analytics: %w", err)
-	}
-
-	rowsAffected, err := result.RowsAffected()
-	if err != nil {
-		return false, fmt.Errorf("failed to check rows affected: %w", err)
-	}
-
-	inserted := rowsAffected > 0
-	if inserted {
-		p.logger.Info("analytics record inserted",
-			"analytics_id", id.String(),
-			"attempt_id", pl.AttemptID,
-		)
-	}
-	return inserted, nil
-}
-
-// updateAssessmentStats updates cumulative statistics for the assessment using UPSERT.
-func (p *AssessmentAttemptProcessor) updateAssessmentStats(ctx context.Context, event events.AssessmentAttemptRecordedEvent) error {
-	pl := event.Payload
-
+	// Paso 4 — Resolver el autor del examen como created_by_membership_id (R2).
 	assessmentID, err := uuid.Parse(pl.AssessmentID)
 	if err != nil {
 		return fmt.Errorf("invalid assessment_id: %w", err)
 	}
-
-	percentage := calculatePercentage(0, pl.Score, pl.TotalPoints)
-
-	query := `INSERT INTO assessment.assessment_stats (id, assessment_id, attempt_count, average_score, average_percentage, updated_at)
-		VALUES ($1, $2, 1, $3, $4, NOW())
-		ON CONFLICT (assessment_id) DO UPDATE SET
-			attempt_count = assessment.assessment_stats.attempt_count + 1,
-			average_score = (assessment.assessment_stats.average_score * assessment.assessment_stats.attempt_count + $3) / (assessment.assessment_stats.attempt_count + 1),
-			average_percentage = (assessment.assessment_stats.average_percentage * assessment.assessment_stats.attempt_count + $4) / (assessment.assessment_stats.attempt_count + 1),
-			updated_at = NOW()`
-
-	statsID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(pl.AssessmentID+"stats"))
-
-	_, err = p.db.ExecContext(ctx, query, statsID, assessmentID, pl.Score, percentage)
+	createdBy, err := p.resolveAssessmentAuthor(ctx, assessmentID)
 	if err != nil {
-		return fmt.Errorf("failed to upsert assessment stats: %w", err)
+		return fmt.Errorf("resolviendo autor de la evaluacion: %w", err)
 	}
 
-	p.logger.Info("assessment stats updated",
-		"assessment_id", pl.AssessmentID,
+	// Paso 5 — Calcular value como porcentaje 0-100 (guard de division por cero).
+	value := 0.0
+	if pl.MaxScore > 0 {
+		value = math.Round(pl.Score/pl.MaxScore*100*100) / 100
+	}
+
+	// Paso 6 — UPSERT idempotente en academic.grade_item con ID deterministico.
+	attemptID, err := uuid.Parse(pl.AttemptID)
+	if err != nil {
+		return fmt.Errorf("invalid attempt_id: %w", err)
+	}
+	title := pl.Title
+	if title == "" {
+		title = "Evaluacion"
+	}
+
+	if err := p.upsertGradeItem(ctx, gradeItemUpsert{
+		attemptID:           attemptID,
+		studentMembershipID: studentMembershipID,
+		subjectID:           subjectID,
+		periodID:            periodID,
+		offeringID:          offeringID,
+		assessmentID:        assessmentID,
+		value:               value,
+		title:               title,
+		createdBy:           createdBy,
+	}); err != nil {
+		return fmt.Errorf("materializando grade_item auto_scored: %w", err)
+	}
+
+	// Paso 7 — Delegar la notificacion al docente al sub-procesador (sin cambio de cadena).
+	if p.notifProc != nil {
+		if err := p.notifProc.processEvent(ctx, event); err != nil {
+			p.logger.Error("fallo al crear notificacion del intento (no fatal)",
+				"attempt_id", pl.AttemptID,
+				"error", err.Error(),
+			)
+			// No fatal: el grade_item ya quedo materializado.
+		}
+	}
+
+	p.logger.Info("assessment.attempt_recorded procesado: grade_item materializado",
+		"attempt_id", pl.AttemptID,
+		"value", value,
 	)
 	return nil
 }
 
-// calculatePercentage computes the percentage from score/totalPoints.
-// Uses the provided percentage if positive; otherwise calculates from score and totalPoints.
-// This correctly handles the edge case where a student scores 0 (percentage should be 0, not recalculated).
-func calculatePercentage(provided, score, totalPoints float64) float64 {
-	if provided > 0 {
-		return provided
+// resolveEnrollment resuelve el period_id y el offering_id de la sesion en la que
+// el alumno esta inscrito para la materia dada, filtrando por periodo activo.
+// La tabla subject_offering_enrollments no tiene soft-delete (una baja es DELETE
+// con CASCADE), por lo que basta el filtro de periodo activo. Si hay mas de un
+// periodo activo se toma el primero (deuda de desambiguacion documentada). found
+// es false cuando no hay inscripcion (descartar best-effort, sin error).
+func (p *AssessmentAttemptProcessor) resolveEnrollment(ctx context.Context, studentMembershipID, subjectID uuid.UUID) (periodID, offeringID uuid.UUID, found bool, err error) {
+	const query = `SELECT soe.period_id, soe.offering_id
+	               FROM academic.subject_offering_enrollments soe
+	               JOIN academic.academic_periods p ON p.id = soe.period_id
+	               WHERE soe.student_membership_id = $1
+	                 AND soe.subject_id = $2
+	                 AND p.is_active = true
+	               LIMIT 1`
+
+	err = p.db.QueryRowContext(ctx, query, studentMembershipID, subjectID).Scan(&periodID, &offeringID)
+	if err != nil {
+		if stderrors.Is(err, sql.ErrNoRows) {
+			return uuid.Nil, uuid.Nil, false, nil
+		}
+		return uuid.Nil, uuid.Nil, false, fmt.Errorf("consultando inscripcion: %w", err)
 	}
-	if totalPoints > 0 {
-		return (score / totalPoints) * 100
+	return periodID, offeringID, true, nil
+}
+
+// resolveAssessmentAuthor devuelve el created_by_membership_id del examen, que
+// se usa como autor (created_by_membership_id) del grade_item generado.
+func (p *AssessmentAttemptProcessor) resolveAssessmentAuthor(ctx context.Context, assessmentID uuid.UUID) (uuid.UUID, error) {
+	const query = `SELECT created_by_membership_id
+	               FROM assessment.assessment
+	               WHERE id = $1`
+
+	var createdBy uuid.UUID
+	if err := p.db.QueryRowContext(ctx, query, assessmentID).Scan(&createdBy); err != nil {
+		return uuid.Nil, fmt.Errorf("consultando autor de la evaluacion: %w", err)
 	}
-	return 0
+	return createdBy, nil
+}
+
+// gradeItemUpsert agrupa los datos resueltos para el UPSERT del grade_item.
+type gradeItemUpsert struct {
+	attemptID           uuid.UUID
+	studentMembershipID uuid.UUID
+	subjectID           uuid.UUID
+	periodID            uuid.UUID
+	offeringID          uuid.UUID
+	assessmentID        uuid.UUID
+	value               float64
+	title               string
+	createdBy           uuid.UUID
+}
+
+// upsertGradeItem materializa (o actualiza) el componente de nota auto_scored.
+// El ID es deterministico sobre el attempt_id: reprocesar el mismo intento no
+// duplica el grade_item (R6). El UNIQUE parcial uq_grade_item_attempt actua como
+// red de seguridad adicional en BD. grade_letter queda NULL en auto_scored (R4).
+func (p *AssessmentAttemptProcessor) upsertGradeItem(ctx context.Context, in gradeItemUpsert) error {
+	gradeItemID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(in.attemptID.String()+"grade_item"))
+
+	const query = `INSERT INTO academic.grade_item
+		(id, membership_id, subject_id, period_id, source,
+		 source_attempt_id, source_assessment_id,
+		 value, title, created_by_membership_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'auto_scored', $5, $6, $7, $8, $9, NOW(), NOW())
+		ON CONFLICT (id) DO UPDATE SET
+			value      = EXCLUDED.value,
+			title      = EXCLUDED.title,
+			updated_at = NOW()`
+
+	_, err := p.db.ExecContext(ctx, query,
+		gradeItemID,
+		in.studentMembershipID,
+		in.subjectID,
+		in.periodID,
+		in.attemptID,
+		in.assessmentID,
+		in.value,
+		in.title,
+		in.createdBy,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert grade_item: %w", err)
+	}
+
+	p.logger.Info("grade_item auto_scored materializado",
+		"grade_item_id", gradeItemID.String(),
+		"attempt_id", in.attemptID.String(),
+		"value", in.value,
+	)
+	return nil
 }

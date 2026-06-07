@@ -38,10 +38,10 @@ func (p *AssessmentAttemptNotifProcessor) Process(ctx context.Context, payload [
 func (p *AssessmentAttemptNotifProcessor) processEvent(ctx context.Context, event events.AssessmentAttemptRecordedEvent) error {
 	pl := event.Payload
 
-	p.logger.Info("processing assessment.attempt_recorded notification",
+	p.logger.Info("procesando notificacion assessment.attempt_recorded",
 		"attempt_id", pl.AttemptID,
 		"assessment_id", pl.AssessmentID,
-		"student_id", pl.StudentID,
+		"student_membership_id", pl.StudentMembershipID,
 	)
 
 	if pl.TeacherID == "" {
