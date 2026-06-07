@@ -9,6 +9,11 @@ on:
 
 env:
   GO_VERSION: "1.25.0"
+  # GOPRIVATE a nivel de workflow: aplica a TODOS los pasos Go (download/tidy/vet/test/build).
+  # Si solo se setea en el step de "git config insteadOf", el "go mod download" siguiente corre sin
+  # GOPRIVATE y consulta el checksum DB / proxy, que puede servir un blob fantasma de un módulo
+  # EduGoGroup re-tagueado (bug 0022 / ADR 0015) -> "SECURITY ERROR: checksum mismatch".
+  GOPRIVATE: github.com/EduGoGroup/*
 
 jobs:
   test:

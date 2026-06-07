@@ -1,5 +1,5 @@
 # ============================================
-# Makefile - API Mobile (EduGo)
+# Makefile - edugo-worker (EduGo)
 # ============================================
 
 # Variables
@@ -27,11 +27,14 @@ BLUE=\033[1;34m
 RED=\033[1;31m
 RESET=\033[0m
 
-# Environment variables con defaults
+# Environment variables con defaults (apuntan a la infra docker real de dev:
+#   edugo-migrator-postgres 5433/edugo · edugo-migrator-mongodb 27018/edugo · edugo-rabbitmq 5672)
+# Con estos defaults, `APP_ENV=local make run` arranca sin exportar nada a mano.
+# Override puntual: `POSTGRES_PASSWORD=otra make run`.
 export APP_ENV ?= local
-export POSTGRES_PASSWORD ?= edugo_pass
-export MONGODB_URI ?= mongodb://edugo_admin:edugo_pass@localhost:27017/edugo?authSource=admin
-export RABBITMQ_URL ?= amqp://edugo_user:edugo_pass@localhost:5672/
+export POSTGRES_PASSWORD ?= edugo123
+export MONGODB_URI ?= mongodb://edugo:edugo123@localhost:27018/edugo?authSource=admin
+export RABBITMQ_URL ?= amqp://guest:guest@localhost:5672/
 
 .DEFAULT_GOAL := help
 
@@ -53,7 +56,7 @@ run: ## Ejecutar en modo desarrollo
 	@echo "$(YELLOW)🚀 Ejecutando $(APP_NAME) (ambiente: $(APP_ENV))...$(RESET)"
 	@$(GOCMD) run $(MAIN_PATH)
 
-dev: deps swagger run ## Desarrollo completo
+dev: deps run ## Desarrollo completo
 
 # ============================================
 # Testing
@@ -129,18 +132,8 @@ tidy: ## Limpiar go.mod
 
 tools: ## Instalar herramientas
 	@echo "$(YELLOW)🛠️  Instalando herramientas...$(RESET)"
-	@go install github.com/swaggo/swag/cmd/swag@latest
 	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@latest
 	@echo "$(GREEN)✓ Herramientas instaladas$(RESET)"
-
-# ============================================
-# Swagger
-# ============================================
-
-swagger: ## Regenerar Swagger
-	@echo "$(YELLOW)📚 Regenerando Swagger...$(RESET)"
-	@swag init -g cmd/main.go -o docs --parseInternal
-	@echo "$(GREEN)✓ Swagger: http://localhost:none/swagger/index.html$(RESET)"
 
 # ============================================
 # Docker
@@ -153,7 +146,7 @@ docker-build: ## Build imagen
 
 docker-run: ## Run con compose
 	@docker-compose up -d
-	@echo "$(GREEN)✓ Corriendo en http://localhost:none$(RESET)"
+	@echo "$(GREEN)✓ Worker corriendo (sin HTTP de negocio; métricas en :9090)$(RESET)"
 
 docker-stop: ## Stop compose
 	@docker-compose down
@@ -165,7 +158,7 @@ docker-logs: ## Ver logs
 # CI/CD
 # ============================================
 
-ci: audit test-coverage swagger ## CI pipeline
+ci: audit test-coverage ## CI pipeline
 	@echo "$(GREEN)✅ CI completado$(RESET)"
 
 pre-commit: fmt vet test ## Pre-commit hook
@@ -183,7 +176,7 @@ clean: ## Limpiar todo
 # Meta
 # ============================================
 
-all: clean deps fmt vet swagger test build ## Build completo
+all: clean deps fmt vet test build ## Build completo
 	@echo "$(GREEN)🎉 Build completo$(RESET)"
 
 info: ## Info del proyecto
@@ -192,5 +185,5 @@ info: ## Info del proyecto
 	@echo "  Ambiente: $(APP_ENV)"
 	@echo "  Go: $$($(GOCMD) version)"
 
-.PHONY: help build run dev test test-coverage test-unit test-integration benchmark fmt vet lint audit deps tidy tools swagger docker-build docker-run docker-stop docker-logs ci pre-commit clean all info
+.PHONY: help build run dev test test-coverage test-unit test-integration benchmark fmt vet lint audit deps tidy tools docker-build docker-run docker-stop docker-logs ci pre-commit clean all info
 export OPENAI_API_KEY ?= sk-test-key

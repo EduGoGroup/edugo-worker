@@ -10,15 +10,15 @@ import (
 
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/logger"
-	"github.com/EduGoGroup/edugo-worker/internal/application/dto"
+	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/google/uuid"
 )
 
 // AssessmentAssignedNotifProcessor handles "assessment.assigned" events
-// and creates in-app notifications for the assigned student(s).
-// When target_type is "student", a single notification is created.
-// When target_type is "unit", enrolled students are resolved from the
-// academic.memberships table and each one receives a notification.
+// and creates in-app notifications for the students enrolled in the
+// assigned subject offering (session). In N4 an assessment is always
+// assigned to a subject offering; the recipients are the active students
+// enrolled in that offering.
 type AssessmentAssignedNotifProcessor struct {
 	db     *sql.DB
 	nc     *NotificationCreator
@@ -35,73 +35,32 @@ func (p *AssessmentAssignedNotifProcessor) EventType() string {
 }
 
 func (p *AssessmentAssignedNotifProcessor) Process(ctx context.Context, payload []byte) error {
-	var event dto.AssessmentAssignedNotifEvent
+	var event events.AssessmentAssignedEvent
 	if err := json.Unmarshal(payload, &event); err != nil {
 		return errors.NewValidationError("invalid event payload")
 	}
 	return p.processEvent(ctx, event)
 }
 
-func (p *AssessmentAssignedNotifProcessor) processEvent(ctx context.Context, event dto.AssessmentAssignedNotifEvent) error {
+// processEvent resuelve los alumnos inscritos en la oferta y notifica a cada uno.
+// Los fallos parciales se agregan y se devuelven como un unico error; los alumnos
+// que ya recibieron notificacion no se revierten.
+func (p *AssessmentAssignedNotifProcessor) processEvent(ctx context.Context, event events.AssessmentAssignedEvent) error {
 	pl := event.Payload
 
 	p.logger.Info("processing assessment.assigned notification",
 		"assessment_id", pl.AssessmentID,
-		"target_type", pl.TargetType,
-		"target_id", pl.TargetID,
+		"subject_offering_id", pl.SubjectOfferingID,
 	)
 
-	switch pl.TargetType {
-	case "student":
-		return p.notifyStudent(ctx, pl)
-	case "unit":
-		return p.notifyUnit(ctx, pl)
-	default:
-		p.logger.Warn("skipping assessment.assigned notification: unsupported target_type",
-			"target_type", pl.TargetType,
-			"assessment_id", pl.AssessmentID,
-		)
-		return nil
-	}
-}
-
-// notifyStudent creates a single notification for a direct student assignment.
-func (p *AssessmentAssignedNotifProcessor) notifyStudent(ctx context.Context, pl dto.AssessmentAssignedNotifPayload) error {
-	studentID, err := uuid.Parse(pl.TargetID)
-	if err != nil {
-		return fmt.Errorf("invalid target_id (student): %w", err)
-	}
-
-	assessmentID, err := uuid.Parse(pl.AssessmentID)
-	if err != nil {
-		return fmt.Errorf("invalid assessment_id: %w", err)
-	}
-
-	title := "Nueva evaluacion asignada"
-	body := fmt.Sprintf("Te han asignado: %s", pl.Title)
-
-	if err := p.nc.Create(ctx, studentID, "assessment_assigned", title, body, "assessment", assessmentID); err != nil {
-		return fmt.Errorf("failed to create assessment assigned notification: %w", err)
-	}
-
-	p.logger.Info("assessment.assigned notification processed successfully",
-		"student_id", studentID.String(),
-		"assessment_id", assessmentID.String(),
-	)
-	return nil
-}
-
-// notifyUnit resolves all students enrolled in the given academic unit and
-// creates a notification for each one. Partial failures are aggregated and
-// returned as a single error; students that succeed are not rolled back.
-func (p *AssessmentAssignedNotifProcessor) notifyUnit(ctx context.Context, pl dto.AssessmentAssignedNotifPayload) error {
-	// Timeout for bulk notification operations (200 students * ~50ms each = ~10s max)
+	// Timeout para la operacion masiva de notificaciones
+	// (200 alumnos * ~50ms cada uno = ~10s max).
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
-	unitID, err := uuid.Parse(pl.TargetID)
+	offeringID, err := uuid.Parse(pl.SubjectOfferingID)
 	if err != nil {
-		return fmt.Errorf("invalid target_id (unit): %w", err)
+		return fmt.Errorf("invalid subject_offering_id: %w", err)
 	}
 
 	assessmentID, err := uuid.Parse(pl.AssessmentID)
@@ -109,14 +68,14 @@ func (p *AssessmentAssignedNotifProcessor) notifyUnit(ctx context.Context, pl dt
 		return fmt.Errorf("invalid assessment_id: %w", err)
 	}
 
-	studentIDs, err := p.resolveStudentIDs(ctx, unitID)
+	studentIDs, err := p.resolveEnrolledStudentIDs(ctx, offeringID)
 	if err != nil {
-		return fmt.Errorf("resolving unit students: %w", err)
+		return fmt.Errorf("resolving offering students: %w", err)
 	}
 
 	if len(studentIDs) == 0 {
-		p.logger.Info("unit has no enrolled students",
-			"unit_id", unitID.String(),
+		p.logger.Info("subject offering has no enrolled students",
+			"subject_offering_id", offeringID.String(),
 			"assessment_id", assessmentID.String(),
 		)
 		return nil
@@ -125,44 +84,45 @@ func (p *AssessmentAssignedNotifProcessor) notifyUnit(ctx context.Context, pl dt
 	title := "Nueva evaluacion asignada"
 	body := fmt.Sprintf("Te han asignado: %s", pl.Title)
 
-	// TODO: Replace individual Create calls with a batch INSERT (NotificationCreator.CreateBatch)
-	// once the NotificationCreator API supports it. Currently, each Create() computes a
-	// deterministic SHA1-based UUID internally, making it non-trivial to build a multi-row
-	// INSERT externally without duplicating that logic. For typical class sizes (< 50 students)
-	// the overhead is acceptable, but for large units this should be optimised.
 	var errs []error
 	for _, studentID := range studentIDs {
 		if err := p.nc.Create(ctx, studentID, "assessment_assigned", title, body, "assessment", assessmentID); err != nil {
 			errs = append(errs, err)
-			p.logger.Error("failed to notify student in unit",
+			p.logger.Error("failed to notify enrolled student",
 				"student_id", studentID.String(),
-				"unit_id", unitID.String(),
+				"subject_offering_id", offeringID.String(),
 				"error", err.Error(),
 			)
 		}
 	}
 
-	p.logger.Info("unit assessment.assigned notifications processed",
-		"unit_id", unitID.String(),
+	p.logger.Info("assessment.assigned notifications processed",
+		"subject_offering_id", offeringID.String(),
 		"assessment_id", assessmentID.String(),
 		"total_students", len(studentIDs),
 		"errors", len(errs),
 	)
 
 	if len(errs) > 0 {
-		summary := fmt.Errorf("failed to notify %d/%d students in unit %s", len(errs), len(studentIDs), unitID)
+		summary := fmt.Errorf("failed to notify %d/%d students in offering %s", len(errs), len(studentIDs), offeringID)
 		return stderrors.Join(append([]error{summary}, errs...)...)
 	}
 	return nil
 }
 
-// resolveStudentIDs returns the user IDs of all active students enrolled in
-// the given academic unit by querying academic.memberships.
-func (p *AssessmentAssignedNotifProcessor) resolveStudentIDs(ctx context.Context, unitID uuid.UUID) ([]uuid.UUID, error) {
-	const query = `SELECT DISTINCT user_id FROM academic.memberships
-	               WHERE academic_unit_id = $1 AND role = 'student' AND is_active = true`
+// resolveEnrolledStudentIDs devuelve los user IDs de los alumnos activos
+// inscritos en la oferta dada, uniendo la tabla de inscripciones con la de
+// membresias. La tabla subject_offering_enrollments no tiene soft-delete
+// (una baja es un DELETE real con CASCADE), por lo que el filtro de actividad
+// se aplica sobre la membresia.
+func (p *AssessmentAssignedNotifProcessor) resolveEnrolledStudentIDs(ctx context.Context, offeringID uuid.UUID) ([]uuid.UUID, error) {
+	const query = `SELECT DISTINCT m.user_id
+	               FROM academic.subject_offering_enrollments e
+	               JOIN academic.memberships m ON m.id = e.student_membership_id
+	               WHERE e.offering_id = $1
+	                 AND m.is_active = true`
 
-	rows, err := p.db.QueryContext(ctx, query, unitID)
+	rows, err := p.db.QueryContext(ctx, query, offeringID)
 	if err != nil {
 		return nil, fmt.Errorf("querying enrolled students: %w", err)
 	}

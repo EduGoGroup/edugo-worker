@@ -68,23 +68,10 @@ func (f *Factory) CreatePDFExtractor() (pdf.Extractor, error) {
 	return pdf.NewExtractor(f.logger), nil
 }
 
-// CreateNLPClient crea un cliente NLP según configuración
-// Decide entre OpenAI real o SmartFallback basado en si hay API key
+// CreateNLPClient crea el cliente NLP del worker.
+// Hoy el ecosistema solo tiene el SmartFallback (NLP heurístico sin proveedor
+// externo); un proveedor real de NLP es trabajo futuro (F2+).
 func (f *Factory) CreateNLPClient() (nlp.Client, error) {
-	provider := f.config.NLP.Provider
-	hasAPIKey := f.config.NLP.APIKey != ""
-
-	f.logger.Info("creando cliente NLP", "provider", provider, "hasAPIKey", hasAPIKey)
-
-	// Si hay API key y el proveedor es openai, usarlo (futuro)
-	// Por ahora, siempre usamos SmartFallback hasta tener API key
-	if hasAPIKey && provider == "openai" {
-		// TODO: Implementar cliente OpenAI real cuando tengamos API key
-		// return openai.NewClient(f.config.NLP, f.logger), nil
-		f.logger.Warn("cliente OpenAI no implementado aún, usando SmartFallback")
-	}
-
-	// Usar SmartFallback por defecto
-	f.logger.Info("usando SmartFallback para NLP")
+	f.logger.Info("creando cliente NLP", "provider", "smart_fallback")
 	return fallback.NewSmartClient(f.logger), nil
 }

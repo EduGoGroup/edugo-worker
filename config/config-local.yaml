@@ -1,13 +1,23 @@
 # Local Development
+# Apunta a la infra docker real de dev:
+#   Postgres -> edugo-migrator-postgres (host 5433, user/db edugo)
+#   Mongo    -> edugo-migrator-mongodb  (host 27018, user edugo)
+#   RabbitMQ -> edugo-rabbitmq           (host 5672, guest:guest)
+# Patrón: host/port/user/db en el yaml; el password de Postgres llega por
+# el ENV binding POSTGRES_PASSWORD (default edugo123 en el Makefile target dev).
 database:
   postgres:
-    password: "edugo_pass"
+    host: "localhost"
+    port: 5433
+    user: "edugo"
+    database: "edugo"
+    # password -> ENV POSTGRES_PASSWORD (ver Makefile)
   mongodb:
-    uri: "mongodb://edugo_admin:edugo_pass@localhost:27017/edugo?authSource=admin"
+    uri: "mongodb://edugo:edugo123@localhost:27018/edugo?authSource=admin"
 
 messaging:
   rabbitmq:
-    url: "amqp://edugo_user:edugo_pass@localhost:5672/"
+    url: "amqp://guest:guest@localhost:5672/"
 
 nlp:
   # En desarrollo local usamos mock por defecto (sin API key real)
