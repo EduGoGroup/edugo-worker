@@ -48,6 +48,9 @@ coverage.txt
 coverage.out
 coverage.html
 coverage/
+coverage-report.txt
+coverage-*.out
+coverage_*.out
 *.coverage
 *.html.gz
 .cache/
