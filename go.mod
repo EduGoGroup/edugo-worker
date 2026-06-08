@@ -14,7 +14,7 @@ require (
 	github.com/EduGoGroup/edugo-shared/health v0.1.0
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.1.0
 	github.com/EduGoGroup/edugo-shared/lifecycle/shutdown v0.1.0
-	github.com/EduGoGroup/edugo-shared/logger v0.1.0
+	github.com/EduGoGroup/edugo-shared/logger v0.900.0
 	github.com/EduGoGroup/edugo-shared/messaging/events v0.900.0
 	github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.0
 	github.com/EduGoGroup/edugo-shared/metrics v0.1.0
