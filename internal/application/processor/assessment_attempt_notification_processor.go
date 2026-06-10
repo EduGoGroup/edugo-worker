@@ -8,19 +8,20 @@ import (
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
+	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/google/uuid"
 )
 
 // AssessmentAttemptNotifProcessor handles "assessment.attempt_recorded" events
-// and creates in-app notifications for the teacher.
+// and delegates the teacher notification to the Notification Gateway (platform).
 type AssessmentAttemptNotifProcessor struct {
-	nc     *NotificationCreator
-	logger logger.Logger
+	dispatcher NotificationDispatcher
+	logger     logger.Logger
 }
 
 // NewAssessmentAttemptNotifProcessor creates a new processor.
-func NewAssessmentAttemptNotifProcessor(nc *NotificationCreator, logger logger.Logger) *AssessmentAttemptNotifProcessor {
-	return &AssessmentAttemptNotifProcessor{nc: nc, logger: logger}
+func NewAssessmentAttemptNotifProcessor(dispatcher NotificationDispatcher, logger logger.Logger) *AssessmentAttemptNotifProcessor {
+	return &AssessmentAttemptNotifProcessor{dispatcher: dispatcher, logger: logger}
 }
 
 func (p *AssessmentAttemptNotifProcessor) EventType() string {
@@ -62,16 +63,31 @@ func (p *AssessmentAttemptNotifProcessor) processEvent(ctx context.Context, even
 		return fmt.Errorf("invalid attempt_id: %w", err)
 	}
 
-	title := "Evaluacion enviada"
-	body := fmt.Sprintf("Un estudiante ha enviado: %s", pl.Title)
-
-	if err := p.nc.Create(ctx, teacherID, "assessment_attempt_recorded", title, body, "assessment_attempt", attemptID); err != nil {
-		return fmt.Errorf("failed to create assessment attempt notification: %w", err)
+	req := client.DispatchRequest{
+		IdempotencyKey: "assessment.attempt_recorded:" + attemptID.String(),
+		Recipients:     []client.DispatchRecipient{{UserID: teacherID.String()}},
+		Notification: client.DispatchNotification{
+			Type:         "assessment_attempt_recorded",
+			Title:        "Evaluacion enviada",
+			Body:         fmt.Sprintf("Un estudiante ha enviado: %s", pl.Title),
+			ResourceType: "assessment_attempt",
+			ResourceID:   attemptID.String(),
+		},
+		Channels: &client.DispatchChannels{InApp: true, Push: true},
+		PushData: map[string]string{"event_type": p.EventType()},
+		Source:   &client.DispatchSource{Caller: dispatchCaller, CorrelationID: event.EventID},
 	}
 
-	p.logger.Info("assessment.attempt_recorded notification processed successfully",
-		"teacher_id", teacherID.String(),
+	p.logger.Info("dispatch_requested",
+		"event_type", p.EventType(),
 		"attempt_id", attemptID.String(),
+		"teacher_id", teacherID.String(),
+		"recipients", 1,
 	)
+
+	if err := p.dispatcher.Dispatch(ctx, req); err != nil {
+		return fmt.Errorf("dispatching assessment.attempt_recorded notification: %w", err)
+	}
+
 	return nil
 }

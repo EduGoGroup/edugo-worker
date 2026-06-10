@@ -8,6 +8,8 @@ github.com/DATA-DOG/go-sqlmock v1.5.2 h1:OcvFkGmslmlZibjAjaHm3L//6LiuBgolP7Oputl
 github.com/DATA-DOG/go-sqlmock v1.5.2/go.mod h1:88MAG/4G7SMwSE3CeA0ZKzrT5CiOU3OJ+JlNzwDqpNU=
 github.com/EduGoGroup/edugo-infrastructure/mongodb v0.1.0 h1:hf4C7YPJ+gw+zwIQlZFJWY8IhFJRd3NIjvAXFWtCJsU=
 github.com/EduGoGroup/edugo-infrastructure/mongodb v0.1.0/go.mod h1:i2Z9ha97Xbm6sSigl8Rlyj7fqnDggBUcbwUT9tUXy5I=
+github.com/EduGoGroup/edugo-shared/auth v0.1.1 h1:hFFy7fKQYuiqMt5XKNE9e9u9k9TRyKeufNOBa4HBi3U=
+github.com/EduGoGroup/edugo-shared/auth v0.1.1/go.mod h1:X75eF8JizaAbUxcb/RZECHZ2xQBuVLbPEuvRREbaGR4=
 github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0 h1:I7iVHAohSVmuvYlB74iW/6Di7O+me6+MbOb+aLkGo9A=
 github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0/go.mod h1:tXOCq+b4+DjzOE16tLTvGM9SrLBVhz7nC+MQ10UEWsA=
 github.com/EduGoGroup/edugo-shared/bootstrap/mongodb v0.1.0 h1:qXMMbATisfI9iILL4e4oUbhPF2kcHbpGstv31VFGLNE=
@@ -145,6 +147,8 @@ github.com/go-playground/validator/v10 v10.30.2 h1:JiFIMtSSHb2/XBUbWM4i/MpeQm9ZK
 github.com/go-playground/validator/v10 v10.30.2/go.mod h1:mAf2pIOVXjTEBrwUMGKkCWKKPs9NheYGabeB04txQSc=
 github.com/go-viper/mapstructure/v2 v2.5.0 h1:vM5IJoUAy3d7zRSVtIwQgBj7BiWtMPfmPEgAXnvj1Ro=
 github.com/go-viper/mapstructure/v2 v2.5.0/go.mod h1:oJDH3BJKyqBA2TXFhDsKDGDTlndYOZ6rGS0BRZIxGhM=
+github.com/golang-jwt/jwt/v5 v5.3.1 h1:kYf81DTWFe7t+1VvL7eS+jKFVWaUnK9cB1qbwn63YCY=
+github.com/golang-jwt/jwt/v5 v5.3.1/go.mod h1:fxCRLWMO43lRc8nhHWY6LGqRcf+1gQWArsqaEUEa5bE=
 github.com/google/go-cmp v0.7.0 h1:wk8382ETsv4JYUZwIsn6YpYiWiBsYLSJiTsyBybVuN8=
 github.com/google/go-cmp v0.7.0/go.mod h1:pXiqmnSA92OHEEa9HXL2W4E7lf9JzCmGVUdgjX3N/iU=
 github.com/google/uuid v1.6.0 h1:NIvaJDMOsjHA8n1jAhLSgzrAzy1Hgr+hNrb57e+94F0=

@@ -69,6 +69,18 @@ api_identity:
   cache_enabled: true
   max_bulk_size: 50
 
+# Notification Gateway (edugo-api-platform) — el worker delega in-app + push (plan 020 D13).
+# El worker ya NO escribe notifications.* ni tiene credenciales FCM/APNs.
+notification_gateway:
+  base_url: "http://api-platform:8075"
+  timeout: "5s"
+  service_jwt:
+    secret: "" # Set via NOTIFICATION_GATEWAY_SERVICE_JWT_SECRET (SERVICE_JWT_SECRET compartido con platform)
+    issuer: "edugo-identity"
+    audience: "edugo-api-platform"
+    client_id: "edugo-worker"
+    ttl: "15m"
+
 # Health Checks
 health:
   timeouts:
