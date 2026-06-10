@@ -121,6 +121,9 @@ func (c *NotificationDispatchClient) Dispatch(ctx context.Context, req DispatchR
 	defer func() { _ = resp.Body.Close() }()
 
 	if resp.StatusCode >= 200 && resp.StatusCode < 300 {
+		// W-1: drenar el cuerpo antes de cerrar permite que el http.Client
+		// reutilice la conexión keep-alive en el siguiente dispatch.
+		_, _ = io.Copy(io.Discard, resp.Body)
 		return nil
 	}
 
