@@ -16,6 +16,10 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 - `NotificationCreator` y todo SQL directo a `notifications.notifications` en el worker (migrado a edugo-api-platform en F2.2). El worker ya no escribe in-app ni tiene credenciales FCM/APNs.
 
+### Tests
+
+- test(notifications): cierre F2.4 — roundtrip cruzado worker→gateway a través del `NotificationDispatchClient` real (service JWT firmado) contra un httptest que simula `/api/v1/internal/notifications/dispatch`; verifica el contrato `DispatchRequest` (recipients/fan-out, type, resource_id, idempotency_key, push_data, source) y el header `Authorization`.
+
 ---
 
 ## [0.7.0] - 2025-12-24
