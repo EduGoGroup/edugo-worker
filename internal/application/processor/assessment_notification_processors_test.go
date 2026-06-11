@@ -338,6 +338,7 @@ func TestAssessmentAttemptNotifProcessor_WithTeacherID_Success(t *testing.T) {
 	teacherID := uuid.New()
 	attemptID := uuid.New()
 	schoolID := uuid.New()
+	unitID := uuid.New()
 
 	event := events.AssessmentAttemptRecordedEvent{
 		EventID:      "evt-010",
@@ -350,6 +351,7 @@ func TestAssessmentAttemptNotifProcessor_WithTeacherID_Success(t *testing.T) {
 			StudentMembershipID: uuid.New().String(),
 			SubjectID:           uuid.New().String(),
 			SchoolID:            schoolID.String(),
+			AcademicUnitID:      unitID.String(),
 			Score:               85.0,
 			MaxScore:            100.0,
 			Status:              "completed",
@@ -372,9 +374,10 @@ func TestAssessmentAttemptNotifProcessor_WithTeacherID_Success(t *testing.T) {
 	assert.Equal(t, "Un estudiante ha enviado: Quiz de Ciencias", req.Notification.Body)
 	assert.Equal(t, "assessment_attempt", req.Notification.ResourceType)
 	assert.Equal(t, attemptID.String(), req.Notification.ResourceID)
-	// F4.6.0: school_id del evento viaja; unit_id se omite (sin BD ni oferta aquí).
+	// F4.6: school_id y academic_unit_id del evento (del contexto activo del emisor)
+	// viajan al dispatch para que el push lleve unit_id y el deep-link cambie de tenant.
 	assert.Equal(t, schoolID.String(), req.Notification.SchoolID)
-	assert.Empty(t, req.Notification.UnitID)
+	assert.Equal(t, unitID.String(), req.Notification.UnitID)
 }
 
 func TestAssessmentAttemptNotifProcessor_MissingTeacherID_Skips(t *testing.T) {
@@ -463,6 +466,7 @@ func TestAssessmentReviewedNotifProcessor_WithStudentID_Success(t *testing.T) {
 	studentID := uuid.New()
 	attemptID := uuid.New()
 	schoolID := uuid.New()
+	unitID := uuid.New()
 
 	event := events.AssessmentReviewedEvent{
 		EventID:      "evt-020",
@@ -470,15 +474,16 @@ func TestAssessmentReviewedNotifProcessor_WithStudentID_Success(t *testing.T) {
 		EventVersion: "1.0.0",
 		Timestamp:    time.Now(),
 		Payload: events.AssessmentReviewedPayload{
-			AttemptID:    attemptID.String(),
-			AssessmentID: uuid.New().String(),
-			ReviewerID:   uuid.New().String(),
-			SchoolID:     schoolID.String(),
-			FinalScore:   92.5,
-			TotalPoints:  100.0,
-			Status:       "reviewed",
-			StudentID:    studentID.String(),
-			Title:        "Examen Final de Lengua",
+			AttemptID:      attemptID.String(),
+			AssessmentID:   uuid.New().String(),
+			ReviewerID:     uuid.New().String(),
+			SchoolID:       schoolID.String(),
+			AcademicUnitID: unitID.String(),
+			FinalScore:     92.5,
+			TotalPoints:    100.0,
+			Status:         "reviewed",
+			StudentID:      studentID.String(),
+			Title:          "Examen Final de Lengua",
 		},
 	}
 	payload, err := json.Marshal(event)
@@ -496,9 +501,10 @@ func TestAssessmentReviewedNotifProcessor_WithStudentID_Success(t *testing.T) {
 	assert.Equal(t, "Tu evaluacion ha sido calificada: Examen Final de Lengua", req.Notification.Body)
 	assert.Equal(t, "assessment_attempt", req.Notification.ResourceType)
 	assert.Equal(t, attemptID.String(), req.Notification.ResourceID)
-	// F4.6.0: school_id del evento viaja; unit_id se omite (sin BD ni oferta aquí).
+	// F4.6: school_id y academic_unit_id del evento (del contexto activo del emisor)
+	// viajan al dispatch para que el push lleve unit_id y el deep-link cambie de tenant.
 	assert.Equal(t, schoolID.String(), req.Notification.SchoolID)
-	assert.Empty(t, req.Notification.UnitID)
+	assert.Equal(t, unitID.String(), req.Notification.UnitID)
 }
 
 func TestAssessmentReviewedNotifProcessor_MissingStudentID_Skips(t *testing.T) {
