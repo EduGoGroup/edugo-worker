@@ -10,6 +10,8 @@ github.com/EduGoGroup/edugo-infrastructure/mongodb v0.1.0 h1:hf4C7YPJ+gw+zwIQlZF
 github.com/EduGoGroup/edugo-infrastructure/mongodb v0.1.0/go.mod h1:i2Z9ha97Xbm6sSigl8Rlyj7fqnDggBUcbwUT9tUXy5I=
 github.com/EduGoGroup/edugo-shared/auth v0.1.1 h1:hFFy7fKQYuiqMt5XKNE9e9u9k9TRyKeufNOBa4HBi3U=
 github.com/EduGoGroup/edugo-shared/auth v0.1.1/go.mod h1:X75eF8JizaAbUxcb/RZECHZ2xQBuVLbPEuvRREbaGR4=
+github.com/EduGoGroup/edugo-shared/auth v0.2.0 h1:IhZzv7nBeNLSQktIQAjlNc7R1hM7XJoo4FA1x44aFy8=
+github.com/EduGoGroup/edugo-shared/auth v0.2.0/go.mod h1:X75eF8JizaAbUxcb/RZECHZ2xQBuVLbPEuvRREbaGR4=
 github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0 h1:I7iVHAohSVmuvYlB74iW/6Di7O+me6+MbOb+aLkGo9A=
 github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0/go.mod h1:tXOCq+b4+DjzOE16tLTvGM9SrLBVhz7nC+MQ10UEWsA=
 github.com/EduGoGroup/edugo-shared/bootstrap/mongodb v0.1.0 h1:qXMMbATisfI9iILL4e4oUbhPF2kcHbpGstv31VFGLNE=
@@ -20,6 +22,8 @@ github.com/EduGoGroup/edugo-shared/bootstrap/s3 v0.1.0 h1:9rbfo/DbR65esLhB1xEM7e
 github.com/EduGoGroup/edugo-shared/bootstrap/s3 v0.1.0/go.mod h1:kAkdhlW1zlhgAB2n/3sklg5dNEhiMbxqZMsdloNg6+c=
 github.com/EduGoGroup/edugo-shared/common v0.900.1 h1:qk5PqL00oS+/D9Q+feR9cjWqC7BsONM7NS07dVeuOls=
 github.com/EduGoGroup/edugo-shared/common v0.900.1/go.mod h1:NMBRyufKBKFtp/S/p63xGAJz1VtqRymH0VJrsQWnBoM=
+github.com/EduGoGroup/edugo-shared/common v0.900.2 h1:ESGQcCZ8a9aH9UZD3vrDfmV9Lue4f0EeRgFNuhole68=
+github.com/EduGoGroup/edugo-shared/common v0.900.2/go.mod h1:NMBRyufKBKFtp/S/p63xGAJz1VtqRymH0VJrsQWnBoM=
 github.com/EduGoGroup/edugo-shared/config v0.1.0 h1:pZiOR/YmaoDLYCawBy0xnt2lu+aRyjwuvIvDbcittto=
 github.com/EduGoGroup/edugo-shared/config v0.1.0/go.mod h1:xirrLI+2wAiwSRfZOcWSxdKBFcTUwdZHgJhH4fuiEd4=
 github.com/EduGoGroup/edugo-shared/health v0.1.0 h1:ULGFf3XmobNVgY4rOy6VlGxKMGvtj6vT6hYf6GSk6xg=
@@ -32,6 +36,8 @@ github.com/EduGoGroup/edugo-shared/logger v0.900.0 h1:CG3rE4KwtmkrnhbgmbwiXHtepz
 github.com/EduGoGroup/edugo-shared/logger v0.900.0/go.mod h1:5Y55HvdOlVvvhokdGJauj50eg4xrpEjo/0tvHnDH594=
 github.com/EduGoGroup/edugo-shared/messaging/events v0.900.0 h1:s7eDnEJ9IWWulpms9l+POH67tmPjQaZbyTiVyH1O6oA=
 github.com/EduGoGroup/edugo-shared/messaging/events v0.900.0/go.mod h1:IjkYkCW3xFfH2f6ias13AhJM4VdMSGY7riNKDSo3e0Q=
+github.com/EduGoGroup/edugo-shared/messaging/events v0.900.1 h1:MK6GbqQIWiJaUvDlPzBQ2lRFkXNilXWY2B7Ptblw6CA=
+github.com/EduGoGroup/edugo-shared/messaging/events v0.900.1/go.mod h1:IjkYkCW3xFfH2f6ias13AhJM4VdMSGY7riNKDSo3e0Q=
 github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.0 h1:2HP/vZJil22N0hf3uu07TqiR/8y90DEBtNeDFXI9P70=
 github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.0/go.mod h1:BvWxPacazLrMcYLqT+1NFRvLtgSady+0UQSb6WM7JWE=
 github.com/EduGoGroup/edugo-shared/metrics v0.1.0 h1:J3kQcKTyIppjfPddVht8/IBwM0Yi8fIn70NdBHNI0Z8=
