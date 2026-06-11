@@ -5,17 +5,18 @@ go 1.25.0
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.1.0
+	github.com/EduGoGroup/edugo-shared/auth v0.2.0
 	github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0
 	github.com/EduGoGroup/edugo-shared/bootstrap/mongodb v0.1.0
 	github.com/EduGoGroup/edugo-shared/bootstrap/postgres v0.1.0
 	github.com/EduGoGroup/edugo-shared/bootstrap/s3 v0.1.0
-	github.com/EduGoGroup/edugo-shared/common v0.900.1
+	github.com/EduGoGroup/edugo-shared/common v0.900.2
 	github.com/EduGoGroup/edugo-shared/config v0.1.0
 	github.com/EduGoGroup/edugo-shared/health v0.1.0
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.1.0
 	github.com/EduGoGroup/edugo-shared/lifecycle/shutdown v0.1.0
 	github.com/EduGoGroup/edugo-shared/logger v0.900.0
-	github.com/EduGoGroup/edugo-shared/messaging/events v0.900.0
+	github.com/EduGoGroup/edugo-shared/messaging/events v0.900.1
 	github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.0
 	github.com/EduGoGroup/edugo-shared/metrics v0.1.0
 	github.com/EduGoGroup/edugo-shared/resilience/circuitbreaker v0.1.0
@@ -83,6 +84,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/pkcs7 v0.2.0 // indirect
 	github.com/hhrutter/tiff v1.0.3 // indirect

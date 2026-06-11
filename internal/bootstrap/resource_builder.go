@@ -359,11 +359,35 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	)
 	studentEnrolledProc := processor.NewStudentEnrolledProcessor(b.logger)
 
-	// Crear notification creator y processors de notificaciones
-	notifCreator := processor.NewNotificationCreator(b.sqlDB, b.logger)
-	assessmentAssignedNotifProc := processor.NewAssessmentAssignedNotifProcessor(b.sqlDB, notifCreator, b.logger)
-	assessmentAttemptNotifProc := processor.NewAssessmentAttemptNotifProcessor(notifCreator, b.logger)
-	assessmentReviewedNotifProc := processor.NewAssessmentReviewedNotifProcessor(notifCreator, b.logger)
+	// Cliente de dispatch al Notification Gateway (platform). El worker delega la
+	// entrega (in-app + push); ya no escribe notifications.* ni tiene FCM/APNs (D13).
+	gatewayCfg := b.config.GetNotificationGatewayConfigWithDefaults()
+	tokenProvider, err := client.NewServiceTokenProvider(client.ServiceTokenConfig{
+		Secret:   gatewayCfg.ServiceJWT.Secret,
+		Issuer:   gatewayCfg.ServiceJWT.Issuer,
+		Audience: gatewayCfg.ServiceJWT.Audience,
+		ClientID: gatewayCfg.ServiceJWT.ClientID,
+		Scopes:   []string{"notifications.dispatch"},
+		TTL:      gatewayCfg.ServiceJWT.TTL,
+	})
+	if err != nil {
+		b.err = fmt.Errorf("failed to create service token provider: %w", err)
+		return b
+	}
+	if gatewayCfg.ServiceJWT.Secret == "" {
+		b.logger.Warn("SERVICE_JWT_SECRET vacío: el gateway rechazará el dispatch (configurar para entornos con push)")
+	}
+	dispatchClient := client.NewNotificationDispatchClient(client.NotificationDispatchClientConfig{
+		BaseURL:       gatewayCfg.BaseURL,
+		Timeout:       gatewayCfg.Timeout,
+		TokenProvider: tokenProvider,
+	})
+	b.logger.Info("✅ Notification dispatch client initialized", "gateway_url", gatewayCfg.BaseURL)
+
+	// Processors de notificaciones: delegan al gateway vía dispatchClient.
+	assessmentAssignedNotifProc := processor.NewAssessmentAssignedNotifProcessor(b.sqlDB, dispatchClient, b.logger)
+	assessmentAttemptNotifProc := processor.NewAssessmentAttemptNotifProcessor(dispatchClient, b.logger)
+	assessmentReviewedNotifProc := processor.NewAssessmentReviewedNotifProcessor(dispatchClient, b.logger)
 
 	// Create composite attempt processor: analytics + notification delegation
 	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(b.sqlDB, assessmentAttemptNotifProc, b.logger)

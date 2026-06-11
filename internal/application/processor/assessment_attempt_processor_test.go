@@ -409,8 +409,8 @@ func TestAssessmentAttemptProcessor_WithNotificationSubProcessor(t *testing.T) {
 	defer func() { _ = db.Close() }()
 
 	logger := newTestLogger()
-	nc := NewNotificationCreator(db, logger)
-	notifProc := NewAssessmentAttemptNotifProcessor(nc, logger)
+	disp := &fakeDispatcher{}
+	notifProc := NewAssessmentAttemptNotifProcessor(disp, logger)
 	proc := NewAssessmentAttemptProcessor(db, notifProc, logger)
 
 	teacherID := uuid.New()
@@ -449,22 +449,17 @@ func TestAssessmentAttemptProcessor_WithNotificationSubProcessor(t *testing.T) {
 		).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
-	// Notificacion al docente (delegada al sub-procesador)
-	dbMock.ExpectExec("INSERT INTO notifications.notifications").
-		WithArgs(
-			sqlmock.AnyArg(),
-			teacherID,
-			"assessment_attempt_recorded",
-			"Evaluacion enviada",
-			"Un estudiante ha enviado: Quiz con Notificacion",
-			"assessment_attempt",
-			attemptID,
-		).
-		WillReturnResult(sqlmock.NewResult(0, 1))
-
 	err = proc.Process(context.Background(), payload)
 	assert.NoError(t, err)
 	assert.NoError(t, dbMock.ExpectationsWereMet())
+
+	// La notificacion al docente se delega al gateway (1 dispatch con 1 recipient).
+	require.Len(t, disp.requests, 1)
+	req := disp.requests[0]
+	require.Len(t, req.Recipients, 1)
+	assert.Equal(t, teacherID.String(), req.Recipients[0].UserID)
+	assert.Equal(t, "assessment_attempt_recorded", req.Notification.Type)
+	assert.Equal(t, "Un estudiante ha enviado: Quiz con Notificacion", req.Notification.Body)
 }
 
 func TestAssessmentAttemptProcessor_DeterministicID(t *testing.T) {

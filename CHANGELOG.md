@@ -5,6 +5,23 @@ Todos los cambios notables en edugo-worker serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased]
+
+### Changed
+
+- feat(notifications): el worker delega la entrega al Notification Gateway (plan 020 F2.3, D13). Nuevo `client.ServiceTokenProvider` (firma service JWT M2M HS256 con `auth.ServiceJWTManager` de edugo-shared, con caché) y `client.NotificationDispatchClient` (HTTP POST a `/api/v1/internal/notifications/dispatch` con `Authorization: Bearer <service-jwt>`). Los processors `assessment.assigned` (N alumnos → 1 dispatch con N recipients), `assessment.attempt_recorded` (docente) y `assessment.reviewed` (alumno) ahora resuelven destinatarios y delegan; un fallo de dispatch (5xx/timeout) se propaga para que RabbitMQ reintente (la idempotencia del gateway evita duplicados). Log `dispatch_requested`.
+- Config nueva `notification_gateway` (`base_url`, `timeout`, `service_jwt.{secret,issuer,audience,client_id,ttl}`).
+
+### Removed
+
+- `NotificationCreator` y todo SQL directo a `notifications.notifications` en el worker (migrado a edugo-api-platform en F2.2). El worker ya no escribe in-app ni tiene credenciales FCM/APNs.
+
+### Tests
+
+- test(notifications): cierre F2.4 — roundtrip cruzado worker→gateway a través del `NotificationDispatchClient` real (service JWT firmado) contra un httptest que simula `/api/v1/internal/notifications/dispatch`; verifica el contrato `DispatchRequest` (recipients/fan-out, type, resource_id, idempotency_key, push_data, source) y el header `Authorization`.
+
+---
+
 ## [0.7.0] - 2025-12-24
 
 ### Tipo de Release: patch

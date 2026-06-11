@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	stderrors "errors"
 	mongoentities "github.com/EduGoGroup/edugo-infrastructure/mongodb/entities"
 	postgres "github.com/EduGoGroup/edugo-shared/bootstrap/postgres"
 	"github.com/EduGoGroup/edugo-shared/common/errors"
@@ -21,6 +22,7 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
+	"go.mongodb.org/mongo-driver/v2/bson"
 	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
@@ -215,21 +217,66 @@ func (p *MaterialUploadedProcessor) processEvent(ctx context.Context, event dto.
 	err = postgres.WithTransaction(ctx, p.db, func(tx *sql.Tx) error {
 		now := time.Now()
 
-		// Guardar resumen + secciones en MongoDB
+		// Guardar o actualizar (consolidar) resumen + secciones en MongoDB
 		mongoStart := time.Now()
-		summaryDoc := p.buildSummaryDocWithSections(event.GetMaterialID(), summary, documentSections, extractedText, summaryProcessingMs, now)
 		summaryCol := p.mongodb.Collection(mongoentities.MaterialSummary{}.CollectionName())
-		_, err = summaryCol.InsertOne(ctx, summaryDoc)
-		metrics.RecordDatabaseOperation("mongodb", "insert", time.Since(mongoStart).Seconds(), err == nil)
-		if err != nil {
-			return fmt.Errorf("inserting summary: %w", err)
+		newSummaryDoc := p.buildSummaryDocWithSections(event.GetMaterialID(), summary, documentSections, extractedText, summaryProcessingMs, now)
+
+		var existingDoc mongoentities.MaterialSummary
+		mongoErr := summaryCol.FindOne(ctx, bson.M{"material_id": event.GetMaterialID()}).Decode(&existingDoc)
+
+		var opErr error
+		if mongoErr != nil {
+			if stderrors.Is(mongoErr, mongo.ErrNoDocuments) {
+				// No existe, insertar nuevo
+				_, opErr = summaryCol.InsertOne(ctx, newSummaryDoc)
+				metrics.RecordDatabaseOperation("mongodb", "insert", time.Since(mongoStart).Seconds(), opErr == nil)
+			} else {
+				opErr = mongoErr
+			}
+		} else {
+			// Ya existe, consolidar
+			existingDoc.Summary = existingDoc.Summary + "\n\n" + newSummaryDoc.Summary
+
+			// Combinar key points sin duplicados
+			kpMap := make(map[string]bool)
+			for _, kp := range existingDoc.KeyPoints {
+				kpMap[kp] = true
+			}
+			for _, kp := range newSummaryDoc.KeyPoints {
+				if !kpMap[kp] {
+					existingDoc.KeyPoints = append(existingDoc.KeyPoints, kp)
+				}
+			}
+
+			// Combinar secciones con índices secuenciales corregidos
+			startIndex := len(existingDoc.Sections)
+			for i, s := range newSummaryDoc.Sections {
+				existingDoc.Sections = append(existingDoc.Sections, mongoentities.DocumentSection{
+					Index:   startIndex + i,
+					Title:   s.Title,
+					Content: s.Content,
+					Preview: s.Preview,
+				})
+			}
+
+			existingDoc.WordCount += newSummaryDoc.WordCount
+			existingDoc.ProcessingTimeMs += newSummaryDoc.ProcessingTimeMs
+			existingDoc.UpdatedAt = now
+
+			_, opErr = summaryCol.ReplaceOne(ctx, bson.M{"material_id": event.GetMaterialID()}, existingDoc)
+			metrics.RecordDatabaseOperation("mongodb", "replace", time.Since(mongoStart).Seconds(), opErr == nil)
 		}
 
-		// Actualizar estado a completed
+		if opErr != nil {
+			return fmt.Errorf("persisting summary in MongoDB: %w", opErr)
+		}
+
+		// Actualizar estado a "ready" (CHECK constraint en postgres content.materials exige 'ready', no 'completed')
 		pgStart := time.Now()
 		_, err = tx.ExecContext(ctx,
 			"UPDATE content.materials SET status = $1, updated_at = NOW() WHERE id = $2",
-			enum.ProcessingStatusCompleted.String(),
+			enum.ProcessingStatusReady.String(),
 			materialID.String(),
 		)
 		metrics.RecordDatabaseOperation("postgres", "update", time.Since(pgStart).Seconds(), err == nil)

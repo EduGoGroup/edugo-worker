@@ -4,30 +4,29 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
-	stderrors "errors"
 	"fmt"
 	"time"
 
 	"github.com/EduGoGroup/edugo-shared/common/errors"
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
+	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/google/uuid"
 )
 
-// AssessmentAssignedNotifProcessor handles "assessment.assigned" events
-// and creates in-app notifications for the students enrolled in the
-// assigned subject offering (session). In N4 an assessment is always
-// assigned to a subject offering; the recipients are the active students
-// enrolled in that offering.
+// AssessmentAssignedNotifProcessor handles "assessment.assigned" events and
+// delegates notification delivery to the Notification Gateway (platform) for the
+// students enrolled in the assigned subject offering. The worker only resolves
+// recipients; it no longer writes notifications nor sends push (plan 020 D13).
 type AssessmentAssignedNotifProcessor struct {
-	db     *sql.DB
-	nc     *NotificationCreator
-	logger logger.Logger
+	db         *sql.DB
+	dispatcher NotificationDispatcher
+	logger     logger.Logger
 }
 
 // NewAssessmentAssignedNotifProcessor creates a new processor.
-func NewAssessmentAssignedNotifProcessor(db *sql.DB, nc *NotificationCreator, logger logger.Logger) *AssessmentAssignedNotifProcessor {
-	return &AssessmentAssignedNotifProcessor{db: db, nc: nc, logger: logger}
+func NewAssessmentAssignedNotifProcessor(db *sql.DB, dispatcher NotificationDispatcher, logger logger.Logger) *AssessmentAssignedNotifProcessor {
+	return &AssessmentAssignedNotifProcessor{db: db, dispatcher: dispatcher, logger: logger}
 }
 
 func (p *AssessmentAssignedNotifProcessor) EventType() string {
@@ -42,9 +41,9 @@ func (p *AssessmentAssignedNotifProcessor) Process(ctx context.Context, payload 
 	return p.processEvent(ctx, event)
 }
 
-// processEvent resuelve los alumnos inscritos en la oferta y notifica a cada uno.
-// Los fallos parciales se agregan y se devuelven como un unico error; los alumnos
-// que ya recibieron notificacion no se revierten.
+// processEvent resuelve los alumnos inscritos en la oferta y delega UN dispatch
+// con N destinatarios al gateway. Si el dispatch falla (5xx/timeout) se devuelve
+// el error para que RabbitMQ reintente; la idempotencia del gateway evita duplicados.
 func (p *AssessmentAssignedNotifProcessor) processEvent(ctx context.Context, event events.AssessmentAssignedEvent) error {
 	pl := event.Payload
 
@@ -53,8 +52,7 @@ func (p *AssessmentAssignedNotifProcessor) processEvent(ctx context.Context, eve
 		"subject_offering_id", pl.SubjectOfferingID,
 	)
 
-	// Timeout para la operacion masiva de notificaciones
-	// (200 alumnos * ~50ms cada uno = ~10s max).
+	// Timeout para resolver destinatarios + 1 request al gateway.
 	ctx, cancel := context.WithTimeout(ctx, 30*time.Second)
 	defer cancel()
 
@@ -81,32 +79,45 @@ func (p *AssessmentAssignedNotifProcessor) processEvent(ctx context.Context, eve
 		return nil
 	}
 
-	title := "Nueva evaluacion asignada"
-	body := fmt.Sprintf("Te han asignado: %s", pl.Title)
-
-	var errs []error
+	recipients := make([]client.DispatchRecipient, 0, len(studentIDs))
 	for _, studentID := range studentIDs {
-		if err := p.nc.Create(ctx, studentID, "assessment_assigned", title, body, "assessment", assessmentID); err != nil {
-			errs = append(errs, err)
-			p.logger.Error("failed to notify enrolled student",
-				"student_id", studentID.String(),
-				"subject_offering_id", offeringID.String(),
-				"error", err.Error(),
-			)
-		}
+		recipients = append(recipients, client.DispatchRecipient{UserID: studentID.String()})
 	}
 
-	p.logger.Info("assessment.assigned notifications processed",
-		"subject_offering_id", offeringID.String(),
+	// Tenant del recurso (F4.6.0): school_id viene del evento; unit_id se resuelve
+	// desde la oferta (academic.subject_offerings.academic_unit_id). Si falla la
+	// resolución del unit, se deja vacío (se omite en el push) sin abortar el
+	// dispatch — el deep-link cae al fallback (lista) en el cliente.
+	unitID := p.resolveOfferingUnitID(ctx, offeringID)
+
+	req := client.DispatchRequest{
+		IdempotencyKey: "assessment.assigned:" + pl.AssignmentID,
+		Recipients:     recipients,
+		Notification: client.DispatchNotification{
+			Type:         "assessment_assigned",
+			Title:        "Nueva evaluacion asignada",
+			Body:         fmt.Sprintf("Te han asignado: %s", pl.Title),
+			ResourceType: "assessment",
+			ResourceID:   assessmentID.String(),
+			SchoolID:     pl.SchoolID,
+			UnitID:       unitID,
+		},
+		Channels: &client.DispatchChannels{InApp: true, Push: true},
+		PushData: map[string]string{"event_type": p.EventType()},
+		Source:   &client.DispatchSource{Caller: dispatchCaller, CorrelationID: event.EventID},
+	}
+
+	p.logger.Info("dispatch_requested",
+		"event_type", p.EventType(),
 		"assessment_id", assessmentID.String(),
-		"total_students", len(studentIDs),
-		"errors", len(errs),
+		"subject_offering_id", offeringID.String(),
+		"recipients", len(recipients),
 	)
 
-	if len(errs) > 0 {
-		summary := fmt.Errorf("failed to notify %d/%d students in offering %s", len(errs), len(studentIDs), offeringID)
-		return stderrors.Join(append([]error{summary}, errs...)...)
+	if err := p.dispatcher.Dispatch(ctx, req); err != nil {
+		return fmt.Errorf("dispatching assessment.assigned notifications: %w", err)
 	}
+
 	return nil
 }
 
@@ -141,4 +152,24 @@ func (p *AssessmentAssignedNotifProcessor) resolveEnrolledStudentIDs(ctx context
 	}
 
 	return studentIDs, nil
+}
+
+// resolveOfferingUnitID devuelve el academic_unit_id de la oferta para el
+// deep-link multi-tenant (F4.6.0). Es best-effort: ante cualquier fallo
+// (oferta inexistente, error de BD) devuelve "" — el unit se omite del push y
+// el cliente cae al fallback. Nunca aborta el dispatch.
+func (p *AssessmentAssignedNotifProcessor) resolveOfferingUnitID(ctx context.Context, offeringID uuid.UUID) string {
+	const query = `SELECT academic_unit_id
+	               FROM academic.subject_offerings
+	               WHERE id = $1`
+
+	var unitID uuid.UUID
+	if err := p.db.QueryRowContext(ctx, query, offeringID).Scan(&unitID); err != nil {
+		p.logger.Warn("could not resolve offering academic_unit_id; omitting unit_id in push",
+			"subject_offering_id", offeringID.String(),
+			"error", err.Error(),
+		)
+		return ""
+	}
+	return unitID.String()
 }
