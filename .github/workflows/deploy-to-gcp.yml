@@ -1,0 +1,137 @@
+name: Deploy to GCP Cloud Run (On-Demand)
+
+# Pipeline manual para desplegar en GCP Cloud Run.
+# IMPORTANTE: Solo funciona desde la rama main.
+
+on:
+  workflow_dispatch:
+    inputs:
+      image_tag:
+        description: "Tag de imagen a desplegar (ej. latest, v0.1.0)"
+        required: false
+        type: string
+        default: "latest"
+
+permissions:
+  id-token: write   # OIDC con GCP (Workload Identity Federation)
+  contents: read
+  packages: read    # Leer imágenes de GHCR
+
+env:
+  GHCR_REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+  GCP_PROJECT_ID: ${{ secrets.GCP_PROJECT_ID }}      # edugo-dev-2026
+  GCP_REGION: ${{ secrets.GCP_REGION }}              # us-east1
+  AR_REPO: edugo
+  SERVICE_NAME: edugo-worker
+  SERVICE_PORT: "9090"                               # Puerto del Metrics / Health Server
+  RUNTIME_SA: cloud-run-runtime@${{ secrets.GCP_PROJECT_ID }}.iam.gserviceaccount.com
+
+jobs:
+  prepare:
+    name: Preparar
+    runs-on: ubuntu-latest
+    outputs:
+      image_tag: ${{ steps.set-tag.outputs.tag }}
+    steps:
+      - name: Verificar rama main
+        if: github.ref != 'refs/heads/main'
+        run: |
+          echo "ERROR: este pipeline solo corre desde main (rama actual: ${{ github.ref }})"
+          exit 1
+      - id: set-tag
+        run: |
+          TAG="${{ inputs.image_tag }}"
+          echo "tag=${TAG:-latest}" >> $GITHUB_OUTPUT
+
+  deploy:
+    name: Desplegar en Cloud Run
+    runs-on: ubuntu-latest
+    needs: prepare
+    steps:
+      - name: Auth GCP (Workload Identity Federation)
+        uses: google-github-actions/auth@v2
+        with:
+          workload_identity_provider: ${{ secrets.GCP_WIF_PROVIDER }}
+          service_account: ${{ secrets.GCP_WIF_SERVICE_ACCOUNT }}
+
+      - name: Setup gcloud
+        uses: google-github-actions/setup-gcloud@v2
+
+      - name: Login a GHCR
+        run: echo "${{ secrets.GITHUB_TOKEN }}" | docker login ghcr.io -u ${{ github.actor }} --password-stdin
+
+      - name: Configurar Docker para Artifact Registry
+        run: gcloud auth configure-docker ${{ env.GCP_REGION }}-docker.pkg.dev --quiet
+
+      - name: Re-tagear imagen GHCR → Artifact Registry
+        run: |
+          TAG="${{ needs.prepare.outputs.image_tag }}"
+          GHCR_IMAGE="${{ env.GHCR_REGISTRY }}/$(echo '${{ env.IMAGE_NAME }}' | tr '[:upper:]' '[:lower:]'):$TAG"
+          AR_IMAGE="${{ env.GCP_REGION }}-docker.pkg.dev/${{ env.GCP_PROJECT_ID }}/${{ env.AR_REPO }}/${{ env.SERVICE_NAME }}:$TAG"
+          docker pull "$GHCR_IMAGE"
+          docker tag  "$GHCR_IMAGE" "$AR_IMAGE"
+          docker push "$AR_IMAGE"
+          echo "AR_IMAGE=$AR_IMAGE" >> $GITHUB_ENV
+
+      - name: Deploy a Cloud Run
+        run: |
+          gcloud run deploy "${{ env.SERVICE_NAME }}" \
+            --image="$AR_IMAGE" \
+            --region="${{ env.GCP_REGION }}" \
+            --platform=managed \
+            --allow-unauthenticated \
+            --service-account="${{ env.RUNTIME_SA }}" \
+            --port="${{ env.SERVICE_PORT }}" \
+            --cpu=1 \
+            --memory=512Mi \
+            --min-instances=1 \
+            --max-instances=2 \
+            --no-cpu-throttling \
+            --execution-environment=gen2 \
+            --set-env-vars="^@^APP_ENV=cloud@ENV=production@EDUGO_WORKER_LOGGING_LEVEL=info@EDUGO_WORKER_LOGGING_FORMAT=json@EDUGO_WORKER_DATABASE_MONGODB_DATABASE=edugo@EDUGO_WORKER_METRICS_ENABLED=true@EDUGO_WORKER_METRICS_PORT=${{ env.SERVICE_PORT }}@TRACER_ENABLED=true@TRACER_INSECURE=false@OTEL_SERVICE_NAME=${{ env.SERVICE_NAME }}@OTEL_RESOURCE_ATTRIBUTES=service.namespace=edugo,deployment.environment=production" \
+            --set-secrets="POSTGRES_PASSWORD=db-postgres-password:latest,MONGODB_URI=db-mongodb-uri:latest,RABBITMQ_URL=messaging-rabbitmq-url:latest,EDUGO_WORKER_DATABASE_POSTGRES_HOST=db-postgres-host:latest,EDUGO_WORKER_DATABASE_POSTGRES_PORT=db-postgres-port:latest,EDUGO_WORKER_DATABASE_POSTGRES_USER=db-postgres-user:latest,EDUGO_WORKER_DATABASE_POSTGRES_DATABASE=db-postgres-database:latest,EDUGO_WORKER_DATABASE_POSTGRES_SSL_MODE=db-postgres-ssl-mode:latest,TRACER_ENDPOINT=tracer-endpoint:latest,OPENAI_API_KEY=openai-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest"
+
+      - name: Obtener URL del servicio
+        id: url
+        run: |
+          URL=$(gcloud run services describe "${{ env.SERVICE_NAME }}" \
+            --region="${{ env.GCP_REGION }}" --format='value(status.url)')
+          echo "url=$URL" >> $GITHUB_OUTPUT
+
+      - name: Health check
+        run: |
+          URL="${{ steps.url.outputs.url }}"
+          echo "Verificando: $URL/health"
+          sleep 15
+          for i in 1 2 3 4 5; do
+            STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$URL/health" --max-time 15 || echo "000")
+            if [ "$STATUS" = "200" ]; then
+              echo "OK ($STATUS)"; exit 0
+            fi
+            echo "intento $i/5: HTTP $STATUS"; sleep 15
+          done
+          echo "Health check no respondió 200"; exit 1
+
+      - name: Resumen
+        if: always()
+        run: |
+          TAG="${{ needs.prepare.outputs.image_tag }}"
+          URL="${{ steps.url.outputs.url }}"
+          {
+            echo "# Deploy a Cloud Run — $TAG"
+            echo ""
+            echo "| | |"
+            echo "|---|---|"
+            echo "| **Imagen** | \`$AR_IMAGE\` |"
+            echo "| **Servicio** | \`${{ env.SERVICE_NAME }}\` |"
+            echo "| **Región** | \`${{ env.GCP_REGION }}\` |"
+            echo "| **URL de Métricas** | [$URL]($URL) |"
+            echo "| **Health** | [$URL/health]($URL/health) |"
+            echo ""
+            echo "## Logs / debug"
+            echo "\`\`\`bash"
+            echo "gcloud run services logs tail ${{ env.SERVICE_NAME }} --region=${{ env.GCP_REGION }}"
+            echo "gcloud run services describe ${{ env.SERVICE_NAME }} --region=${{ env.GCP_REGION }}"
+            echo "\`\`\`"
+          } >> $GITHUB_STEP_SUMMARY
