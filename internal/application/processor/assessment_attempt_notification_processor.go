@@ -72,6 +72,11 @@ func (p *AssessmentAttemptNotifProcessor) processEvent(ctx context.Context, even
 			Body:         fmt.Sprintf("Un estudiante ha enviado: %s", pl.Title),
 			ResourceType: "assessment_attempt",
 			ResourceID:   attemptID.String(),
+			// Tenant (F4.6.0): school_id viene del evento. unit_id se OMITE: este
+			// processor no tiene acceso a BD y el payload no trae la oferta, solo
+			// subject_id (que puede mapear a N ofertas). El cliente cae al fallback
+			// si necesitara la unidad para el context-switch.
+			SchoolID: pl.SchoolID,
 		},
 		Channels: &client.DispatchChannels{InApp: true, Push: true},
 		PushData: map[string]string{"event_type": p.EventType()},

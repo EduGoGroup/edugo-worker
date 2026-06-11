@@ -84,6 +84,12 @@ func (p *AssessmentAssignedNotifProcessor) processEvent(ctx context.Context, eve
 		recipients = append(recipients, client.DispatchRecipient{UserID: studentID.String()})
 	}
 
+	// Tenant del recurso (F4.6.0): school_id viene del evento; unit_id se resuelve
+	// desde la oferta (academic.subject_offerings.academic_unit_id). Si falla la
+	// resolución del unit, se deja vacío (se omite en el push) sin abortar el
+	// dispatch — el deep-link cae al fallback (lista) en el cliente.
+	unitID := p.resolveOfferingUnitID(ctx, offeringID)
+
 	req := client.DispatchRequest{
 		IdempotencyKey: "assessment.assigned:" + pl.AssignmentID,
 		Recipients:     recipients,
@@ -93,6 +99,8 @@ func (p *AssessmentAssignedNotifProcessor) processEvent(ctx context.Context, eve
 			Body:         fmt.Sprintf("Te han asignado: %s", pl.Title),
 			ResourceType: "assessment",
 			ResourceID:   assessmentID.String(),
+			SchoolID:     pl.SchoolID,
+			UnitID:       unitID,
 		},
 		Channels: &client.DispatchChannels{InApp: true, Push: true},
 		PushData: map[string]string{"event_type": p.EventType()},
@@ -144,4 +152,24 @@ func (p *AssessmentAssignedNotifProcessor) resolveEnrolledStudentIDs(ctx context
 	}
 
 	return studentIDs, nil
+}
+
+// resolveOfferingUnitID devuelve el academic_unit_id de la oferta para el
+// deep-link multi-tenant (F4.6.0). Es best-effort: ante cualquier fallo
+// (oferta inexistente, error de BD) devuelve "" — el unit se omite del push y
+// el cliente cae al fallback. Nunca aborta el dispatch.
+func (p *AssessmentAssignedNotifProcessor) resolveOfferingUnitID(ctx context.Context, offeringID uuid.UUID) string {
+	const query = `SELECT academic_unit_id
+	               FROM academic.subject_offerings
+	               WHERE id = $1`
+
+	var unitID uuid.UUID
+	if err := p.db.QueryRowContext(ctx, query, offeringID).Scan(&unitID); err != nil {
+		p.logger.Warn("could not resolve offering academic_unit_id; omitting unit_id in push",
+			"subject_offering_id", offeringID.String(),
+			"error", err.Error(),
+		)
+		return ""
+	}
+	return unitID.String()
 }

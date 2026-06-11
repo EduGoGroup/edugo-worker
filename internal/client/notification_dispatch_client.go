@@ -28,6 +28,11 @@ type DispatchNotification struct {
 	Body         string `json:"body,omitempty"`
 	ResourceType string `json:"resource_type,omitempty"`
 	ResourceID   string `json:"resource_id,omitempty"`
+	// SchoolID/UnitID: tenant del recurso (F4.6.0, D21). Notif global → vacíos
+	// (se omiten en el push y permiten el context-switch al tocar). Debe
+	// mantenerse en sync con el DTO de platform.
+	SchoolID string `json:"school_id,omitempty"`
+	UnitID   string `json:"unit_id,omitempty"`
 }
 
 // DispatchChannels controla los canales de entrega.

@@ -52,6 +52,8 @@ func TestAssessmentAssignedNotifProcessor_EnrolledStudents_Success(t *testing.T)
 	offeringID := uuid.New()
 	assessmentID := uuid.New()
 	assignmentID := uuid.New()
+	schoolID := uuid.New()
+	unitID := uuid.New()
 	student1 := uuid.New()
 	student2 := uuid.New()
 
@@ -63,7 +65,7 @@ func TestAssessmentAssignedNotifProcessor_EnrolledStudents_Success(t *testing.T)
 		Payload: events.AssessmentAssignedPayload{
 			AssessmentID:           assessmentID.String(),
 			AssignmentID:           assignmentID.String(),
-			SchoolID:               uuid.New().String(),
+			SchoolID:               schoolID.String(),
 			AssignedByMembershipID: uuid.New().String(),
 			SubjectOfferingID:      offeringID.String(),
 			Title:                  "Examen de Historia",
@@ -76,6 +78,10 @@ func TestAssessmentAssignedNotifProcessor_EnrolledStudents_Success(t *testing.T)
 	dbMock.ExpectQuery("SELECT DISTINCT m.user_id").
 		WithArgs(offeringID).
 		WillReturnRows(rows)
+	// F4.6.0: resolución del academic_unit_id de la oferta para el push.
+	dbMock.ExpectQuery("SELECT academic_unit_id").
+		WithArgs(offeringID).
+		WillReturnRows(sqlmock.NewRows([]string{"academic_unit_id"}).AddRow(unitID))
 
 	err = proc.Process(context.Background(), payload)
 
@@ -94,10 +100,61 @@ func TestAssessmentAssignedNotifProcessor_EnrolledStudents_Success(t *testing.T)
 	assert.Equal(t, "Te han asignado: Examen de Historia", req.Notification.Body)
 	assert.Equal(t, "assessment", req.Notification.ResourceType)
 	assert.Equal(t, assessmentID.String(), req.Notification.ResourceID)
+	// F4.6.0: tenant del recurso en el dispatch (school del evento, unit de la oferta).
+	assert.Equal(t, schoolID.String(), req.Notification.SchoolID)
+	assert.Equal(t, unitID.String(), req.Notification.UnitID)
 	assert.Equal(t, "assessment.assigned:"+assignmentID.String(), req.IdempotencyKey)
 	require.NotNil(t, req.Channels)
 	assert.True(t, req.Channels.InApp)
 	assert.True(t, req.Channels.Push)
+}
+
+func TestAssessmentAssignedNotifProcessor_UnitResolutionFails_OmitsUnitID(t *testing.T) {
+	// F4.6.0: si no se puede resolver el academic_unit_id de la oferta, el unit_id
+	// se omite (queda vacío) pero el dispatch SÍ ocurre (best-effort, no aborta).
+	db, dbMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	logger := newTestLogger()
+	disp := &fakeDispatcher{}
+	proc := NewAssessmentAssignedNotifProcessor(db, disp, logger)
+
+	offeringID := uuid.New()
+	schoolID := uuid.New()
+
+	event := events.AssessmentAssignedEvent{
+		EventID:      "evt-002f",
+		EventType:    "assessment.assigned",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload: events.AssessmentAssignedPayload{
+			AssessmentID:           uuid.New().String(),
+			AssignmentID:           uuid.New().String(),
+			SchoolID:               schoolID.String(),
+			AssignedByMembershipID: uuid.New().String(),
+			SubjectOfferingID:      offeringID.String(),
+			Title:                  "Examen sin unidad",
+		},
+	}
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	dbMock.ExpectQuery("SELECT DISTINCT m.user_id").
+		WithArgs(offeringID).
+		WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow(uuid.New()))
+	dbMock.ExpectQuery("SELECT academic_unit_id").
+		WithArgs(offeringID).
+		WillReturnError(fmt.Errorf("offering not found"))
+
+	err = proc.Process(context.Background(), payload)
+
+	assert.NoError(t, err)
+	assert.NoError(t, dbMock.ExpectationsWereMet())
+	require.Len(t, disp.requests, 1)
+	req := disp.requests[0]
+	assert.Equal(t, schoolID.String(), req.Notification.SchoolID)
+	assert.Empty(t, req.Notification.UnitID, "unit_id se omite si no se puede resolver")
 }
 
 func TestAssessmentAssignedNotifProcessor_NoEnrolledStudents(t *testing.T) {
@@ -169,6 +226,10 @@ func TestAssessmentAssignedNotifProcessor_DispatchError(t *testing.T) {
 	dbMock.ExpectQuery("SELECT DISTINCT m.user_id").
 		WithArgs(offeringID).
 		WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow(uuid.New()))
+	// F4.6.0: el unit se resuelve antes del dispatch.
+	dbMock.ExpectQuery("SELECT academic_unit_id").
+		WithArgs(offeringID).
+		WillReturnRows(sqlmock.NewRows([]string{"academic_unit_id"}).AddRow(uuid.New()))
 
 	// Dispatch falla → Process devuelve error (Rabbit reintenta).
 	err = proc.Process(context.Background(), payload)
@@ -276,6 +337,7 @@ func TestAssessmentAttemptNotifProcessor_WithTeacherID_Success(t *testing.T) {
 
 	teacherID := uuid.New()
 	attemptID := uuid.New()
+	schoolID := uuid.New()
 
 	event := events.AssessmentAttemptRecordedEvent{
 		EventID:      "evt-010",
@@ -287,7 +349,7 @@ func TestAssessmentAttemptNotifProcessor_WithTeacherID_Success(t *testing.T) {
 			AssessmentID:        uuid.New().String(),
 			StudentMembershipID: uuid.New().String(),
 			SubjectID:           uuid.New().String(),
-			SchoolID:            uuid.New().String(),
+			SchoolID:            schoolID.String(),
 			Score:               85.0,
 			MaxScore:            100.0,
 			Status:              "completed",
@@ -310,6 +372,9 @@ func TestAssessmentAttemptNotifProcessor_WithTeacherID_Success(t *testing.T) {
 	assert.Equal(t, "Un estudiante ha enviado: Quiz de Ciencias", req.Notification.Body)
 	assert.Equal(t, "assessment_attempt", req.Notification.ResourceType)
 	assert.Equal(t, attemptID.String(), req.Notification.ResourceID)
+	// F4.6.0: school_id del evento viaja; unit_id se omite (sin BD ni oferta aquí).
+	assert.Equal(t, schoolID.String(), req.Notification.SchoolID)
+	assert.Empty(t, req.Notification.UnitID)
 }
 
 func TestAssessmentAttemptNotifProcessor_MissingTeacherID_Skips(t *testing.T) {
@@ -397,6 +462,7 @@ func TestAssessmentReviewedNotifProcessor_WithStudentID_Success(t *testing.T) {
 
 	studentID := uuid.New()
 	attemptID := uuid.New()
+	schoolID := uuid.New()
 
 	event := events.AssessmentReviewedEvent{
 		EventID:      "evt-020",
@@ -407,7 +473,7 @@ func TestAssessmentReviewedNotifProcessor_WithStudentID_Success(t *testing.T) {
 			AttemptID:    attemptID.String(),
 			AssessmentID: uuid.New().String(),
 			ReviewerID:   uuid.New().String(),
-			SchoolID:     uuid.New().String(),
+			SchoolID:     schoolID.String(),
 			FinalScore:   92.5,
 			TotalPoints:  100.0,
 			Status:       "reviewed",
@@ -430,6 +496,9 @@ func TestAssessmentReviewedNotifProcessor_WithStudentID_Success(t *testing.T) {
 	assert.Equal(t, "Tu evaluacion ha sido calificada: Examen Final de Lengua", req.Notification.Body)
 	assert.Equal(t, "assessment_attempt", req.Notification.ResourceType)
 	assert.Equal(t, attemptID.String(), req.Notification.ResourceID)
+	// F4.6.0: school_id del evento viaja; unit_id se omite (sin BD ni oferta aquí).
+	assert.Equal(t, schoolID.String(), req.Notification.SchoolID)
+	assert.Empty(t, req.Notification.UnitID)
 }
 
 func TestAssessmentReviewedNotifProcessor_MissingStudentID_Skips(t *testing.T) {
