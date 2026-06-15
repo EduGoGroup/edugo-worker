@@ -75,10 +75,10 @@ func TestAssessmentAttemptProcessor_Completed_MaterializesGradeItem(t *testing.T
 		WithArgs(studentMembershipID, subjectID).
 		WillReturnRows(sqlmock.NewRows([]string{"period_id", "offering_id"}).AddRow(periodID, offeringID))
 
-	// Resolucion del autor del examen
+	// Resolucion del autor del examen (kind = final -> entra al expediente)
 	dbMock.ExpectQuery("SELECT created_by_membership_id").
 		WithArgs(assessmentID).
-		WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id"}).AddRow(createdBy))
+		WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id", "kind"}).AddRow(createdBy, "final"))
 
 	// UPSERT del grade_item: value = 85.00
 	dbMock.ExpectExec("INSERT INTO academic.grade_item").
@@ -99,6 +99,70 @@ func TestAssessmentAttemptProcessor_Completed_MaterializesGradeItem(t *testing.T
 	err = proc.Process(context.Background(), payload)
 
 	// Assert
+	assert.NoError(t, err)
+	assert.NoError(t, dbMock.ExpectationsWereMet())
+}
+
+func TestAssessmentAttemptProcessor_Practice_MaterializesPracticeResult(t *testing.T) {
+	// Una evaluacion 'practice' NO entra al expediente de notas: su resultado va a
+	// academic.practice_result (estadisticas), no a academic.grade_item.
+	db, dbMock, err := sqlmock.New()
+	require.NoError(t, err)
+	defer func() { _ = db.Close() }()
+
+	logger := newTestLogger()
+	proc := NewAssessmentAttemptProcessor(db, nil, logger)
+
+	attemptID := uuid.New()
+	assessmentID := uuid.New()
+	studentMembershipID := uuid.New()
+	subjectID := uuid.New()
+	schoolID := uuid.New()
+	periodID := uuid.New()
+	offeringID := uuid.New()
+	createdBy := uuid.New()
+
+	event := events.AssessmentAttemptRecordedEvent{
+		EventID:      "evt-110",
+		EventType:    "assessment.attempt_recorded",
+		EventVersion: "1.0.0",
+		Timestamp:    time.Now(),
+		Payload:      completedAttemptPayload(attemptID, assessmentID, studentMembershipID, subjectID, schoolID, 85.0, 100.0),
+	}
+	payload, err := json.Marshal(event)
+	require.NoError(t, err)
+
+	// Resolucion de inscripcion cross-schema
+	dbMock.ExpectQuery("SELECT soe.period_id, soe.offering_id").
+		WithArgs(studentMembershipID, subjectID).
+		WillReturnRows(sqlmock.NewRows([]string{"period_id", "offering_id"}).AddRow(periodID, offeringID))
+
+	// Resolucion del autor del examen (kind = practice -> NO entra al expediente)
+	dbMock.ExpectQuery("SELECT created_by_membership_id").
+		WithArgs(assessmentID).
+		WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id", "kind"}).AddRow(createdBy, "practice"))
+
+	// UPSERT del practice_result (NO grade_item): value = 85.00, sin columna weight.
+	// El orden de args espeja el INSERT de upsertPracticeResult:
+	// (id, membership_id, subject_id, period_id, source_attempt_id, source_assessment_id, value, title, created_by).
+	dbMock.ExpectExec("INSERT INTO academic.practice_result").
+		WithArgs(
+			sqlmock.AnyArg(), // id deterministico (SHA1, namespace practice_result)
+			studentMembershipID,
+			subjectID,
+			periodID,
+			attemptID,    // source_attempt_id
+			assessmentID, // source_assessment_id
+			85.0,         // value (porcentaje)
+			"Examen de Matematicas",
+			createdBy,
+		).
+		WillReturnResult(sqlmock.NewResult(0, 1))
+
+	// Act
+	err = proc.Process(context.Background(), payload)
+
+	// Assert: sin error y SIN ningun INSERT a grade_item (no se registro esa expectativa).
 	assert.NoError(t, err)
 	assert.NoError(t, dbMock.ExpectationsWereMet())
 }
@@ -198,7 +262,7 @@ func TestAssessmentAttemptProcessor_DuplicateAttempt_Idempotent(t *testing.T) {
 			WillReturnRows(sqlmock.NewRows([]string{"period_id", "offering_id"}).AddRow(periodID, offeringID))
 		dbMock.ExpectQuery("SELECT created_by_membership_id").
 			WithArgs(assessmentID).
-			WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id"}).AddRow(createdBy))
+			WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id", "kind"}).AddRow(createdBy, "final"))
 		dbMock.ExpectExec("INSERT INTO academic.grade_item").
 			WithArgs(
 				sqlmock.AnyArg(), studentMembershipID, subjectID, periodID,
@@ -252,7 +316,7 @@ func TestAssessmentAttemptProcessor_ZeroMaxScore_ValueZero(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"period_id", "offering_id"}).AddRow(periodID, offeringID))
 	dbMock.ExpectQuery("SELECT created_by_membership_id").
 		WithArgs(assessmentID).
-		WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id"}).AddRow(createdBy))
+		WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id", "kind"}).AddRow(createdBy, "final"))
 	dbMock.ExpectExec("INSERT INTO academic.grade_item").
 		WithArgs(
 			sqlmock.AnyArg(), studentMembershipID, subjectID, periodID,
@@ -296,7 +360,7 @@ func TestAssessmentAttemptProcessor_ValueRounding(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"period_id", "offering_id"}).AddRow(periodID, offeringID))
 	dbMock.ExpectQuery("SELECT created_by_membership_id").
 		WithArgs(assessmentID).
-		WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id"}).AddRow(createdBy))
+		WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id", "kind"}).AddRow(createdBy, "final"))
 	dbMock.ExpectExec("INSERT INTO academic.grade_item").
 		WithArgs(
 			sqlmock.AnyArg(), studentMembershipID, subjectID, periodID,
@@ -441,7 +505,7 @@ func TestAssessmentAttemptProcessor_WithNotificationSubProcessor(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{"period_id", "offering_id"}).AddRow(periodID, offeringID))
 	dbMock.ExpectQuery("SELECT created_by_membership_id").
 		WithArgs(assessmentID).
-		WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id"}).AddRow(createdBy))
+		WillReturnRows(sqlmock.NewRows([]string{"created_by_membership_id", "kind"}).AddRow(createdBy, "final"))
 	dbMock.ExpectExec("INSERT INTO academic.grade_item").
 		WithArgs(
 			sqlmock.AnyArg(), studentMembershipID, subjectID, periodID,
