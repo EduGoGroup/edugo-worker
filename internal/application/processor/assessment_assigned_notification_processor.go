@@ -131,7 +131,7 @@ func (p *AssessmentAssignedNotifProcessor) resolveEnrolledStudentIDs(ctx context
 	               FROM academic.subject_offering_enrollments e
 	               JOIN academic.memberships m ON m.id = e.student_membership_id
 	               WHERE e.offering_id = $1
-	                 AND m.is_active = true`
+	                 AND m.status = 'active'`
 
 	rows, err := p.db.QueryContext(ctx, query, offeringID)
 	if err != nil {

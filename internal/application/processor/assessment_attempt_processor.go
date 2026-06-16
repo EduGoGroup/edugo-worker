@@ -115,12 +115,13 @@ func (p *AssessmentAttemptProcessor) processEvent(ctx context.Context, event eve
 		return nil
 	}
 
-	// Paso 4 — Resolver el autor del examen como created_by_membership_id (R2).
+	// Paso 4 — Resolver el autor del examen como created_by_membership_id (R2)
+	// y el tipo de evaluacion (kind) que decide si la nota entra al expediente.
 	assessmentID, err := uuid.Parse(pl.AssessmentID)
 	if err != nil {
 		return fmt.Errorf("invalid assessment_id: %w", err)
 	}
-	createdBy, err := p.resolveAssessmentAuthor(ctx, assessmentID)
+	createdBy, kind, err := p.resolveAssessmentAuthor(ctx, assessmentID)
 	if err != nil {
 		return fmt.Errorf("resolviendo autor de la evaluacion: %w", err)
 	}
@@ -141,7 +142,7 @@ func (p *AssessmentAttemptProcessor) processEvent(ctx context.Context, event eve
 		title = "Evaluacion"
 	}
 
-	if err := p.upsertGradeItem(ctx, gradeItemUpsert{
+	upsert := gradeItemUpsert{
 		attemptID:           attemptID,
 		studentMembershipID: studentMembershipID,
 		subjectID:           subjectID,
@@ -151,8 +152,19 @@ func (p *AssessmentAttemptProcessor) processEvent(ctx context.Context, event eve
 		value:               value,
 		title:               title,
 		createdBy:           createdBy,
-	}); err != nil {
-		return fmt.Errorf("materializando grade_item auto_scored: %w", err)
+	}
+
+	// Una evaluacion 'practice' no entra al expediente de notas: su resultado va a
+	// academic.practice_result (estadisticas). Cualquier otro valor ('final', vacio
+	// o desconocido) se trata como 'final' y materializa grade_item (R defensiva).
+	if kind == "practice" {
+		if err := p.upsertPracticeResult(ctx, upsert); err != nil {
+			return fmt.Errorf("materializando practice_result auto_scored: %w", err)
+		}
+	} else {
+		if err := p.upsertGradeItem(ctx, upsert); err != nil {
+			return fmt.Errorf("materializando grade_item auto_scored: %w", err)
+		}
 	}
 
 	// Paso 7 — Delegar la notificacion al docente al sub-procesador (sin cambio de cadena).
@@ -162,12 +174,13 @@ func (p *AssessmentAttemptProcessor) processEvent(ctx context.Context, event eve
 				"attempt_id", pl.AttemptID,
 				"error", err.Error(),
 			)
-			// No fatal: el grade_item ya quedo materializado.
+			// No fatal: el resultado ya quedo materializado.
 		}
 	}
 
-	p.logger.Info("assessment.attempt_recorded procesado: grade_item materializado",
+	p.logger.Info("assessment.attempt_recorded procesado: resultado materializado",
 		"attempt_id", pl.AttemptID,
+		"kind", kind,
 		"value", value,
 	)
 	return nil
@@ -198,18 +211,20 @@ func (p *AssessmentAttemptProcessor) resolveEnrollment(ctx context.Context, stud
 	return periodID, offeringID, true, nil
 }
 
-// resolveAssessmentAuthor devuelve el created_by_membership_id del examen, que
-// se usa como autor (created_by_membership_id) del grade_item generado.
-func (p *AssessmentAttemptProcessor) resolveAssessmentAuthor(ctx context.Context, assessmentID uuid.UUID) (uuid.UUID, error) {
-	const query = `SELECT created_by_membership_id
+// resolveAssessmentAuthor devuelve el created_by_membership_id del examen (autor
+// del grade_item / practice_result generado) y su kind ('practice' | 'final'),
+// que decide si el resultado entra al expediente de notas o solo a estadisticas.
+func (p *AssessmentAttemptProcessor) resolveAssessmentAuthor(ctx context.Context, assessmentID uuid.UUID) (uuid.UUID, string, error) {
+	const query = `SELECT created_by_membership_id, kind
 	               FROM assessment.assessment
 	               WHERE id = $1`
 
 	var createdBy uuid.UUID
-	if err := p.db.QueryRowContext(ctx, query, assessmentID).Scan(&createdBy); err != nil {
-		return uuid.Nil, fmt.Errorf("consultando autor de la evaluacion: %w", err)
+	var kind string
+	if err := p.db.QueryRowContext(ctx, query, assessmentID).Scan(&createdBy, &kind); err != nil {
+		return uuid.Nil, "", fmt.Errorf("consultando autor de la evaluacion: %w", err)
 	}
-	return createdBy, nil
+	return createdBy, kind, nil
 }
 
 // gradeItemUpsert agrupa los datos resueltos para el UPSERT del grade_item.
@@ -259,6 +274,48 @@ func (p *AssessmentAttemptProcessor) upsertGradeItem(ctx context.Context, in gra
 
 	p.logger.Info("grade_item auto_scored materializado",
 		"grade_item_id", gradeItemID.String(),
+		"attempt_id", in.attemptID.String(),
+		"value", in.value,
+	)
+	return nil
+}
+
+// upsertPracticeResult materializa (o actualiza) el resultado de una evaluacion
+// 'practice' en academic.practice_result. Espeja a upsertGradeItem: el ID es
+// deterministico sobre el attempt_id (con namespace propio) para que reprocesar el
+// mismo intento actualice la misma fila (R6). El resultado NO entra al expediente
+// de notas; solo alimenta estadisticas. El UNIQUE parcial uq_practice_result_attempt
+// actua como red de seguridad adicional en BD. La tabla no tiene columna weight.
+func (p *AssessmentAttemptProcessor) upsertPracticeResult(ctx context.Context, in gradeItemUpsert) error {
+	practiceResultID := uuid.NewSHA1(uuid.NameSpaceOID, []byte(in.attemptID.String()+"practice_result"))
+
+	const query = `INSERT INTO academic.practice_result
+		(id, membership_id, subject_id, period_id, source,
+		 source_attempt_id, source_assessment_id,
+		 value, title, created_by_membership_id, created_at, updated_at)
+		VALUES ($1, $2, $3, $4, 'auto_scored', $5, $6, $7, $8, $9, NOW(), NOW())
+		ON CONFLICT (id) DO UPDATE SET
+			value      = EXCLUDED.value,
+			title      = EXCLUDED.title,
+			updated_at = NOW()`
+
+	_, err := p.db.ExecContext(ctx, query,
+		practiceResultID,
+		in.studentMembershipID,
+		in.subjectID,
+		in.periodID,
+		in.attemptID,
+		in.assessmentID,
+		in.value,
+		in.title,
+		in.createdBy,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert practice_result: %w", err)
+	}
+
+	p.logger.Info("practice_result auto_scored materializado",
+		"practice_result_id", practiceResultID.String(),
 		"attempt_id", in.attemptID.String(),
 		"value", in.value,
 	)

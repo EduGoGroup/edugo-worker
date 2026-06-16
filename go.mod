@@ -5,12 +5,12 @@ go 1.25.0
 require (
 	github.com/DATA-DOG/go-sqlmock v1.5.2
 	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.1.0
-	github.com/EduGoGroup/edugo-shared/auth v0.2.0
+	github.com/EduGoGroup/edugo-shared/auth v0.900.2
 	github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0
 	github.com/EduGoGroup/edugo-shared/bootstrap/mongodb v0.1.0
 	github.com/EduGoGroup/edugo-shared/bootstrap/postgres v0.1.0
 	github.com/EduGoGroup/edugo-shared/bootstrap/s3 v0.1.0
-	github.com/EduGoGroup/edugo-shared/common v0.900.2
+	github.com/EduGoGroup/edugo-shared/common v0.900.4
 	github.com/EduGoGroup/edugo-shared/config v0.1.0
 	github.com/EduGoGroup/edugo-shared/health v0.1.0
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.1.0
