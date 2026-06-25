@@ -5,34 +5,6 @@ Todos los cambios notables en edugo-worker serán documentados en este archivo.
 El formato está basado en [Keep a Changelog](https://keepachangelog.com/en/1.0.0/),
 y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [0.2.0] - 2026-06-11
-
-### Tipo de Release: minor
-
-- chore(deps): go mod tidy tras bump de shared (limpia go.sum)
-- chore(deps): bump auth@v0.2.0 + common@v0.900.2 + messaging-events@v0.900.1 (plan 020 N5)
-- ci(worker): workflow Deploy to GCP Cloud Run on-demand (paridad con las otras APIs)
-- feat(worker-n5-push): propaga unit_id del evento al push de intento/revisión
-- feat(worker-n5-push): F4.6.0 — tenant del recurso en processors de notificación
-- fix(worker): drena body del dispatch (keep-alive) y usa enum ProcessingStatusReady
-- test(notifications): cierre F2.4 — roundtrip cruzado worker→gateway (plan 020)
-- feat(notifications): worker delega dispatch al gateway (plan 020 F2.3)
-- Revert "chore: release v0.8.0"
-- chore: release v0.8.0
-- Revert "chore: release v0.8.0"
-- fix(ci): GOPRIVATE en manual-release para evitar checksum mismatch del shared (ADR 0015)
-- chore: release v0.8.0
-- chore(deps): bump shared/logger@v0.900.0
-- fix(ci): GOPRIVATE a nivel de workflow para evitar fantasma del proxy en go mod download (bug 0022)
-- chore(deps): bump common@v0.900.1 + require messaging/events@v0.900.0 (cierre N4)
-- feat(n4): materializar grade_item auto_scored desde attempt_recorded (F4b)
-- chore(worker): saneo de legacy muerto + config dev contra infra docker real
-- feat(n4): F3 processors al sobre canonico + notif in-app por oferta
-- refactor(n4): F1 — elimina stub OpenAI falso + limpia factory NLP
-
-
----
-
 ## [Unreleased]
 
 ### Changed
