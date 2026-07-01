@@ -10,8 +10,6 @@ github.com/EduGoGroup/edugo-infrastructure/mongodb v0.1.0 h1:hf4C7YPJ+gw+zwIQlZF
 github.com/EduGoGroup/edugo-infrastructure/mongodb v0.1.0/go.mod h1:i2Z9ha97Xbm6sSigl8Rlyj7fqnDggBUcbwUT9tUXy5I=
 github.com/EduGoGroup/edugo-shared/auth v0.2.0 h1:IhZzv7nBeNLSQktIQAjlNc7R1hM7XJoo4FA1x44aFy8=
 github.com/EduGoGroup/edugo-shared/auth v0.2.0/go.mod h1:X75eF8JizaAbUxcb/RZECHZ2xQBuVLbPEuvRREbaGR4=
-github.com/EduGoGroup/edugo-shared/auth v0.900.2 h1:iZXZTVnnGBUsBq4jsxSyKpJ2+cAwwyGP3k4eBjqK33E=
-github.com/EduGoGroup/edugo-shared/auth v0.900.2/go.mod h1:X75eF8JizaAbUxcb/RZECHZ2xQBuVLbPEuvRREbaGR4=
 github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0 h1:I7iVHAohSVmuvYlB74iW/6Di7O+me6+MbOb+aLkGo9A=
 github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0/go.mod h1:tXOCq+b4+DjzOE16tLTvGM9SrLBVhz7nC+MQ10UEWsA=
 github.com/EduGoGroup/edugo-shared/bootstrap/mongodb v0.1.0 h1:qXMMbATisfI9iILL4e4oUbhPF2kcHbpGstv31VFGLNE=
@@ -22,8 +20,6 @@ github.com/EduGoGroup/edugo-shared/bootstrap/s3 v0.1.0 h1:9rbfo/DbR65esLhB1xEM7e
 github.com/EduGoGroup/edugo-shared/bootstrap/s3 v0.1.0/go.mod h1:kAkdhlW1zlhgAB2n/3sklg5dNEhiMbxqZMsdloNg6+c=
 github.com/EduGoGroup/edugo-shared/common v0.900.2 h1:ESGQcCZ8a9aH9UZD3vrDfmV9Lue4f0EeRgFNuhole68=
 github.com/EduGoGroup/edugo-shared/common v0.900.2/go.mod h1:NMBRyufKBKFtp/S/p63xGAJz1VtqRymH0VJrsQWnBoM=
-github.com/EduGoGroup/edugo-shared/common v0.900.4 h1:XGu9yvhS3DTPHmPi2+PvP0k1KAUneVTvhxlu3hvo1sI=
-github.com/EduGoGroup/edugo-shared/common v0.900.4/go.mod h1:NMBRyufKBKFtp/S/p63xGAJz1VtqRymH0VJrsQWnBoM=
 github.com/EduGoGroup/edugo-shared/config v0.1.0 h1:pZiOR/YmaoDLYCawBy0xnt2lu+aRyjwuvIvDbcittto=
 github.com/EduGoGroup/edugo-shared/config v0.1.0/go.mod h1:xirrLI+2wAiwSRfZOcWSxdKBFcTUwdZHgJhH4fuiEd4=
 github.com/EduGoGroup/edugo-shared/health v0.1.0 h1:ULGFf3XmobNVgY4rOy6VlGxKMGvtj6vT6hYf6GSk6xg=

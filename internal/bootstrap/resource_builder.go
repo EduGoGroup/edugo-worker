@@ -402,6 +402,11 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	registry.Register(studentEnrolledProc)
 
 	// Registrar processors de evaluaciones
+	// DEPRECATED (plan 032 A4): la ruta assessment.assigned ya NO se usa. Desde el
+	// plan 032, edugo-api-learning resuelve los inscritos y llama directo al
+	// Notification Gateway de platform tras asignar; ya NO publica el evento a
+	// Rabbit. Este processor queda registrado por seguridad (idempotente vía
+	// gateway) pero no debería recibir mensajes: ningún productor emite el evento.
 	registry.Register(assessmentAssignedNotifProc)
 	registry.Register(assessmentAttemptProc) // handles analytics + notifications for assessment.attempt_recorded
 	registry.Register(assessmentReviewedNotifProc)
