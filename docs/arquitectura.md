@@ -261,7 +261,7 @@ materialUploadedProc := processor.NewMaterialUploadedProcessor(
 | **RabbitMQ** | Cola de eventos para procesamiento asíncrono | `messaging.rabbitmq.*` |
 | **AWS S3** | Almacenamiento de archivos PDF | `storage.s3.*` |
 | **OpenAI** | Generación de resúmenes y quizzes con IA | `nlp.openai.*` |
-| **API Admin** | Consulta de usuarios y permisos (con cache) | `api_admin.*` |
+| **API Identity** (:8070) | Consulta de usuarios y permisos (con cache) | `api_identity.*` |
 
 ---
 

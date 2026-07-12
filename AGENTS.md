@@ -42,7 +42,7 @@ consumer enruta por `event_type`. Consumer y processors quedan desacoplados.
 - `make build` — binario en `bin/`. `make run` o `go run cmd/main.go`.
 - `make test` / `make test-coverage` / `make lint` / `make format`.
 - Docker: `docker-compose up -d`. Config vía env (`POSTGRES_*`, `MONGODB_*`, `RABBITMQ_URL`,
-  `API_ADMIN_*`, `LOG_*`).
+  `API_IDENTITY_*`, `LOG_*`).
 
 ## Eventos procesados (registrados en el registry)
 

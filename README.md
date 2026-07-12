@@ -120,11 +120,11 @@ RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 LOG_LEVEL=info
 LOG_FORMAT=json
 
-# API Admin (Autenticación)
-API_ADMIN_BASE_URL=http://localhost:8081
-API_ADMIN_TIMEOUT=5s
-API_ADMIN_CACHE_TTL=60s
-API_ADMIN_CACHE_ENABLED=true
+# API Identity (Autenticación)
+API_IDENTITY_BASE_URL=http://localhost:8070/api
+API_IDENTITY_TIMEOUT=5s
+API_IDENTITY_CACHE_TTL=60s
+API_IDENTITY_CACHE_ENABLED=true
 ```
 
 ### Ejemplo config.yaml
@@ -158,8 +158,8 @@ logging:
   level: info
   format: json
 
-api_admin:
-  base_url: http://localhost:8081
+api_identity:
+  base_url: http://localhost:8070/api
   timeout: 5s
   cache_ttl: 60s
   cache_enabled: true
