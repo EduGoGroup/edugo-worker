@@ -20,7 +20,7 @@ type Config struct {
     Storage         StorageConfig         `mapstructure:"storage"`
     PDF             PDFConfig             `mapstructure:"pdf"`
     Logging         LoggingConfig         `mapstructure:"logging"`
-    APIAdmin        APIAdminConfig        `mapstructure:"api_admin"`
+    APIIdentity     APIIdentityConfig     `mapstructure:"api_identity"`
     Metrics         MetricsConfig         `mapstructure:"metrics"`
     Health          HealthConfig          `mapstructure:"health"`
     CircuitBreakers CircuitBreakersConfig `mapstructure:"circuit_breakers"`
@@ -137,9 +137,9 @@ logging:
   level: "info"
   format: "json"
 
-# Autenticación centralizada con api-admin
-api_admin:
-  base_url: "http://api-admin:8081"
+# Autenticación centralizada con api-identity
+api_identity:
+  base_url: "http://api-identity:8070/api"
   timeout: "5s"
   cache_ttl: "60s"
   cache_enabled: true
@@ -360,7 +360,7 @@ El patrón `Get*WithDefaults()` asegura que siempre hay valores razonables:
 | Método | Defaults |
 |--------|----------|
 | `GetActiveNLPConfig()` | model: gpt-4-turbo-preview, maxTokens: 4096, temp: 0.7, timeout: 30s |
-| `GetAPIAdminConfigWithDefaults()` | baseURL: localhost:8081, timeout: 5s, cacheTTL: 60s |
+| `GetAPIIdentityConfigWithDefaults()` | baseURL: localhost:8070/api, timeout: 5s, cacheTTL: 60s |
 | `GetMetricsConfigWithDefaults()` | port: 9090 |
 | `GetHealthConfigWithDefaults()` | MongoDB: 5s, Postgres: 3s, RabbitMQ: 3s |
 | `GetCircuitBreakerConfigWithDefaults()` | maxFailures: 5, timeout: 60s, maxRequests: 1 |
