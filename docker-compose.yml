@@ -7,9 +7,8 @@ services:
       dockerfile: Dockerfile
     container_name: edugo-worker
     environment:
+      # Plan 037 (D-037.11): worker esqueleto sin Postgres ni Mongo.
       APP_ENV: ${APP_ENV:-local}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-edugo_pass}
-      MONGODB_URI: ${MONGODB_URI:-mongodb://edugo_admin:edugo_pass@mongodb:27017/edugo?authSource=admin}
       RABBITMQ_URL: ${RABBITMQ_URL:-amqp://edugo_user:edugo_pass@rabbitmq:5672/}
       OPENAI_API_KEY: ${OPENAI_API_KEY}
     volumes:

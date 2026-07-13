@@ -1,17 +1,5 @@
 # Configuración Base - Worker
-database:
-  postgres:
-    host: "localhost"
-    port: 5432
-    database: "edugo"
-    user: "edugo_user"
-    max_connections: 10
-    ssl_mode: "disable"
-
-  mongodb:
-    database: "edugo"
-    timeout: 10s
-
+# Plan 037 (D-037.11): worker en estado esqueleto, sin Postgres ni Mongo.
 messaging:
   rabbitmq:
     queues:
@@ -69,8 +57,6 @@ api_identity:
 # Health Checks
 health:
   timeouts:
-    mongodb: "5s"
-    postgres: "3s"
     rabbitmq: "3s"
 
 # Circuit Breakers

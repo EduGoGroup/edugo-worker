@@ -31,13 +31,11 @@ BLUE=\033[1;34m
 RED=\033[1;31m
 RESET=\033[0m
 
-# Environment variables con defaults (apuntan a la infra docker real de dev:
-#   edugo-migrator-postgres 5433/edugo · edugo-migrator-mongodb 27018/edugo · edugo-rabbitmq 5672)
-# Con estos defaults, `APP_ENV=local make run` arranca sin exportar nada a mano.
-# Override puntual: `POSTGRES_PASSWORD=otra make run`.
+# Environment variables con defaults.
+# Plan 037 (D-037.11): worker esqueleto sin Postgres ni Mongo; su única
+# dependencia es RabbitMQ (edugo-rabbitmq 5672). Con estos defaults,
+# `APP_ENV=local make run` arranca sin exportar nada a mano.
 export APP_ENV ?= local
-export POSTGRES_PASSWORD ?= edugo123
-export MONGODB_URI ?= mongodb://edugo:edugo123@localhost:27018/edugo?authSource=admin
 export RABBITMQ_URL ?= amqp://guest:guest@localhost:5672/
 
 .DEFAULT_GOAL := help

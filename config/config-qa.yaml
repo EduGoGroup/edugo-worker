@@ -1,14 +1,6 @@
 # Configuración QA/Staging
 # Usa variables de ambiente para secretos
 
-database:
-  postgres:
-    host: "qa-postgres.edugo.internal"
-    max_connections: 50
-
-  mongodb:
-    # URI desde ENV: MONGODB_URI
-
 messaging:
   rabbitmq:
     # URL desde ENV: RABBITMQ_URL

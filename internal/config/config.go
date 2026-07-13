@@ -8,7 +8,6 @@ import (
 )
 
 type Config struct {
-	Database        DatabaseConfig        `mapstructure:"database"`
 	Messaging       MessagingConfig       `mapstructure:"messaging"`
 	NLP             NLPConfig             `mapstructure:"nlp"`
 	Storage         StorageConfig         `mapstructure:"storage"`
@@ -20,27 +19,6 @@ type Config struct {
 	CircuitBreakers CircuitBreakersConfig `mapstructure:"circuit_breakers"`
 	RateLimiter     RateLimiterConfig     `mapstructure:"rate_limiter"`
 	Shutdown        ShutdownConfig        `mapstructure:"shutdown"`
-}
-
-type DatabaseConfig struct {
-	Postgres PostgresConfig `mapstructure:"postgres"`
-	MongoDB  MongoDBConfig  `mapstructure:"mongodb"`
-}
-
-type PostgresConfig struct {
-	Host           string `mapstructure:"host"`
-	Port           int    `mapstructure:"port"`
-	Database       string `mapstructure:"database"`
-	User           string `mapstructure:"user"`
-	Password       string `mapstructure:"password"`
-	MaxConnections int    `mapstructure:"max_connections"`
-	SSLMode        string `mapstructure:"ssl_mode"`
-}
-
-type MongoDBConfig struct {
-	URI      string        `mapstructure:"uri"`
-	Database string        `mapstructure:"database"`
-	Timeout  time.Duration `mapstructure:"timeout"`
 }
 
 type MessagingConfig struct {
@@ -163,8 +141,6 @@ type HealthConfig struct {
 }
 
 type HealthTimeoutsConfig struct {
-	MongoDB  time.Duration `mapstructure:"mongodb"`
-	Postgres time.Duration `mapstructure:"postgres"`
 	RabbitMQ time.Duration `mapstructure:"rabbitmq"`
 }
 
@@ -190,12 +166,6 @@ type APIIdentityConfig struct {
 }
 
 func (c *Config) Validate() error {
-	if c.Database.Postgres.Password == "" {
-		return fmt.Errorf("POSTGRES_PASSWORD is required")
-	}
-	if c.Database.MongoDB.URI == "" {
-		return fmt.Errorf("MONGODB_URI is required")
-	}
 	if c.Messaging.RabbitMQ.URL == "" {
 		return fmt.Errorf("RABBITMQ_URL is required")
 	}
@@ -302,12 +272,6 @@ func (c *Config) GetMetricsConfigWithDefaults() MetricsConfig {
 // GetHealthConfigWithDefaults retorna la configuración de health checks con valores por defecto
 func (c *Config) GetHealthConfigWithDefaults() HealthConfig {
 	cfg := c.Health
-	if cfg.Timeouts.MongoDB == 0 {
-		cfg.Timeouts.MongoDB = 5 * time.Second
-	}
-	if cfg.Timeouts.Postgres == 0 {
-		cfg.Timeouts.Postgres = 3 * time.Second
-	}
 	if cfg.Timeouts.RabbitMQ == 0 {
 		cfg.Timeouts.RabbitMQ = 3 * time.Second
 	}

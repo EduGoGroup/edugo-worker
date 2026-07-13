@@ -31,8 +31,6 @@ func main() {
 	resources, cleanup, err := bootstrap.NewResourceBuilder(ctx, cfg).
 		WithLogger().
 		WithSharedMetrics().
-		WithPostgreSQL().
-		WithMongoDB().
 		WithRabbitMQ().
 		WithAuthClient().
 		WithInfrastructure().
@@ -183,7 +181,7 @@ func main() {
 		return nil
 	})
 
-	// 9.3 Ejecutar cleanup de recursos (RabbitMQ, MongoDB, PostgreSQL, etc.)
+	// 9.3 Ejecutar cleanup de recursos (RabbitMQ, logger, etc.)
 	gracefulShutdown.Register("infrastructure_cleanup", func(shutdownCtx context.Context) error {
 		resources.Logger.Info("Ejecutando cleanup de infraestructura...")
 		return cleanup()
@@ -233,10 +231,10 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 		return fmt.Errorf("error declarando cola: %w", err)
 	}
 
-	// Bind cola de materiales. Un solo binding: material.uploaded. El reproceso
-	// (material.reprocess) reusa esta misma cola y se enruta por event_type en el
-	// registry (plan 037 F1). material.deleted ya no existe: la limpieza Mongo es
-	// síncrona en edugo-api-learning (plan 037 D-037.4).
+	// Bind cola de materiales al routing key material.uploaded. El worker declara
+	// exchange + cola + binding y arranca el consumer como cáscara, pero el registry
+	// está VACÍO (plan 037 D-037.11): no hay processor de negocio hasta que el carril
+	// LLM (037-F3) registre los suyos. Ver README (topología Rabbit / estado esqueleto).
 	if err := ch.QueueBind(
 		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
 		"material.uploaded",

@@ -23,7 +23,7 @@ jobs:
     with:
       go-version: "1.25"
       coverage-threshold: 0.0  # TODO: Aumentar a 33.0 cuando se implementen tests
-      use-services: true  # PostgreSQL + MongoDB + RabbitMQ
+      use-services: true  # RabbitMQ (worker esqueleto, plan 037 D-037.11: sin Postgres/Mongo)
     # LECCIONES APRENDIDAS APLICADAS:
     # ✅ NO subdirectorio (reusable-go-test.yml en raíz)
     # ✅ NO secrets GITHUB_TOKEN (nombre reservado)

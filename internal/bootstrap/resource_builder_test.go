@@ -36,15 +36,12 @@ func TestResourceBuilder_ErrorHandling(t *testing.T) {
 	ctx := context.Background()
 	cfg := &config.Config{}
 
-	// Configurar config inválida para PostgreSQL
-	cfg.Database.Postgres.Host = ""
-
+	// WithProcessors requiere logger; llamarlo sin logger debe fijar el error
 	builder := NewResourceBuilder(ctx, cfg).
-		WithLogger().
-		WithPostgreSQL()
+		WithProcessors()
 
 	if builder.err == nil {
-		t.Error("expected error when PostgreSQL config is invalid")
+		t.Error("expected error when processors are built before logger")
 	}
 
 	// Build should return the error
@@ -59,15 +56,15 @@ func TestResourceBuilder_DependencyValidation(t *testing.T) {
 	ctx := context.Background()
 	cfg := &config.Config{}
 
-	// Intentar crear PostgreSQL sin logger
+	// Intentar conectar a RabbitMQ sin logger
 	builder := NewResourceBuilder(ctx, cfg).
-		WithPostgreSQL()
+		WithRabbitMQ()
 
 	if builder.err == nil {
-		t.Error("expected error when PostgreSQL is called before logger")
+		t.Error("expected error when RabbitMQ is called before logger")
 	}
 
-	if builder.err.Error() != "logger required before PostgreSQL" {
+	if builder.err.Error() != "logger required before RabbitMQ" {
 		t.Errorf("unexpected error message: %v", builder.err)
 	}
 }

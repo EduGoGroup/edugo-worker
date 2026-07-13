@@ -1,9 +1,3 @@
-database:
-  postgres:
-    host: "ep-green-frost-ado4abbi-pooler.c-2.us-east-1.aws.neon.tech"
-    user: "neondb_owner"
-    ssl_mode: "require"
-
 messaging:
   rabbitmq:
     url: "amqps://rgvtxvma:O_9EeTgx8IHDg3MW3UZuTGn1tdbdhsZR@chameleon.lmq.cloudamqp.com/rgvtxvma"

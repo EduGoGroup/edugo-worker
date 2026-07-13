@@ -125,28 +125,6 @@ var (
 	)
 )
 
-// Métricas de base de datos
-var (
-	// DBOperationsTotal cuenta las operaciones de base de datos
-	DBOperationsTotal = promauto.NewCounterVec(
-		prometheus.CounterOpts{
-			Name: "worker_db_operations_total",
-			Help: "Total number of database operations by type and status",
-		},
-		[]string{"db_type", "operation", "status"}, // db_type: postgres, mongodb
-	)
-
-	// DBOperationDuration mide la duración de operaciones de DB
-	DBOperationDuration = promauto.NewHistogramVec(
-		prometheus.HistogramOpts{
-			Name:    "worker_db_operation_duration_seconds",
-			Help:    "Duration of database operations in seconds",
-			Buckets: prometheus.DefBuckets,
-		},
-		[]string{"db_type", "operation"},
-	)
-)
-
 // Métricas de circuit breaker
 var (
 	// CircuitBreakerState indica el estado del circuit breaker por servicio
@@ -155,7 +133,7 @@ var (
 			Name: "worker_circuit_breaker_state",
 			Help: "Current state of circuit breakers (0=closed, 1=half-open, 2=open)",
 		},
-		[]string{"service"}, // openai, mongodb, postgres
+		[]string{"service"}, // nlp, storage
 	)
 
 	// CircuitBreakerTransitions cuenta las transiciones de estado
@@ -243,12 +221,6 @@ func RecordPDFExtraction(status string, durationSeconds float64, pageCount int) 
 	}
 }
 
-// RecordDBOperation registra una operación de base de datos
-func RecordDBOperation(dbType string, operation string, status string, durationSeconds float64) {
-	DBOperationsTotal.WithLabelValues(dbType, operation, status).Inc()
-	DBOperationDuration.WithLabelValues(dbType, operation).Observe(durationSeconds)
-}
-
 // SetCircuitBreakerState actualiza el estado del circuit breaker.
 //
 // Valores esperados para el parámetro service:
@@ -286,15 +258,6 @@ func RecordEventProcessed(eventType string, status string) {
 // RecordProcessingDuration registra la duración total de procesamiento de un evento
 func RecordProcessingDuration(eventType string, durationSeconds float64) {
 	ProcessingDuration.WithLabelValues(eventType).Observe(durationSeconds)
-}
-
-// RecordDatabaseOperation registra una operación de base de datos con éxito/fallo
-func RecordDatabaseOperation(dbType string, operation string, durationSeconds float64, success bool) {
-	status := "error"
-	if success {
-		status = "success"
-	}
-	RecordDBOperation(dbType, operation, status, durationSeconds)
 }
 
 // RecordRateLimiterWait registra una espera causada por rate limiter

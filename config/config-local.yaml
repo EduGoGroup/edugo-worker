@@ -1,20 +1,7 @@
 # Local Development
-# Apunta a la infra docker real de dev:
-#   Postgres -> edugo-migrator-postgres (host 5433, user/db edugo)
-#   Mongo    -> edugo-migrator-mongodb  (host 27018, user edugo)
-#   RabbitMQ -> edugo-rabbitmq           (host 5672, guest:guest)
-# Patrón: host/port/user/db en el yaml; el password de Postgres llega por
-# el ENV binding POSTGRES_PASSWORD (default edugo123 en el Makefile target dev).
-database:
-  postgres:
-    host: "localhost"
-    port: 5433
-    user: "edugo"
-    database: "edugo"
-    # password -> ENV POSTGRES_PASSWORD (ver Makefile)
-  mongodb:
-    uri: "mongodb://edugo:edugo123@localhost:27018/edugo?authSource=admin"
-
+# Plan 037 (D-037.11): el worker quedó como esqueleto sin Postgres ni Mongo.
+# Su única dependencia de mensajería es RabbitMQ:
+#   RabbitMQ -> edugo-rabbitmq (host 5672, guest:guest)
 messaging:
   rabbitmq:
     url: "amqp://guest:guest@localhost:5672/"

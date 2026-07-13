@@ -4,127 +4,16 @@ package integration
 
 import (
 	"context"
-	"database/sql"
 	"testing"
 
-	"github.com/EduGoGroup/edugo-infrastructure/mongodb/migrations"
 	"github.com/EduGoGroup/edugo-shared/testing/containers"
-	_ "github.com/lib/pq"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
-// setupAllContainers inicia todos los contenedores necesarios (PostgreSQL + MongoDB + RabbitMQ)
-func setupAllContainers(t *testing.T) (*containers.Manager, func()) {
-	cfg := containers.NewConfig().
-		WithPostgreSQL(&containers.PostgresConfig{
-			Database: "edugo",
-			Username: "edugo_user",
-			Password: "edugo_pass",
-		}).
-		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo",
-			Username: "edugo_admin",
-			Password: "edugo_pass",
-		}).
-		WithRabbitMQ(&containers.RabbitConfig{
-			Username: "edugo_user",
-			Password: "edugo_pass",
-		}).
-		Build()
-
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	cleanup := func() {
-		// Cleanup es manejado por el manager
-	}
-
-	return manager, cleanup
-}
-
-// setupPostgres inicia solo PostgreSQL
-func setupPostgres(t *testing.T) (*sql.DB, func()) {
-	ctx := context.Background()
-
-	cfg := containers.NewConfig().
-		WithPostgreSQL(&containers.PostgresConfig{
-			Database: "edugo",
-			Username: "edugo_user",
-			Password: "edugo_pass",
-		}).
-		Build()
-
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	pg := manager.PostgreSQL()
-	if pg == nil {
-		t.Fatal("Failed to get PostgreSQL container")
-	}
-
-	connString, err := pg.ConnectionString(ctx)
-	if err != nil {
-		t.Fatalf("Failed to get connection string: %v", err)
-	}
-
-	db, err := sql.Open("postgres", connString)
-	if err != nil {
-		t.Fatalf("Failed to connect to Postgres: %v", err)
-	}
-
-	if err := db.Ping(); err != nil {
-		db.Close()
-		t.Fatalf("Failed to ping Postgres: %v", err)
-	}
-
-	cleanup := func() {
-		db.Close()
-	}
-
-	return db, cleanup
-}
-
-// setupMongoDB inicia solo MongoDB
-func setupMongoDB(t *testing.T) (*mongo.Database, func()) {
-	cfg := containers.NewConfig().
-		WithMongoDB(&containers.MongoConfig{
-			Database: "edugo",
-			Username: "edugo_admin",
-			Password: "edugo_pass",
-		}).
-		Build()
-
-	manager, err := containers.GetManager(t, cfg)
-	if err != nil {
-		t.Fatalf("Failed to get manager: %v", err)
-	}
-
-	mongoDB := manager.MongoDB()
-	if mongoDB == nil {
-		t.Fatal("Failed to get MongoDB container")
-	}
-
-	db := mongoDB.Database()
-
-	// Aplicar migraciones
-	ctx := context.Background()
-	if err := migrations.ApplyAll(ctx, db); err != nil {
-		t.Fatalf("Failed to apply migrations: %v", err)
-	}
-
-	cleanup := func() {
-		// Cleanup es manejado por el manager
-	}
-
-	return db, cleanup
-}
-
-// setupRabbitMQ inicia solo RabbitMQ
+// setupRabbitMQ inicia solo RabbitMQ.
+//
+// Plan 037 (D-037.11): el worker quedó como esqueleto sin Postgres ni Mongo; su
+// única dependencia de infraestructura de mensajería es RabbitMQ.
 func setupRabbitMQ(t *testing.T) (*amqp.Channel, func()) {
 	ctx := context.Background()
 

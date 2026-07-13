@@ -7,9 +7,16 @@
 ## Propósito
 
 **Worker de procesamiento de eventos** de EduGo. No expone API HTTP de negocio: consume mensajes de
-**RabbitMQ** y ejecuta el trabajo pesado/asíncrono detrás de `edugo-api-learning` —
-extracción de texto de PDFs, embeddings/NLP para búsqueda, scoring de intentos, creación de
-notificaciones, inscripción de estudiantes. Persiste en **PostgreSQL** y **MongoDB** y usa **S3**.
+**RabbitMQ** y está pensado para el trabajo pesado/asíncrono detrás de `edugo-api-learning`.
+
+> **Estado: ESQUELETO (plan 037 D-037.11).** El `ProcessorRegistry` arranca **vacío**: no hay processors
+> de negocio. El único carril que le quedaba (`material.uploaded`/`material.reprocess`) persistía en
+> **Mongo** y no tenía consumidor (el worker nunca se desplegó); al retirarse Mongo del ecosistema esos
+> processors se eliminaron, junto con **Postgres** y **Mongo** (conexiones, config, health, métricas de BD).
+> Sigue vivo como cáscara: conecta a RabbitMQ (declara exchange/cola + consumer con DLQ), healthcheck,
+> métricas Prometheus, AuthClient (identity), rate limiter, circuit breakers, shutdown, y la infra
+> S3/PDF/NLP lista para reusar. Los processors del carril **LLM** llegan en **037-F3** (store y
+> orquestación nuevos).
 
 ## Arquitectura (clean / DDD por capas — distinta a las APIs)
 
@@ -21,35 +28,35 @@ internal/
   container/                 contenedor de dependencias (DI)
   client/                    clientes externos (AuthClient hacia identity)
   application/
-    processor/               procesadores de eventos + registry.go (enrutamiento por event_type) + retry
-    service/                 servicios de aplicación
+    processor/               registry.go (enrutamiento por event_type) + processor.go (interfaz) + retry
+                             — SIN implementaciones de processor (registry vacío, F3 los añade)
     dto/
   domain/
-    service/ valueobject/ repository/ constants/   lógica y contratos de dominio
+    valueobject/             lógica y contratos de dominio
   infrastructure/
     messaging/   consumidor RabbitMQ
-    persistence/ repos Postgres/Mongo
-    storage/     S3 · pdf/ extracción · nlp/ embeddings
+    storage/     S3 · pdf/ extracción · nlp/ embeddings (listos para reusar en F3)
     http/ health/ metrics/ ratelimiter/ circuitbreaker/ shutdown/
 ```
 
-**Patrón clave**: `ProcessorRegistry` — en vez de un switch gigante, cada procesador se registra y el
-consumer enruta por `event_type`. Consumer y processors quedan desacoplados.
+**Patrón clave**: `ProcessorRegistry` — cada procesador se registra y el consumer enruta por
+`event_type`. En el estado esqueleto el registry arranca vacío; el consumer tolera 0 processors.
+Ya **no hay** `persistence/` (Postgres/Mongo retirados).
 
 ## Cómo correr y testear
 
 `Makefile` (set propio del worker, distinto al de las APIs):
 - `make build` — binario en `bin/`. `make run` o `go run cmd/main.go`.
 - `make test` / `make test-coverage` / `make lint` / `make format`.
-- Docker: `docker-compose up -d`. Config vía env (`POSTGRES_*`, `MONGODB_*`, `RABBITMQ_URL`,
-  `API_IDENTITY_*`, `LOG_*`).
+- Docker: `docker-compose up -d`. Config vía env (`RABBITMQ_URL`, `API_IDENTITY_*`, `LOG_*`,
+  `OPENAI_API_KEY`). Ya **no** usa `POSTGRES_*` ni `MONGODB_*`.
 
 ## Eventos procesados (registrados en el registry)
 
-`material_uploaded`, `material_deleted`, `material_reprocess`, `assessment_attempt`,
-`student_enrolled`, y notificaciones de assessment (`assigned`, `attempt`, `reviewed`).
-Para agregar uno nuevo: implementa un `*_processor.go` que satisfaga la interfaz de `processor.go`,
-regístralo en `registry.go`, y mapea el `event_type`/cola en `config`.
+**Ninguno hoy** — el registry arranca vacío (esqueleto, plan 037 D-037.11). Los processors del carril
+**LLM** llegan en **037-F3**. Para agregar uno (cuando llegue F3): implementa un `*_processor.go` que
+satisfaga la interfaz de `processor.go`, regístralo en el `ProcessorRegistry` (bootstrap
+`WithProcessors`), y mapea el `event_type`/binding de RabbitMQ.
 
 ## Convenciones y gotchas locales
 

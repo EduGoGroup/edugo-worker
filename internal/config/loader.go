@@ -24,10 +24,8 @@ func Load() (*Config, error) {
 			"logging.version": "dev",
 		}),
 		sharedconfig.WithExplicitBindings(map[string]string{
-			"database.postgres.password": "POSTGRES_PASSWORD",
-			"database.mongodb.uri":       "MONGODB_URI",
-			"messaging.rabbitmq.url":     "RABBITMQ_URL",
-			"nlp.api_key":                "OPENAI_API_KEY",
+			"messaging.rabbitmq.url": "RABBITMQ_URL",
+			"nlp.api_key":            "OPENAI_API_KEY",
 		}),
 	)
 

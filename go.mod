@@ -3,12 +3,7 @@ module github.com/EduGoGroup/edugo-worker
 go 1.25.0
 
 require (
-	github.com/DATA-DOG/go-sqlmock v1.5.2
-	github.com/EduGoGroup/edugo-infrastructure/mongodb v0.1.0
-	github.com/EduGoGroup/edugo-shared/auth v0.2.0
 	github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0
-	github.com/EduGoGroup/edugo-shared/bootstrap/mongodb v0.1.0
-	github.com/EduGoGroup/edugo-shared/bootstrap/postgres v0.1.0
 	github.com/EduGoGroup/edugo-shared/bootstrap/s3 v0.1.0
 	github.com/EduGoGroup/edugo-shared/common v0.900.2
 	github.com/EduGoGroup/edugo-shared/config v0.1.0
@@ -16,7 +11,6 @@ require (
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.1.0
 	github.com/EduGoGroup/edugo-shared/lifecycle/shutdown v0.1.0
 	github.com/EduGoGroup/edugo-shared/logger v0.900.0
-	github.com/EduGoGroup/edugo-shared/messaging/events v0.900.1
 	github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.0
 	github.com/EduGoGroup/edugo-shared/metrics v0.1.0
 	github.com/EduGoGroup/edugo-shared/resilience/circuitbreaker v0.1.0
@@ -25,15 +19,12 @@ require (
 	github.com/EduGoGroup/edugo-shared/storage v0.1.0
 	github.com/EduGoGroup/edugo-shared/storage/s3 v0.1.0
 	github.com/EduGoGroup/edugo-shared/testing v0.1.0
-	github.com/google/uuid v1.6.0
-	github.com/lib/pq v1.12.3
 	github.com/pdfcpu/pdfcpu v0.11.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/rabbitmq/amqp091-go v1.10.0
 	github.com/sony/gobreaker v1.0.0
 	github.com/stretchr/testify v1.11.1
-	go.mongodb.org/mongo-driver/v2 v2.5.0
 )
 
 require (
@@ -84,19 +75,14 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
-	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
+	github.com/google/uuid v1.6.0 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/pkcs7 v0.2.0 // indirect
 	github.com/hhrutter/tiff v1.0.3 // indirect
-	github.com/jackc/pgpassfile v1.0.0 // indirect
-	github.com/jackc/pgservicefile v0.0.0-20240606120523-5a60cdf6a761 // indirect
-	github.com/jackc/pgx/v5 v5.9.1 // indirect
-	github.com/jackc/puddle/v2 v2.2.2 // indirect
-	github.com/jinzhu/inflection v1.0.0 // indirect
-	github.com/jinzhu/now v1.1.5 // indirect
 	github.com/joho/godotenv v1.5.1 // indirect
 	github.com/klauspost/compress v1.18.5 // indirect
 	github.com/leodido/go-urn v1.4.0 // indirect
+	github.com/lib/pq v1.12.3 // indirect
 	github.com/lufia/plan9stats v0.0.0-20260216142805-b3301c5f2a88 // indirect
 	github.com/magiconair/properties v1.8.10 // indirect
 	github.com/mattn/go-runewidth v0.0.22 // indirect
@@ -137,6 +123,7 @@ require (
 	github.com/xdg-go/stringprep v1.0.4 // indirect
 	github.com/youmark/pkcs8 v0.0.0-20240726163527-a2c0da244d78 // indirect
 	github.com/yusufpapurcu/wmi v1.2.4 // indirect
+	go.mongodb.org/mongo-driver/v2 v2.5.0 // indirect
 	go.opentelemetry.io/auto/sdk v1.2.1 // indirect
 	go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp v0.65.0 // indirect
 	go.opentelemetry.io/otel v1.43.0 // indirect
@@ -154,8 +141,6 @@ require (
 	google.golang.org/protobuf v1.36.11 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
-	gorm.io/driver/postgres v1.6.0 // indirect
-	gorm.io/gorm v1.31.1 // indirect
 )
 
 // pdfcpu v0.11.1 is incompatible with pkcs7 >= v0.2.1 (NewSignedData signature changed)

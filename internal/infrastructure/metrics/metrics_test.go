@@ -228,28 +228,6 @@ func TestRecordPDFExtraction(t *testing.T) {
 	assert.Equal(t, initialExtractions+1, newExtractions, "Las extracciones de PDF deberían incrementar")
 }
 
-func TestRecordDBOperation(t *testing.T) {
-	dbType := "postgres"
-	operation := "select"
-	status := "success"
-	duration := 0.05
-
-	initialOps := getCounterValue(t, DBOperationsTotal, prometheus.Labels{
-		"db_type":   dbType,
-		"operation": operation,
-		"status":    status,
-	})
-
-	RecordDBOperation(dbType, operation, status, duration)
-
-	newOps := getCounterValue(t, DBOperationsTotal, prometheus.Labels{
-		"db_type":   dbType,
-		"operation": operation,
-		"status":    status,
-	})
-	assert.Equal(t, initialOps+1, newOps, "Las operaciones de DB deberían incrementar")
-}
-
 func TestSetCircuitBreakerState(t *testing.T) {
 	service := "nlp-test-cb"
 
@@ -288,42 +266,4 @@ func TestRecordCircuitBreakerTransition(t *testing.T) {
 		"to_state":   toState,
 	})
 	assert.Equal(t, initialTransitions+1, newTransitions, "Las transiciones deberían incrementar")
-}
-
-func TestRecordDatabaseOperation(t *testing.T) {
-	dbType := "mongodb"
-	operation := "insert"
-	duration := 0.1
-
-	// Test con éxito
-	initialSuccess := getCounterValue(t, DBOperationsTotal, prometheus.Labels{
-		"db_type":   dbType,
-		"operation": operation,
-		"status":    "success",
-	})
-
-	RecordDatabaseOperation(dbType, operation, duration, true)
-
-	newSuccess := getCounterValue(t, DBOperationsTotal, prometheus.Labels{
-		"db_type":   dbType,
-		"operation": operation,
-		"status":    "success",
-	})
-	assert.Equal(t, initialSuccess+1, newSuccess, "Las operaciones exitosas deberían incrementar")
-
-	// Test con error
-	initialError := getCounterValue(t, DBOperationsTotal, prometheus.Labels{
-		"db_type":   dbType,
-		"operation": operation,
-		"status":    "error",
-	})
-
-	RecordDatabaseOperation(dbType, operation, duration, false)
-
-	newError := getCounterValue(t, DBOperationsTotal, prometheus.Labels{
-		"db_type":   dbType,
-		"operation": operation,
-		"status":    "error",
-	})
-	assert.Equal(t, initialError+1, newError, "Las operaciones con error deberían incrementar")
 }

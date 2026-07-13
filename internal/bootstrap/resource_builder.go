@@ -2,13 +2,9 @@ package bootstrap
 
 import (
 	"context"
-	"database/sql"
 	"fmt"
 	"time"
 
-	sharedbootstrap "github.com/EduGoGroup/edugo-shared/bootstrap"
-	mongobootstrap "github.com/EduGoGroup/edugo-shared/bootstrap/mongodb"
-	pgbootstrap "github.com/EduGoGroup/edugo-shared/bootstrap/postgres"
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
 	"github.com/EduGoGroup/edugo-shared/logger"
 	rabbit "github.com/EduGoGroup/edugo-shared/messaging/rabbit"
@@ -23,14 +19,11 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
 	amqp "github.com/rabbitmq/amqp091-go"
-	"go.mongodb.org/mongo-driver/v2/mongo"
 )
 
 // Resources contiene todos los recursos inicializados para el worker
 type Resources struct {
 	Logger            logger.Logger
-	PostgreSQL        *sql.DB
-	MongoDB           *mongo.Database
 	RabbitMQConn      *rabbit.Connection
 	RabbitMQChannel   *amqp.Channel
 	AuthClient        *client.AuthClient
@@ -48,9 +41,6 @@ type ResourceBuilder struct {
 
 	// Recursos de infraestructura base
 	logger           logger.Logger
-	sqlDB            *sql.DB
-	mongoClient      *mongo.Client
-	mongodb          *mongo.Database
 	rabbitSharedConn *rabbit.Connection
 	rabbitConn       *amqp.Connection
 	rabbitChannel    *amqp.Channel
@@ -123,93 +113,6 @@ func (b *ResourceBuilder) WithSharedMetrics() *ResourceBuilder {
 		b.logger.Info("shared metrics facade initialized", "service", "edugo-worker")
 	}
 
-	return b
-}
-
-// WithPostgreSQL configura la conexión a PostgreSQL
-func (b *ResourceBuilder) WithPostgreSQL() *ResourceBuilder {
-	if b.err != nil {
-		return b
-	}
-
-	if b.logger == nil {
-		b.err = fmt.Errorf("logger required before PostgreSQL")
-		return b
-	}
-
-	b.logger.Info("connecting to PostgreSQL",
-		"host", b.config.Database.Postgres.Host,
-		"database", b.config.Database.Postgres.Database,
-	)
-
-	// Crear factory y conexión
-	pgFactory := pgbootstrap.NewFactory()
-	sqlDB, err := pgFactory.CreateRawConnection(b.ctx, sharedbootstrap.PostgreSQLConfig{
-		Host:     b.config.Database.Postgres.Host,
-		Port:     b.config.Database.Postgres.Port,
-		User:     b.config.Database.Postgres.User,
-		Password: b.config.Database.Postgres.Password,
-		Database: b.config.Database.Postgres.Database,
-		SSLMode:  b.config.Database.Postgres.SSLMode,
-	})
-	if err != nil {
-		b.err = fmt.Errorf("failed to connect to PostgreSQL: %w", err)
-		return b
-	}
-
-	// Guardar referencia
-	b.sqlDB = sqlDB
-
-	// Registrar cleanup
-	b.addCleanup(func() error {
-		b.logger.Info("closing PostgreSQL connection")
-		return b.sqlDB.Close()
-	})
-
-	b.logger.Info("✅ PostgreSQL connected successfully")
-	return b
-}
-
-// WithMongoDB configura la conexión a MongoDB
-func (b *ResourceBuilder) WithMongoDB() *ResourceBuilder {
-	if b.err != nil {
-		return b
-	}
-
-	if b.logger == nil {
-		b.err = fmt.Errorf("logger required before MongoDB")
-		return b
-	}
-
-	b.logger.Info("connecting to MongoDB",
-		"database", b.config.Database.MongoDB.Database,
-	)
-
-	// Crear factory y cliente
-	mongoFactory := mongobootstrap.NewFactory()
-	mongoClient, err := mongoFactory.CreateConnection(b.ctx, sharedbootstrap.MongoDBConfig{
-		URI:      b.config.Database.MongoDB.URI,
-		Database: b.config.Database.MongoDB.Database,
-	})
-	if err != nil {
-		b.err = fmt.Errorf("failed to connect to MongoDB: %w", err)
-		return b
-	}
-
-	// Obtener database
-	mongoDB := mongoFactory.GetDatabase(mongoClient, b.config.Database.MongoDB.Database)
-
-	// Guardar referencias
-	b.mongoClient = mongoClient
-	b.mongodb = mongoDB
-
-	// Registrar cleanup
-	b.addCleanup(func() error {
-		b.logger.Info("closing MongoDB connection")
-		return b.mongoClient.Disconnect(b.ctx)
-	})
-
-	b.logger.Info("✅ MongoDB connected successfully")
 	return b
 }
 
@@ -320,57 +223,29 @@ func (b *ResourceBuilder) WithInfrastructure() *ResourceBuilder {
 	return b
 }
 
-// WithProcessors configura el registry de processors
+// WithProcessors crea el registry de processors.
+//
+// Plan 037 (D-037.11): el worker quedó como ESQUELETO sin processors. El único
+// carril que le quedaba (`material.uploaded`/`material.reprocess`) persistía su
+// salida en Mongo y no tenía consumidor (el worker nunca se desplegó); al retirar
+// Mongo del ecosistema, esos processors se eliminaron. El registry queda VACÍO a
+// propósito: los processors del carril LLM llegan en 037-F3, que definirá el store
+// y la orquestación nuevos. El consumer tolera un registry sin processors (los
+// mensajes que llegasen irían al DLQ por "no processor registered").
 func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	if b.err != nil {
 		return b
 	}
 
-	// Verificar dependencias base
-	if b.logger == nil || b.sqlDB == nil || b.mongodb == nil {
-		b.err = fmt.Errorf("logger, PostgreSQL and MongoDB required before processors")
+	if b.logger == nil {
+		b.err = fmt.Errorf("logger required before processors")
 		return b
 	}
 
-	// Verificar dependencias de infraestructura
-	if b.storageClient == nil || b.pdfExtractor == nil || b.nlpClient == nil {
-		b.err = fmt.Errorf("infrastructure services required before processors (call WithInfrastructure first)")
-		return b
-	}
+	b.processorRegistry = processor.NewRegistry(b.logger)
 
-	b.logger.Info("initializing processors")
-
-	// Crear processors individuales.
-	//
-	// Plan 037 (F1): el worker queda SOLO con el carril de material pesado
-	// (`material.uploaded` y su reproceso `material.reprocess`), reservado para el
-	// terreno LLM futuro (N6). Los processors de notificaciones (assessment.assigned),
-	// inscripción (student.enrolled) y limpieza (material.deleted) se retiraron: su
-	// negocio migró a las APIs de dominio, que resuelven síncrono y llaman directo al
-	// Notification Gateway de platform (patrón 032-A4). Ver README (topología Rabbit).
-	_, aiModel, _, _, _, _ := b.config.GetActiveNLPConfig()
-	materialUploadedProc := processor.NewMaterialUploadedProcessor(processor.MaterialUploadedProcessorConfig{
-		DB:            b.sqlDB,
-		MongoDB:       b.mongodb,
-		Logger:        b.logger,
-		StorageClient: b.storageClient,
-		PDFExtractor:  b.pdfExtractor,
-		NLPClient:     b.nlpClient,
-		AIModel:       aiModel,
-		SharedMetrics: b.sharedMetrics,
-	})
-
-	// Crear registry
-	registry := processor.NewRegistry(b.logger)
-
-	// Registrar processors
-	registry.Register(materialUploadedProc)
-	registry.Register(processor.NewMaterialReprocessProcessor(materialUploadedProc, b.logger))
-
-	// Guardar referencia
-	b.processorRegistry = registry
-
-	b.logger.Info("✅ Processors registered successfully", "count", registry.Count())
+	b.logger.Info("✅ Processor registry initialized (skeleton, 0 processors — carril LLM en 037-F3)",
+		"count", b.processorRegistry.Count())
 	return b
 }
 
@@ -392,20 +267,6 @@ func (b *ResourceBuilder) WithHealthChecks() *ResourceBuilder {
 
 	// Obtener configuración de health checks con valores por defecto
 	healthConfig := b.config.GetHealthConfigWithDefaults()
-
-	// Registrar health check de PostgreSQL si está disponible
-	if b.sqlDB != nil {
-		pgCheck := health.NewPostgreSQLCheck(b.sqlDB, healthConfig.Timeouts.Postgres)
-		checker.Register(pgCheck)
-		b.logger.Info("registered PostgreSQL health check")
-	}
-
-	// Registrar health check de MongoDB si está disponible
-	if b.mongoClient != nil {
-		mongoCheck := health.NewMongoDBCheck(b.mongoClient, healthConfig.Timeouts.MongoDB)
-		checker.Register(mongoCheck)
-		b.logger.Info("registered MongoDB health check")
-	}
 
 	// Registrar health check de RabbitMQ si está disponible
 	if b.rabbitChannel != nil {
@@ -501,8 +362,6 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 	// Construir Resources
 	resources := &Resources{
 		Logger:            b.logger,
-		PostgreSQL:        b.sqlDB,
-		MongoDB:           b.mongodb,
 		RabbitMQConn:      b.rabbitSharedConn,
 		RabbitMQChannel:   b.rabbitChannel,
 		AuthClient:        b.authClient,
