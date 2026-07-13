@@ -86,18 +86,3 @@ func (e MaterialUploadedEvent) GetS3Key() string {
 func (e MaterialUploadedEvent) GetAuthorID() string {
 	return e.Payload.TeacherID
 }
-
-// MaterialDeletedEvent evento cuando se elimina un material
-type MaterialDeletedEvent struct {
-	EventType  string    `json:"event_type"`
-	MaterialID string    `json:"material_id"`
-	Timestamp  time.Time `json:"timestamp"`
-}
-
-// StudentEnrolledEvent evento cuando un estudiante se inscribe
-type StudentEnrolledEvent struct {
-	EventType string    `json:"event_type"`
-	StudentID string    `json:"student_id"`
-	UnitID    string    `json:"unit_id"`
-	Timestamp time.Time `json:"timestamp"`
-}

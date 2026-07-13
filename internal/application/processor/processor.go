@@ -8,7 +8,7 @@ import "context"
 // en el ProcessorRegistry y procesar eventos de RabbitMQ.
 type Processor interface {
 	// EventType retorna el tipo de evento que este processor maneja
-	// Ejemplos: "material_uploaded", "material_deleted", "assessment_attempt"
+	// Ejemplos: "material.uploaded", "material.reprocess"
 	EventType() string
 
 	// Process procesa el payload del evento

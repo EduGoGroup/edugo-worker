@@ -8,45 +8,18 @@ import (
 )
 
 type Config struct {
-	Database            DatabaseConfig            `mapstructure:"database"`
-	Messaging           MessagingConfig           `mapstructure:"messaging"`
-	NLP                 NLPConfig                 `mapstructure:"nlp"`
-	Storage             StorageConfig             `mapstructure:"storage"`
-	PDF                 PDFConfig                 `mapstructure:"pdf"`
-	Logging             LoggingConfig             `mapstructure:"logging"`
-	APIIdentity         APIIdentityConfig         `mapstructure:"api_identity"`
-	NotificationGateway NotificationGatewayConfig `mapstructure:"notification_gateway"`
-	Metrics             MetricsConfig             `mapstructure:"metrics"`
-	Health              HealthConfig              `mapstructure:"health"`
-	CircuitBreakers     CircuitBreakersConfig     `mapstructure:"circuit_breakers"`
-	RateLimiter         RateLimiterConfig         `mapstructure:"rate_limiter"`
-	Shutdown            ShutdownConfig            `mapstructure:"shutdown"`
-}
-
-// NotificationGatewayConfig configura la delegación HTTP al Notification Gateway
-// en edugo-api-platform (plan 020 D13). El worker arma el DispatchRequest y lo
-// envía con un service JWT M2M; ya no escribe notifications.* ni tiene FCM/APNs.
-type NotificationGatewayConfig struct {
-	// BaseURL del gateway platform (ej. http://localhost:8075).
-	BaseURL string `mapstructure:"base_url"`
-	// Timeout de la request de dispatch.
-	Timeout time.Duration `mapstructure:"timeout"`
-	// ServiceJWT credenciales para firmar el token M2M.
-	ServiceJWT ServiceJWTConfig `mapstructure:"service_jwt"`
-}
-
-// ServiceJWTConfig configura la firma del service JWT M2M (plan 020 D14).
-type ServiceJWTConfig struct {
-	// Secret HS256 compartido con el gateway (SERVICE_JWT_SECRET, ≠ JWT usuario).
-	Secret string `mapstructure:"secret"`
-	// Issuer emisor esperado por el gateway (ej. edugo-identity).
-	Issuer string `mapstructure:"issuer"`
-	// Audience servicio destino (ej. edugo-api-platform).
-	Audience string `mapstructure:"audience"`
-	// ClientID identificador del cliente M2M (ej. edugo-worker).
-	ClientID string `mapstructure:"client_id"`
-	// TTL duración del token.
-	TTL time.Duration `mapstructure:"ttl"`
+	Database        DatabaseConfig        `mapstructure:"database"`
+	Messaging       MessagingConfig       `mapstructure:"messaging"`
+	NLP             NLPConfig             `mapstructure:"nlp"`
+	Storage         StorageConfig         `mapstructure:"storage"`
+	PDF             PDFConfig             `mapstructure:"pdf"`
+	Logging         LoggingConfig         `mapstructure:"logging"`
+	APIIdentity     APIIdentityConfig     `mapstructure:"api_identity"`
+	Metrics         MetricsConfig         `mapstructure:"metrics"`
+	Health          HealthConfig          `mapstructure:"health"`
+	CircuitBreakers CircuitBreakersConfig `mapstructure:"circuit_breakers"`
+	RateLimiter     RateLimiterConfig     `mapstructure:"rate_limiter"`
+	Shutdown        ShutdownConfig        `mapstructure:"shutdown"`
 }
 
 type DatabaseConfig struct {
@@ -109,14 +82,11 @@ func (c DLQConfig) ToShared() rabbit.DLQConfig {
 }
 
 type QueuesConfig struct {
-	MaterialUploaded        string `mapstructure:"material_uploaded"`
-	AssessmentAttempt       string `mapstructure:"assessment_attempt"`
-	AssessmentNotifications string `mapstructure:"assessment_notifications"`
+	MaterialUploaded string `mapstructure:"material_uploaded"`
 }
 
 type ExchangeConfig struct {
-	Materials   string `mapstructure:"materials"`
-	Assessments string `mapstructure:"assessments"`
+	Materials string `mapstructure:"materials"`
 }
 
 type NLPConfig struct {
@@ -320,31 +290,6 @@ func (c *Config) GetAPIIdentityConfigWithDefaults() APIIdentityConfig {
 	return cfg
 }
 
-// GetNotificationGatewayConfigWithDefaults retorna la config del gateway con
-// valores por defecto. El Secret NO tiene default (debe venir de env/secret).
-func (c *Config) GetNotificationGatewayConfigWithDefaults() NotificationGatewayConfig {
-	cfg := c.NotificationGateway
-	if cfg.BaseURL == "" {
-		cfg.BaseURL = "http://localhost:8075"
-	}
-	if cfg.Timeout == 0 {
-		cfg.Timeout = 5 * time.Second
-	}
-	if cfg.ServiceJWT.Issuer == "" {
-		cfg.ServiceJWT.Issuer = "edugo-identity"
-	}
-	if cfg.ServiceJWT.Audience == "" {
-		cfg.ServiceJWT.Audience = "edugo-api-platform"
-	}
-	if cfg.ServiceJWT.ClientID == "" {
-		cfg.ServiceJWT.ClientID = "edugo-worker"
-	}
-	if cfg.ServiceJWT.TTL == 0 {
-		cfg.ServiceJWT.TTL = 15 * time.Minute
-	}
-	return cfg
-}
-
 // GetMetricsConfigWithDefaults retorna la configuración de métricas con valores por defecto
 func (c *Config) GetMetricsConfigWithDefaults() MetricsConfig {
 	cfg := c.Metrics
@@ -395,22 +340,11 @@ func (c *Config) GetDLQConfigWithDefaults() DLQConfig {
 	return cfg
 }
 
-// GetAssessmentDLQConfigWithDefaults retorna la configuración DLQ específica para assessment notifications
-func (c *Config) GetAssessmentDLQConfigWithDefaults() DLQConfig {
-	// Reusar la misma configuración base pero con routing key propio
-	cfg := c.GetDLQConfigWithDefaults()
-	cfg.DLXRoutingKey = "edugo.assessment.notification.dlq"
-	return cfg
-}
-
 // GetExchangesConfigWithDefaults retorna la configuración de exchanges con valores por defecto
 func (c *Config) GetExchangesConfigWithDefaults() ExchangeConfig {
 	cfg := c.Messaging.RabbitMQ.Exchanges
 	if cfg.Materials == "" {
 		cfg.Materials = "edugo.materials"
-	}
-	if cfg.Assessments == "" {
-		cfg.Assessments = "edugo.assessments"
 	}
 	return cfg
 }

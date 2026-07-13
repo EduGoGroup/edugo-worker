@@ -1,6 +1,6 @@
 # EduGo Worker
 
-Worker de procesamiento de eventos para la plataforma EduGo. Este servicio consume mensajes de RabbitMQ y procesa eventos relacionados con materiales educativos, evaluaciones y estudiantes.
+Worker de procesamiento de eventos para la plataforma EduGo. Este servicio consume mensajes de RabbitMQ y procesa el carril pesado de materiales educativos (extracción de texto de PDFs, embeddings/NLP), reservado para el terreno LLM futuro. Tras el plan 037 quedó **a dieta**: las notificaciones, inscripciones y limpiezas migraron a las APIs de dominio.
 
 ## 📋 Tabla de Contenidos
 
@@ -49,12 +49,35 @@ El worker está construido con una arquitectura limpia basada en:
 │ Processors (Procesadores)       │
 ├─────────────────────────────────┤
 │ • MaterialUploadedProcessor     │
-│ • MaterialDeletedProcessor      │
 │ • MaterialReprocessProcessor    │
-│ • AssessmentAttemptProcessor    │
-│ • StudentEnrolledProcessor      │
 └─────────────────────────────────┘
 ```
+
+### Topología RabbitMQ (plan 037 F1)
+
+Tras el plan 037 el worker quedó **a dieta**: solo procesa el carril pesado de
+material, reservado para el terreno LLM futuro (N6). La topología es mínima:
+
+- **Un exchange** (`topic`): `edugo.materials`.
+- **Una cola**: `edugo.material.uploaded`, con un único binding a la routing key
+  `material.uploaded`.
+- **Routing keys que atiende el worker**:
+  - `material.uploaded` — evento de material subido (pipeline PDF → texto → NLP).
+  - `material.reprocess` — reproceso del mismo material; **reusa la cola
+    `edugo.material.uploaded`** y se enruta por `event_type` en el
+    `ProcessorRegistry` (no tiene binding propio).
+- **Actores**: `edugo-api-learning` (productor) → `edugo-worker` (consumidor).
+
+Lo retirado en el plan 037 y **por qué ya no vive en el worker**:
+
+- `material.deleted` — **eliminado**. La limpieza de las colecciones Mongo
+  (`material_summary`, `material_assessment`) es ahora **síncrona en
+  edugo-api-learning** al borrar el material (D-037.4). Ya no hay evento ni cola.
+- `assessment.assigned` (+ el exchange `edugo.assessments` y la cola
+  `edugo.assessment.notifications`) — **eliminado**. Desde el plan 032-A4,
+  learning resuelve los inscritos y llama **directo al Notification Gateway** de
+  platform tras asignar; ya no publica el evento a Rabbit.
+- `student.enrolled` — **eliminado** (zombie: nadie publicaba el evento, D-037.2).
 
 ## 📦 Requisitos
 
@@ -150,7 +173,6 @@ messaging:
     prefetch_count: 10
     queues:
       material_uploaded: material.uploaded
-      assessment_attempt: assessment.attempt
     exchanges:
       materials: materials
 
@@ -225,37 +247,24 @@ edugo-worker/
 
 ## 🔄 Procesadores de Eventos
 
-El worker procesa los siguientes tipos de eventos:
+El worker procesa **solo** el carril pesado de material (plan 037 F1):
 
-### material_uploaded
+### material.uploaded
 Procesa materiales educativos subidos (PDFs, imágenes, videos).
 - Extrae texto de PDFs
 - Genera embeddings para búsqueda semántica
 - Almacena metadatos en PostgreSQL y MongoDB
 
-### material_deleted
-Elimina materiales educativos del sistema.
-- Limpia datos en PostgreSQL
-- Elimina documentos de MongoDB
-- Gestiona cleanup de recursos asociados
-
-### material_reprocess
-Reprocesa materiales existentes.
+### material.reprocess
+Reprocesa materiales existentes reusando el mismo pipeline que `material.uploaded`.
 - Re-extrae texto
 - Regenera embeddings
 - Actualiza metadatos
 
-### assessment_attempt
-Procesa intentos de evaluación.
-- Registra respuestas del estudiante
-- Calcula puntuación
-- Actualiza estadísticas
-
-### student_enrolled
-Procesa inscripciones de estudiantes.
-- Registra inscripción
-- Inicializa progreso
-- Notifica al sistema
+> Los eventos `material.deleted`, `assessment.assigned` y `student.enrolled` se
+> retiraron en el plan 037. Su negocio migró a las APIs de dominio (limpieza Mongo
+> síncrona en learning; notificaciones directas al Notification Gateway de platform,
+> patrón 032-A4). Ver [Topología RabbitMQ](#topología-rabbitmq-plan-037-f1).
 
 ## 🧪 Testing
 

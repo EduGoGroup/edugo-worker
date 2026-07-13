@@ -340,7 +340,14 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 
 	b.logger.Info("initializing processors")
 
-	// Crear processors individuales
+	// Crear processors individuales.
+	//
+	// Plan 037 (F1): el worker queda SOLO con el carril de material pesado
+	// (`material.uploaded` y su reproceso `material.reprocess`), reservado para el
+	// terreno LLM futuro (N6). Los processors de notificaciones (assessment.assigned),
+	// inscripción (student.enrolled) y limpieza (material.deleted) se retiraron: su
+	// negocio migró a las APIs de dominio, que resuelven síncrono y llaman directo al
+	// Notification Gateway de platform (patrón 032-A4). Ver README (topología Rabbit).
 	_, aiModel, _, _, _, _ := b.config.GetActiveNLPConfig()
 	materialUploadedProc := processor.NewMaterialUploadedProcessor(processor.MaterialUploadedProcessorConfig{
 		DB:            b.sqlDB,
@@ -352,40 +359,6 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		AIModel:       aiModel,
 		SharedMetrics: b.sharedMetrics,
 	})
-	materialDeletedProc := processor.NewMaterialDeletedProcessor(
-		b.mongodb,
-		b.logger,
-		b.sharedMetrics,
-	)
-	studentEnrolledProc := processor.NewStudentEnrolledProcessor(b.logger)
-
-	// Cliente de dispatch al Notification Gateway (platform). El worker delega la
-	// entrega (in-app + push); ya no escribe notifications.* ni tiene FCM/APNs (D13).
-	gatewayCfg := b.config.GetNotificationGatewayConfigWithDefaults()
-	tokenProvider, err := client.NewServiceTokenProvider(client.ServiceTokenConfig{
-		Secret:   gatewayCfg.ServiceJWT.Secret,
-		Issuer:   gatewayCfg.ServiceJWT.Issuer,
-		Audience: gatewayCfg.ServiceJWT.Audience,
-		ClientID: gatewayCfg.ServiceJWT.ClientID,
-		Scopes:   []string{"notifications.dispatch"},
-		TTL:      gatewayCfg.ServiceJWT.TTL,
-	})
-	if err != nil {
-		b.err = fmt.Errorf("failed to create service token provider: %w", err)
-		return b
-	}
-	if gatewayCfg.ServiceJWT.Secret == "" {
-		b.logger.Warn("SERVICE_JWT_SECRET vacío: el gateway rechazará el dispatch (configurar para entornos con push)")
-	}
-	dispatchClient := client.NewNotificationDispatchClient(client.NotificationDispatchClientConfig{
-		BaseURL:       gatewayCfg.BaseURL,
-		Timeout:       gatewayCfg.Timeout,
-		TokenProvider: tokenProvider,
-	})
-	b.logger.Info("✅ Notification dispatch client initialized", "gateway_url", gatewayCfg.BaseURL)
-
-	// Processors de notificaciones: delegan al gateway vía dispatchClient.
-	assessmentAssignedNotifProc := processor.NewAssessmentAssignedNotifProcessor(b.sqlDB, dispatchClient, b.logger)
 
 	// Crear registry
 	registry := processor.NewRegistry(b.logger)
@@ -393,21 +366,6 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	// Registrar processors
 	registry.Register(materialUploadedProc)
 	registry.Register(processor.NewMaterialReprocessProcessor(materialUploadedProc, b.logger))
-	registry.Register(materialDeletedProc)
-	registry.Register(studentEnrolledProc)
-
-	// Registrar processors de evaluaciones
-	// DEPRECATED (plan 032 A4): la ruta assessment.assigned ya NO se usa. Desde el
-	// plan 032, edugo-api-learning resuelve los inscritos y llama directo al
-	// Notification Gateway de platform tras asignar; ya NO publica el evento a
-	// Rabbit. Este processor queda registrado por seguridad (idempotente vía
-	// gateway) pero no debería recibir mensajes: ningún productor emite el evento.
-	//
-	// Plan 036-T3: los processors de assessment.attempt_recorded (materialización de
-	// nota + notif docente) y assessment.reviewed (notif alumno) se retiraron. Su
-	// negocio migró a edugo-api-learning (nota síncrona + dispatch directo al gateway,
-	// patrón A4); el worker queda solo para procesamiento pesado (material/LLM).
-	registry.Register(assessmentAssignedNotifProc)
 
 	// Guardar referencia
 	b.processorRegistry = registry
