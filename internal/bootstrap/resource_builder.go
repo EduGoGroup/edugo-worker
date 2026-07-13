@@ -386,11 +386,6 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 
 	// Processors de notificaciones: delegan al gateway vía dispatchClient.
 	assessmentAssignedNotifProc := processor.NewAssessmentAssignedNotifProcessor(b.sqlDB, dispatchClient, b.logger)
-	assessmentAttemptNotifProc := processor.NewAssessmentAttemptNotifProcessor(dispatchClient, b.logger)
-	assessmentReviewedNotifProc := processor.NewAssessmentReviewedNotifProcessor(dispatchClient, b.logger)
-
-	// Create composite attempt processor: analytics + notification delegation
-	assessmentAttemptProc := processor.NewAssessmentAttemptProcessor(b.sqlDB, assessmentAttemptNotifProc, b.logger)
 
 	// Crear registry
 	registry := processor.NewRegistry(b.logger)
@@ -407,9 +402,12 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	// Notification Gateway de platform tras asignar; ya NO publica el evento a
 	// Rabbit. Este processor queda registrado por seguridad (idempotente vía
 	// gateway) pero no debería recibir mensajes: ningún productor emite el evento.
+	//
+	// Plan 036-T3: los processors de assessment.attempt_recorded (materialización de
+	// nota + notif docente) y assessment.reviewed (notif alumno) se retiraron. Su
+	// negocio migró a edugo-api-learning (nota síncrona + dispatch directo al gateway,
+	// patrón A4); el worker queda solo para procesamiento pesado (material/LLM).
 	registry.Register(assessmentAssignedNotifProc)
-	registry.Register(assessmentAttemptProc) // handles analytics + notifications for assessment.attempt_recorded
-	registry.Register(assessmentReviewedNotifProc)
 
 	// Guardar referencia
 	b.processorRegistry = registry

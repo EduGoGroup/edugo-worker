@@ -79,55 +79,6 @@ func assertValidServiceJWT(t *testing.T, authHeader string) {
 	assert.True(t, claims.HasScope("notifications.dispatch"))
 }
 
-func TestCrossContract_AssessmentReviewed(t *testing.T) {
-	dispatchClient, captured, closeFn := newDispatchHarness(t)
-	defer closeFn()
-
-	proc := NewAssessmentReviewedNotifProcessor(dispatchClient, newTestLogger())
-
-	studentID := uuid.New()
-	attemptID := uuid.New()
-	event := events.AssessmentReviewedEvent{
-		EventID:      "evt-it-020",
-		EventType:    "assessment.reviewed",
-		EventVersion: "1.0.0",
-		Timestamp:    time.Now(),
-		Payload: events.AssessmentReviewedPayload{
-			AttemptID:    attemptID.String(),
-			AssessmentID: uuid.New().String(),
-			ReviewerID:   uuid.New().String(),
-			SchoolID:     uuid.New().String(),
-			Status:       "reviewed",
-			StudentID:    studentID.String(),
-			Title:        "Examen Final",
-		},
-	}
-	payload, err := json.Marshal(event)
-	require.NoError(t, err)
-
-	require.NoError(t, proc.Process(context.Background(), payload))
-
-	// Header de auth: service JWT válido.
-	assertValidServiceJWT(t, captured.authHeader)
-	assert.Equal(t, "/api/v1/internal/notifications/dispatch", captured.path)
-
-	// Contrato DispatchRequest.
-	req := captured.req
-	require.Len(t, req.Recipients, 1)
-	assert.Equal(t, studentID.String(), req.Recipients[0].UserID)
-	assert.Equal(t, "assessment_reviewed", req.Notification.Type)
-	assert.Equal(t, attemptID.String(), req.Notification.ResourceID)
-	assert.Equal(t, "assessment_attempt", req.Notification.ResourceType)
-	assert.Equal(t, "assessment.reviewed:"+attemptID.String(), req.IdempotencyKey)
-	require.NotNil(t, req.Channels)
-	assert.True(t, req.Channels.InApp)
-	assert.True(t, req.Channels.Push)
-	assert.Equal(t, "assessment.reviewed", req.PushData["event_type"])
-	require.NotNil(t, req.Source)
-	assert.Equal(t, "edugo-worker", req.Source.Caller)
-	assert.Equal(t, "evt-it-020", req.Source.CorrelationID)
-}
-
 func TestCrossContract_AssessmentAssigned_FanOut(t *testing.T) {
 	dispatchClient, captured, closeFn := newDispatchHarness(t)
 	defer closeFn()
