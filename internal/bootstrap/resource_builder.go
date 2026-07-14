@@ -333,15 +333,12 @@ func (b *ResourceBuilder) WithInfrastructure() *ResourceBuilder {
 	return b
 }
 
-// WithProcessors crea el registry de processors.
+// WithProcessors crea el registry de processors y registra los del carril LLM.
 //
-// Plan 037 (D-037.11): el worker quedó como ESQUELETO sin processors. El único
-// carril que le quedaba (`material.uploaded`/`material.reprocess`) persistía su
-// salida en Mongo y no tenía consumidor (el worker nunca se desplegó); al retirar
-// Mongo del ecosistema, esos processors se eliminaron. El registry queda VACÍO a
-// propósito: los processors del carril LLM llegan en 037-F3, que definirá el store
-// y la orquestación nuevos. El consumer tolera un registry sin processors (los
-// mensajes que llegasen irían al DLQ por "no processor registered").
+// Plan 040 (F1): el registry deja de estar vacío. Se registra el primer processor
+// post-dieta —AttemptReviewProcessor (event_type attempt.review_requested)— que lee
+// la política de la escuela vía SettingsClient y corta-circuito si la revisión está
+// apagada. Requiere que WithM2MClients haya corrido antes (settingsClient listo).
 func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	if b.err != nil {
 		return b
@@ -351,10 +348,15 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		b.err = fmt.Errorf("logger required before processors")
 		return b
 	}
+	if b.settingsClient == nil {
+		b.err = fmt.Errorf("settings client required before processors (call WithM2MClients first)")
+		return b
+	}
 
 	b.processorRegistry = processor.NewRegistry(b.logger)
+	b.processorRegistry.Register(processor.NewAttemptReviewProcessor(b.settingsClient, b.logger))
 
-	b.logger.Info("✅ Processor registry initialized (skeleton, 0 processors — carril LLM en 037-F3)",
+	b.logger.Info("✅ Processor registry initialized (carril revisión LLM, plan 040)",
 		"count", b.processorRegistry.Count())
 	return b
 }

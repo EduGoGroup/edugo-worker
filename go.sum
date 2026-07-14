@@ -22,6 +22,8 @@ github.com/EduGoGroup/edugo-shared/lifecycle/shutdown v0.1.0 h1:ngT8mTWwWFBAEB4E
 github.com/EduGoGroup/edugo-shared/lifecycle/shutdown v0.1.0/go.mod h1:slTtSjaz+h3Rdv2q3zo6Mu8spz+BXR5hToCDaOWObVg=
 github.com/EduGoGroup/edugo-shared/logger v0.900.0 h1:CG3rE4KwtmkrnhbgmbwiXHtepz6/0fKT3EABpUFYHV8=
 github.com/EduGoGroup/edugo-shared/logger v0.900.0/go.mod h1:5Y55HvdOlVvvhokdGJauj50eg4xrpEjo/0tvHnDH594=
+github.com/EduGoGroup/edugo-shared/messaging/events v0.900.1 h1:MK6GbqQIWiJaUvDlPzBQ2lRFkXNilXWY2B7Ptblw6CA=
+github.com/EduGoGroup/edugo-shared/messaging/events v0.900.1/go.mod h1:IjkYkCW3xFfH2f6ias13AhJM4VdMSGY7riNKDSo3e0Q=
 github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.0 h1:2HP/vZJil22N0hf3uu07TqiR/8y90DEBtNeDFXI9P70=
 github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.0/go.mod h1:BvWxPacazLrMcYLqT+1NFRvLtgSady+0UQSb6WM7JWE=
 github.com/EduGoGroup/edugo-shared/metrics v0.1.0 h1:J3kQcKTyIppjfPddVht8/IBwM0Yi8fIn70NdBHNI0Z8=

@@ -25,7 +25,7 @@ func BuildGenerationPrompt(material MaterialInput, params GenerationParams) stri
 
 	var b strings.Builder
 	b.WriteString("Eres un generador de evaluaciones educativas. A partir del MATERIAL de estudio, ")
-	b.WriteString(fmt.Sprintf("genera una evaluación con aproximadamente %d preguntas en idioma %q.\n\n", n, lang))
+	fmt.Fprintf(&b, "genera una evaluación con aproximadamente %d preguntas en idioma %q.\n\n", n, lang)
 
 	b.WriteString("REGLAS DE SALIDA (obligatorias):\n")
 	b.WriteString("- Responde EXCLUSIVAMENTE con un objeto JSON válido. Sin texto antes ni después, sin ```.\n")
@@ -44,10 +44,10 @@ func BuildGenerationPrompt(material MaterialInput, params GenerationParams) stri
 	b.WriteString("- \"difficulty\" ∈ {\"easy\",\"medium\",\"hard\"} o null. \"points\" ≥ 0. \"passing_score\" 0..100.\n")
 
 	if params.Difficulty != "" {
-		b.WriteString(fmt.Sprintf("- Dificultad objetivo: %q.\n", params.Difficulty))
+		fmt.Fprintf(&b, "- Dificultad objetivo: %q.\n", params.Difficulty)
 	}
 	if len(params.QuestionTypes) > 0 {
-		b.WriteString(fmt.Sprintf("- Usa preferentemente estos tipos de pregunta: %s.\n", strings.Join(params.QuestionTypes, ", ")))
+		fmt.Fprintf(&b, "- Usa preferentemente estos tipos de pregunta: %s.\n", strings.Join(params.QuestionTypes, ", "))
 	}
 
 	b.WriteString("\nMATERIAL:\n")
@@ -112,7 +112,7 @@ func BuildReviewPrompt(req ReviewRequest) string {
 	b.WriteString("- Responde EXCLUSIVAMENTE con un objeto JSON válido, sin texto extra ni ```.\n")
 	b.WriteString("- Forma exacta: {\"verdict\":\"correct|partial|incorrect\",\"score\":0.0,\"feedback\":\"string\"}.\n")
 	b.WriteString("- \"score\" es un número entre 0.0 (nada correcto) y 1.0 (totalmente correcto).\n")
-	b.WriteString(fmt.Sprintf("- \"feedback\" en idioma %q, breve y constructivo.\n\n", lang))
+	fmt.Fprintf(&b, "- \"feedback\" en idioma %q, breve y constructivo.\n\n", lang)
 
 	b.WriteString("PREGUNTA:\n" + req.QuestionText + "\n\n")
 	if req.ExpectedAnswer != "" {

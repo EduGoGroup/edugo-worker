@@ -64,11 +64,22 @@ func (c DLQConfig) ToShared() rabbit.DLQConfig {
 }
 
 type QueuesConfig struct {
+	// MaterialUploaded es la cola del carril de materiales. Plan 040: el worker
+	// dejó de consumirla (su processor/binding se retiraron); el plan 041 la revive
+	// con su propio processor. Se conserva en config para ese retorno.
 	MaterialUploaded string `mapstructure:"material_uploaded"`
+	// AttemptReviewRequested es la cola del carril de revisión asistida (plan 040):
+	// recibe los eventos attempt.review_requested que publica learning al hacer submit.
+	AttemptReviewRequested string `mapstructure:"attempt_review_requested"`
 }
 
 type ExchangeConfig struct {
+	// Materials lo publica learning (carril materiales). El worker sigue declarándolo
+	// aunque no consuma su cola: el publisher no declara exchanges, así que un Rabbit
+	// fresco rompería el publish de material si el worker dejara de declararlo.
 	Materials string `mapstructure:"materials"`
+	// Assessments lo publica learning para el carril de evaluaciones/revisión (plan 040).
+	Assessments string `mapstructure:"assessments"`
 }
 
 type NLPConfig struct {
@@ -425,7 +436,10 @@ func (c *Config) GetDLQConfigWithDefaults() DLQConfig {
 		cfg.DLXExchange = "edugo_dlx"
 	}
 	if cfg.DLXRoutingKey == "" {
-		cfg.DLXRoutingKey = "edugo.material.uploaded.dlq"
+		// El único consumidor activo del worker es el carril de revisión (plan 040);
+		// la cola muerta se nombra por él. Es también el nombre de la cola DLQ que
+		// declara el consumer compartido (setupDLQ usa la routing key como nombre).
+		cfg.DLXRoutingKey = "edugo.attempt.review_requested.dlq"
 	}
 	if !cfg.UseExponentialBackoff {
 		cfg.UseExponentialBackoff = true
@@ -439,6 +453,21 @@ func (c *Config) GetExchangesConfigWithDefaults() ExchangeConfig {
 	cfg := c.Messaging.RabbitMQ.Exchanges
 	if cfg.Materials == "" {
 		cfg.Materials = "edugo.materials"
+	}
+	if cfg.Assessments == "" {
+		cfg.Assessments = "edugo.assessments"
+	}
+	return cfg
+}
+
+// GetQueuesConfigWithDefaults retorna la configuración de colas con valores por defecto.
+func (c *Config) GetQueuesConfigWithDefaults() QueuesConfig {
+	cfg := c.Messaging.RabbitMQ.Queues
+	if cfg.MaterialUploaded == "" {
+		cfg.MaterialUploaded = "edugo.material.uploaded"
+	}
+	if cfg.AttemptReviewRequested == "" {
+		cfg.AttemptReviewRequested = "edugo.attempt.review_requested"
 	}
 	return cfg
 }

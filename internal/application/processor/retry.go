@@ -45,5 +45,10 @@ func classifyError(err error) ErrorType {
 		return ErrorTypePermanent
 	}
 
+	// Evento malformado: reintentar no lo arregla, debe ir al DLQ sin reprocesar.
+	if errors.Is(err, ErrMalformedEvent) {
+		return ErrorTypePermanent
+	}
+
 	return ErrorTypeTransient
 }

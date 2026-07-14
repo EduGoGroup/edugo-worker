@@ -3,16 +3,20 @@
 messaging:
   rabbitmq:
     queues:
+      # Carril materiales (plan 041 lo revive como consumidor); hoy el worker no lo consume.
       material_uploaded: "edugo.material.uploaded"
+      # Carril revisión asistida (plan 040): cola que consume el worker hoy.
+      attempt_review_requested: "edugo.attempt.review_requested"
     exchanges:
       materials: "edugo.materials"
+      assessments: "edugo.assessments"
     prefetch_count: 5
     dlq:
       enabled: true
       max_retries: 3
       retry_delay: "5s"
       dlx_exchange: "edugo_dlx"
-      dlx_routing_key: "edugo.material.uploaded.dlq"
+      dlx_routing_key: "edugo.attempt.review_requested.dlq"
       use_exponential_backoff: true
 
 nlp:
