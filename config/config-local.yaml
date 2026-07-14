@@ -29,6 +29,38 @@ api_identity:
   cache_enabled: true
   max_bulk_size: 50
 
+# Clientes M2M de dominio (plan 039 F4). En local apuntan a las APIs nativas.
+api_academic:
+  base_url: "http://localhost:8060"
+  timeout: "5s"
+  cache_ttl: "60s"
+
+api_learning:
+  base_url: "http://localhost:8065"
+  timeout: "5s"
+
+# Service JWT M2M. En local el secret suele venir por env SERVICE_JWT_SECRET; si
+# está vacío, el token se firma igual pero academic lo rechaza (M2M no operativo).
+service_jwt:
+  issuer: "edugo-identity"
+  audience: "edugo-api-academic"
+  client_id: "edugo-worker"
+  ttl: "15m"
+
+# LLM local: por defecto Ollama en localhost. Descomenta y ajusta el modelo que
+# tengas instalado para usar el harness (make llm-harness) contra un modelo real.
+llm:
+  local:
+    base_url: "http://localhost:11434"
+    model: "llama3.1"
+    timeout: "120s"
+  api:
+    provider: "anthropic"
+    # api_key: "sk-ant-..."  # normalmente por env LLM_API_KEY
+    model: "claude-sonnet-5"
+    timeout: "60s"
+    max_tokens: 4096
+
 # Métricas Prometheus
 metrics:
   enabled: true

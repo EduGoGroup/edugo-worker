@@ -3,6 +3,7 @@ module github.com/EduGoGroup/edugo-worker
 go 1.25.0
 
 require (
+	github.com/EduGoGroup/edugo-shared/auth v0.900.2
 	github.com/EduGoGroup/edugo-shared/bootstrap v0.1.0
 	github.com/EduGoGroup/edugo-shared/bootstrap/s3 v0.1.0
 	github.com/EduGoGroup/edugo-shared/common v0.900.2
@@ -75,6 +76,7 @@ require (
 	github.com/go-playground/universal-translator v0.18.1 // indirect
 	github.com/go-playground/validator/v10 v10.30.2 // indirect
 	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
+	github.com/golang-jwt/jwt/v5 v5.3.1 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/hhrutter/lzw v1.0.0 // indirect
 	github.com/hhrutter/pkcs7 v0.2.0 // indirect

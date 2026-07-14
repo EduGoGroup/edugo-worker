@@ -26,6 +26,16 @@ func Load() (*Config, error) {
 		sharedconfig.WithExplicitBindings(map[string]string{
 			"messaging.rabbitmq.url": "RABBITMQ_URL",
 			"nlp.api_key":            "OPENAI_API_KEY",
+			// M2M (plan 039 F4): service JWT + base URLs de dominio.
+			"service_jwt.secret":    "SERVICE_JWT_SECRET",
+			"api_academic.base_url": "API_ACADEMIC_BASE_URL",
+			"api_learning.base_url": "API_LEARNING_BASE_URL",
+			// LLM (plan 039 D-039.3): credenciales/URL/modelo de EduGo, no por escuela.
+			"llm.local.base_url": "LLM_LOCAL_BASE_URL",
+			"llm.local.model":    "LLM_LOCAL_MODEL",
+			"llm.api.provider":   "LLM_API_PROVIDER",
+			"llm.api.api_key":    "LLM_API_KEY",
+			"llm.api.model":      "LLM_API_MODEL",
 		}),
 	)
 

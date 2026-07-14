@@ -33,6 +33,8 @@ func main() {
 		WithSharedMetrics().
 		WithRabbitMQ().
 		WithAuthClient().
+		WithM2MClients().
+		WithLLMProvider().
 		WithInfrastructure().
 		WithProcessors().
 		WithHealthChecks().

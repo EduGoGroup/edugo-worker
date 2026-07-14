@@ -11,6 +11,7 @@ import (
 	sharedMetrics "github.com/EduGoGroup/edugo-shared/metrics"
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
 	"github.com/EduGoGroup/edugo-worker/internal/client"
+	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/health"
@@ -18,6 +19,9 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
+	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	llmapi "github.com/EduGoGroup/edugo-worker/internal/llm/api"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/ollama"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -27,6 +31,9 @@ type Resources struct {
 	RabbitMQConn      *rabbit.Connection
 	RabbitMQChannel   *amqp.Channel
 	AuthClient        *client.AuthClient
+	SettingsClient    *m2m.SettingsClient
+	LearningClient    *m2m.LearningClient
+	LLMProvider       llm.LLMProvider
 	LifecycleManager  *lifecycle.Manager
 	ProcessorRegistry *processor.Registry
 	MetricsServer     *httpInfra.MetricsServer
@@ -52,6 +59,9 @@ type ResourceBuilder struct {
 
 	// Recursos de aplicación
 	authClient        *client.AuthClient
+	settingsClient    *m2m.SettingsClient
+	learningClient    *m2m.LearningClient
+	llmProvider       llm.LLMProvider
 	processorRegistry *processor.Registry
 	metricsServer     *httpInfra.MetricsServer
 	healthChecker     *health.Checker
@@ -177,6 +187,106 @@ func (b *ResourceBuilder) WithAuthClient() *ResourceBuilder {
 	}
 
 	return b
+}
+
+// WithM2MClients configura los clientes máquina-a-máquina del worker (plan 039
+// F4, D-039.7): el provider de service JWT (HS256) + el cliente de lectura de
+// settings hacia academic (con caché TTL corta) + el stub de learning (lo llena
+// el plan 040). No hace llamadas de red: solo construye. Un Secret vacío no
+// impide el arranque (academic rechazará el token si se usa sin secret).
+func (b *ResourceBuilder) WithM2MClients() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+	if b.logger == nil {
+		b.err = fmt.Errorf("logger required before M2M clients")
+		return b
+	}
+
+	jwtCfg := b.config.GetServiceJWTConfigWithDefaults()
+	academicCfg := b.config.GetAPIAcademicConfigWithDefaults()
+	learningCfg := b.config.GetAPILearningConfigWithDefaults()
+
+	tokenProvider, err := m2m.NewServiceTokenProvider(m2m.ServiceTokenConfig{
+		Secret:   jwtCfg.Secret,
+		Issuer:   jwtCfg.Issuer,
+		Audience: jwtCfg.Audience,
+		ClientID: jwtCfg.ClientID,
+		Scopes:   []string{"schools.settings.read"},
+		TTL:      jwtCfg.TTL,
+	})
+	if err != nil {
+		b.err = fmt.Errorf("failed to create service token provider: %w", err)
+		return b
+	}
+
+	b.settingsClient = m2m.NewSettingsClient(m2m.SettingsClientConfig{
+		BaseURL:       academicCfg.BaseURL,
+		Timeout:       academicCfg.Timeout,
+		CacheTTL:      academicCfg.CacheTTL,
+		TokenProvider: tokenProvider,
+	})
+
+	b.learningClient = m2m.NewLearningClient(m2m.LearningClientConfig{
+		BaseURL:       learningCfg.BaseURL,
+		Timeout:       learningCfg.Timeout,
+		TokenProvider: tokenProvider,
+	})
+
+	b.logger.Info("✅ M2M clients initialized",
+		"academic_base_url", academicCfg.BaseURL,
+		"learning_base_url", learningCfg.BaseURL,
+		"jwt_audience", jwtCfg.Audience,
+		"secret_present", jwtCfg.Secret != "",
+	)
+	return b
+}
+
+// WithLLMProvider construye el provider LLM según la política de plataforma
+// (plan 039 D-039.3/D-039.4). En 039 el worker no dispara generación/corrección
+// (eso es 040/041): se elige un provider por defecto (local Ollama) listo para
+// que los planes siguientes lo seleccionen por carril/escuela vía M2M. La config
+// se inyecta al constructor; el provider NUNCA lee env.
+func (b *ResourceBuilder) WithLLMProvider() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+	if b.logger == nil {
+		b.err = fmt.Errorf("logger required before LLM provider")
+		return b
+	}
+
+	llmCfg := b.config.GetLLMConfigWithDefaults()
+
+	// Default de infraestructura: provider local (Ollama). El plan 040/041 elige
+	// entre local/api por carril y escuela leyendo la política vía SettingsClient.
+	b.llmProvider = ollama.New(ollama.Config{
+		BaseURL: llmCfg.Local.BaseURL,
+		Model:   llmCfg.Local.Model,
+		Timeout: llmCfg.Local.Timeout,
+	})
+
+	b.logger.Info("✅ LLM provider initialized (default local; selección por carril/escuela en 040/041)",
+		"provider", b.llmProvider.Name(),
+		"local_base_url", llmCfg.Local.BaseURL,
+		"api_provider", llmCfg.API.Provider,
+	)
+	return b
+}
+
+// buildAPIProvider construye el provider por API a demanda (plan 040/041 lo usa
+// cuando la política de una escuela pide modo "api"). Se expone para no atar el
+// import del paquete api solo al harness. Devuelve error si la config no permite
+// construirlo (proveedor no soportado, etc.).
+func BuildAPIProvider(cfg config.LLMAPIConfig) (llm.LLMProvider, error) {
+	return llmapi.New(llmapi.Config{
+		Provider:  cfg.Provider,
+		APIKey:    cfg.APIKey,
+		Model:     cfg.Model,
+		BaseURL:   cfg.BaseURL,
+		Timeout:   cfg.Timeout,
+		MaxTokens: cfg.MaxTokens,
+	})
 }
 
 // WithInfrastructure configura los servicios de infraestructura externa (S3, PDF, NLP)
@@ -365,6 +475,9 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 		RabbitMQConn:      b.rabbitSharedConn,
 		RabbitMQChannel:   b.rabbitChannel,
 		AuthClient:        b.authClient,
+		SettingsClient:    b.settingsClient,
+		LearningClient:    b.learningClient,
+		LLMProvider:       b.llmProvider,
 		LifecycleManager:  b.lifecycleManager,
 		ProcessorRegistry: b.processorRegistry,
 		MetricsServer:     b.metricsServer,

@@ -60,6 +60,10 @@ run: ## Ejecutar en modo desarrollo
 
 dev: deps run ## Desarrollo completo
 
+llm-harness: ## Smoke del provider LLM (plan 039 D-039.8): genera + valida contrato 038. Flags via ARGS="..."
+	@echo "$(YELLOW)🧪 llm-harness (provider LLM → contrato assessment_import 038)...$(RESET)"
+	@$(GOCMD) run ./cmd/llm-harness $(ARGS)
+
 # ============================================
 # Testing
 # ============================================
