@@ -37,14 +37,9 @@ func TestHealthHandler_Health_AllHealthy(t *testing.T) {
 	// Arrange
 	checker := health.NewChecker()
 	checker.Register(&MockHealthCheck{
-		name:    "mongodb",
+		name:    "rabbitmq",
 		status:  health.StatusHealthy,
-		message: "MongoDB is healthy",
-	})
-	checker.Register(&MockHealthCheck{
-		name:    "postgresql",
-		status:  health.StatusHealthy,
-		message: "PostgreSQL is healthy",
+		message: "RabbitMQ is healthy",
 	})
 
 	handler := NewHealthHandler(checker)
@@ -64,23 +59,17 @@ func TestHealthHandler_Health_AllHealthy(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "healthy", response.Status)
-	assert.Len(t, response.Checks, 2)
-	assert.Equal(t, health.StatusHealthy, response.Checks["mongodb"].Status)
-	assert.Equal(t, health.StatusHealthy, response.Checks["postgresql"].Status)
+	assert.Len(t, response.Checks, 1)
+	assert.Equal(t, health.StatusHealthy, response.Checks["rabbitmq"].Status)
 }
 
 func TestHealthHandler_Health_SomeUnhealthy(t *testing.T) {
 	// Arrange
 	checker := health.NewChecker()
 	checker.Register(&MockHealthCheck{
-		name:    "mongodb",
+		name:    "rabbitmq",
 		status:  health.StatusUnhealthy,
-		message: "MongoDB connection failed",
-	})
-	checker.Register(&MockHealthCheck{
-		name:    "postgresql",
-		status:  health.StatusHealthy,
-		message: "PostgreSQL is healthy",
+		message: "RabbitMQ connection failed",
 	})
 
 	handler := NewHealthHandler(checker)
@@ -100,8 +89,8 @@ func TestHealthHandler_Health_SomeUnhealthy(t *testing.T) {
 	require.NoError(t, err)
 
 	assert.Equal(t, "unhealthy", response.Status)
-	assert.Len(t, response.Checks, 2)
-	assert.Equal(t, health.StatusUnhealthy, response.Checks["mongodb"].Status)
+	assert.Len(t, response.Checks, 1)
+	assert.Equal(t, health.StatusUnhealthy, response.Checks["rabbitmq"].Status)
 }
 
 func TestHealthHandler_Liveness(t *testing.T) {
@@ -131,16 +120,6 @@ func TestHealthHandler_Readiness_AllHealthy(t *testing.T) {
 	// Arrange
 	checker := health.NewChecker()
 	checker.Register(&MockHealthCheck{
-		name:    "mongodb",
-		status:  health.StatusHealthy,
-		message: "MongoDB is healthy",
-	})
-	checker.Register(&MockHealthCheck{
-		name:    "postgresql",
-		status:  health.StatusHealthy,
-		message: "PostgreSQL is healthy",
-	})
-	checker.Register(&MockHealthCheck{
 		name:    "rabbitmq",
 		status:  health.StatusHealthy,
 		message: "RabbitMQ is healthy",
@@ -164,26 +143,16 @@ func TestHealthHandler_Readiness_AllHealthy(t *testing.T) {
 
 	assert.Equal(t, "ready", response.Status)
 	assert.Equal(t, "Application is ready to serve traffic", response.Message)
-	assert.Len(t, response.Checks, 3)
+	assert.Len(t, response.Checks, 1)
 }
 
 func TestHealthHandler_Readiness_CriticalComponentUnhealthy(t *testing.T) {
-	// Arrange - MongoDB (crítico) está degradado
+	// Arrange - RabbitMQ (crítico) está degradado
 	checker := health.NewChecker()
 	checker.Register(&MockHealthCheck{
-		name:    "mongodb",
-		status:  health.StatusUnhealthy,
-		message: "MongoDB connection failed",
-	})
-	checker.Register(&MockHealthCheck{
-		name:    "postgresql",
-		status:  health.StatusHealthy,
-		message: "PostgreSQL is healthy",
-	})
-	checker.Register(&MockHealthCheck{
 		name:    "rabbitmq",
-		status:  health.StatusHealthy,
-		message: "RabbitMQ is healthy",
+		status:  health.StatusUnhealthy,
+		message: "RabbitMQ connection failed",
 	})
 
 	handler := NewHealthHandler(checker)
@@ -207,22 +176,17 @@ func TestHealthHandler_Readiness_CriticalComponentUnhealthy(t *testing.T) {
 }
 
 func TestHealthHandler_Readiness_OnlyOptionalComponentUnhealthy(t *testing.T) {
-	// Arrange - Solo RabbitMQ (opcional) está degradado
+	// Arrange - RabbitMQ (crítico) sano; un componente opcional degradado
 	checker := health.NewChecker()
 	checker.Register(&MockHealthCheck{
-		name:    "mongodb",
-		status:  health.StatusHealthy,
-		message: "MongoDB is healthy",
-	})
-	checker.Register(&MockHealthCheck{
-		name:    "postgresql",
-		status:  health.StatusHealthy,
-		message: "PostgreSQL is healthy",
-	})
-	checker.Register(&MockHealthCheck{
 		name:    "rabbitmq",
+		status:  health.StatusHealthy,
+		message: "RabbitMQ is healthy",
+	})
+	checker.Register(&MockHealthCheck{
+		name:    "storage",
 		status:  health.StatusUnhealthy,
-		message: "RabbitMQ connection failed",
+		message: "storage connection failed",
 	})
 
 	handler := NewHealthHandler(checker)
@@ -243,36 +207,4 @@ func TestHealthHandler_Readiness_OnlyOptionalComponentUnhealthy(t *testing.T) {
 
 	assert.Equal(t, "ready_degraded", response.Status)
 	assert.Equal(t, "Application is ready but some optional components are unhealthy", response.Message)
-}
-
-func TestHealthHandler_Readiness_PostgreSQLCriticalUnhealthy(t *testing.T) {
-	// Arrange - PostgreSQL (crítico) está degradado
-	checker := health.NewChecker()
-	checker.Register(&MockHealthCheck{
-		name:    "mongodb",
-		status:  health.StatusHealthy,
-		message: "MongoDB is healthy",
-	})
-	checker.Register(&MockHealthCheck{
-		name:    "postgresql",
-		status:  health.StatusUnhealthy,
-		message: "PostgreSQL connection timeout",
-	})
-
-	handler := NewHealthHandler(checker)
-
-	req := httptest.NewRequest(http.MethodGet, "/health/ready", nil)
-	rec := httptest.NewRecorder()
-
-	// Act
-	handler.Readiness(rec, req)
-
-	// Assert - Debe retornar 503 porque PostgreSQL es crítico
-	assert.Equal(t, http.StatusServiceUnavailable, rec.Code)
-
-	var response HealthResponse
-	err := json.NewDecoder(rec.Body).Decode(&response)
-	require.NoError(t, err)
-
-	assert.Equal(t, "not_ready", response.Status)
 }

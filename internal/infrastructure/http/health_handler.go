@@ -72,7 +72,8 @@ func (h *HealthHandler) Liveness(w http.ResponseWriter, r *http.Request) {
 }
 
 // Readiness maneja GET /health/ready - readiness probe (Kubernetes)
-// Implementa lógica granular: solo componentes críticos (MongoDB, PostgreSQL) afectan el estado ready
+// Implementa lógica granular: solo componentes críticos afectan el estado ready.
+// En el estado esqueleto (plan 037 D-037.11) el worker solo depende de RabbitMQ.
 func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 	ctx := r.Context()
 
@@ -80,8 +81,7 @@ func (h *HealthHandler) Readiness(w http.ResponseWriter, r *http.Request) {
 
 	// Componentes críticos que deben estar saludables para que el servicio esté "ready"
 	criticalComponents := map[string]bool{
-		"mongodb":    true,
-		"postgresql": true,
+		"rabbitmq": true,
 	}
 
 	hasCriticalFailure := false

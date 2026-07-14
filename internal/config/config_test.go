@@ -197,8 +197,6 @@ func TestGetHealthConfigWithDefaults_ConValoresConfigurados(t *testing.T) {
 	cfg := &Config{
 		Health: HealthConfig{
 			Timeouts: HealthTimeoutsConfig{
-				MongoDB:  10 * time.Second,
-				Postgres: 8 * time.Second,
 				RabbitMQ: 6 * time.Second,
 			},
 		},
@@ -206,8 +204,6 @@ func TestGetHealthConfigWithDefaults_ConValoresConfigurados(t *testing.T) {
 
 	result := cfg.GetHealthConfigWithDefaults()
 
-	assert.Equal(t, 10*time.Second, result.Timeouts.MongoDB)
-	assert.Equal(t, 8*time.Second, result.Timeouts.Postgres)
 	assert.Equal(t, 6*time.Second, result.Timeouts.RabbitMQ)
 }
 
@@ -216,8 +212,6 @@ func TestGetHealthConfigWithDefaults_SinConfiguracion(t *testing.T) {
 
 	result := cfg.GetHealthConfigWithDefaults()
 
-	assert.Equal(t, 5*time.Second, result.Timeouts.MongoDB, "MongoDB timeout por defecto debería ser 5s")
-	assert.Equal(t, 3*time.Second, result.Timeouts.Postgres, "Postgres timeout por defecto debería ser 3s")
 	assert.Equal(t, 3*time.Second, result.Timeouts.RabbitMQ, "RabbitMQ timeout por defecto debería ser 3s")
 }
 
@@ -250,14 +244,6 @@ func TestCircuitBreakerConfig_GetWithDefaults_SinConfiguracion(t *testing.T) {
 
 func TestValidate_ConfiguracionCompleta(t *testing.T) {
 	cfg := &Config{
-		Database: DatabaseConfig{
-			Postgres: PostgresConfig{
-				Password: "test-password",
-			},
-			MongoDB: MongoDBConfig{
-				URI: "mongodb://localhost:27017",
-			},
-		},
 		Messaging: MessagingConfig{
 			RabbitMQ: RabbitMQConfig{
 				URL: "amqp://localhost:5672",
@@ -269,55 +255,8 @@ func TestValidate_ConfiguracionCompleta(t *testing.T) {
 	assert.NoError(t, err, "La validación debería pasar con configuración completa")
 }
 
-func TestValidate_SinPostgresPassword(t *testing.T) {
-	cfg := &Config{
-		Database: DatabaseConfig{
-			MongoDB: MongoDBConfig{
-				URI: "mongodb://localhost:27017",
-			},
-		},
-		Messaging: MessagingConfig{
-			RabbitMQ: RabbitMQConfig{
-				URL: "amqp://localhost:5672",
-			},
-		},
-	}
-
-	err := cfg.Validate()
-	assert.Error(t, err, "Debería fallar sin POSTGRES_PASSWORD")
-	assert.Contains(t, err.Error(), "POSTGRES_PASSWORD is required")
-}
-
-func TestValidate_SinMongoDBURI(t *testing.T) {
-	cfg := &Config{
-		Database: DatabaseConfig{
-			Postgres: PostgresConfig{
-				Password: "test-password",
-			},
-		},
-		Messaging: MessagingConfig{
-			RabbitMQ: RabbitMQConfig{
-				URL: "amqp://localhost:5672",
-			},
-		},
-	}
-
-	err := cfg.Validate()
-	assert.Error(t, err, "Debería fallar sin MONGODB_URI")
-	assert.Contains(t, err.Error(), "MONGODB_URI is required")
-}
-
 func TestValidate_SinRabbitMQURL(t *testing.T) {
-	cfg := &Config{
-		Database: DatabaseConfig{
-			Postgres: PostgresConfig{
-				Password: "test-password",
-			},
-			MongoDB: MongoDBConfig{
-				URI: "mongodb://localhost:27017",
-			},
-		},
-	}
+	cfg := &Config{}
 
 	err := cfg.Validate()
 	assert.Error(t, err, "Debería fallar sin RABBITMQ_URL")

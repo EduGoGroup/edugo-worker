@@ -89,8 +89,8 @@ jobs:
             --max-instances=2 \
             --no-cpu-throttling \
             --execution-environment=gen2 \
-            --set-env-vars="^@^APP_ENV=cloud@ENV=production@EDUGO_WORKER_LOGGING_LEVEL=info@EDUGO_WORKER_LOGGING_FORMAT=json@EDUGO_WORKER_DATABASE_MONGODB_DATABASE=edugo@EDUGO_WORKER_METRICS_ENABLED=true@EDUGO_WORKER_METRICS_PORT=${{ env.SERVICE_PORT }}" \
-            --set-secrets="POSTGRES_PASSWORD=db-postgres-password:latest,MONGODB_URI=db-mongodb-uri:latest,RABBITMQ_URL=messaging-rabbitmq-url:latest,EDUGO_WORKER_DATABASE_POSTGRES_HOST=db-postgres-host:latest,EDUGO_WORKER_DATABASE_POSTGRES_PORT=db-postgres-port:latest,EDUGO_WORKER_DATABASE_POSTGRES_USER=db-postgres-user:latest,EDUGO_WORKER_DATABASE_POSTGRES_DATABASE=db-postgres-database:latest,EDUGO_WORKER_DATABASE_POSTGRES_SSL_MODE=db-postgres-ssl-mode:latest,OPENAI_API_KEY=openai-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest"
+            --set-env-vars="^@^APP_ENV=cloud@ENV=production@EDUGO_WORKER_LOGGING_LEVEL=info@EDUGO_WORKER_LOGGING_FORMAT=json@EDUGO_WORKER_METRICS_ENABLED=true@EDUGO_WORKER_METRICS_PORT=${{ env.SERVICE_PORT }}" \
+            --set-secrets="RABBITMQ_URL=messaging-rabbitmq-url:latest,OPENAI_API_KEY=openai-api-key:latest,ANTHROPIC_API_KEY=anthropic-api-key:latest"
 
       - name: Obtener URL del servicio
         id: url

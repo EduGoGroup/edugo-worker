@@ -1,6 +1,19 @@
 # EduGo Worker
 
-Worker de procesamiento de eventos para la plataforma EduGo. Este servicio consume mensajes de RabbitMQ y procesa eventos relacionados con materiales educativos, evaluaciones y estudiantes.
+Worker de procesamiento de eventos para la plataforma EduGo. Consume mensajes de RabbitMQ y ejecuta trabajo pesado/asíncrono detrás de `edugo-api-learning`.
+
+## Estado: esqueleto para el carril LLM (037 D-037.11)
+
+Tras el plan 037 el worker quedó como **esqueleto sin processors**. El único carril que le quedaba (`material.uploaded` / `material.reprocess`) persistía su salida **100% en Mongo** y **no tenía consumidor** (el worker nunca se desplegó en Cloud Run). Al retirarse Mongo del ecosistema, esos processors se eliminaron.
+
+Lo que **sigue vivo** hoy es la cáscara operativa:
+
+- Conecta a **RabbitMQ**, declara el exchange/cola y arranca el consumer con soporte DLQ.
+- Expone **healthcheck** (liveness/readiness) y servidor de **métricas** Prometheus.
+- Mantiene **AuthClient** (identity), rate limiter, circuit breakers, graceful shutdown y el pipeline de infraestructura (S3/PDF/NLP) listo para reusar.
+- El **`ProcessorRegistry` arranca vacío**: no hay processor de negocio. Cualquier mensaje que llegara iría al DLQ por "no processor registered".
+
+Ya **no** hay Postgres ni Mongo: sus conexiones, config, health checks y métricas de BD se retiraron. Los processors del carril LLM (store y orquestación nuevos) llegan en **037-F3**.
 
 ## 📋 Tabla de Contenidos
 
@@ -46,23 +59,46 @@ El worker está construido con una arquitectura limpia basada en:
          │
          ▼
 ┌─────────────────────────────────┐
-│ Processors (Procesadores)       │
-├─────────────────────────────────┤
-│ • MaterialUploadedProcessor     │
-│ • MaterialDeletedProcessor      │
-│ • MaterialReprocessProcessor    │
-│ • AssessmentAttemptProcessor    │
-│ • StudentEnrolledProcessor      │
+│ ProcessorRegistry               │
+│ (VACÍO — carril LLM en 037-F3)  │
 └─────────────────────────────────┘
 ```
+
+### Topología RabbitMQ (estado esqueleto, plan 037 D-037.11)
+
+El worker declara y conecta la topología de RabbitMQ como cáscara, pero **no
+consume negocio**: el `ProcessorRegistry` arranca vacío.
+
+- **Un exchange** (`topic`): `edugo.materials` — existe; `edugo-api-learning`
+  publica `material.uploaded`.
+- **Una cola**: `edugo.material.uploaded`, con un único binding a la routing key
+  `material.uploaded`, declarada al arrancar (soporte DLQ).
+- **Consumo**: el worker arranca el consumer sobre esa cola, pero al no haber
+  ningún processor registrado, cualquier mensaje sería rechazado al DLQ ("no
+  processor registered"). En la práctica **el worker no procesa nada hasta F3**.
+- **Actores**: `edugo-api-learning` (productor) → `edugo-worker` (consumidor
+  cáscara, sin processors).
+
+RabbitMQ se mantiene cableado a propósito: es la **cola del norte LLM** (D-037.3),
+donde 037-F3 registrará los processors nuevos (evaluación por LLM), con su store
+y orquestación propios.
+
+Contexto de lo retirado antes del esqueleto:
+
+- `material.uploaded` / `material.reprocess` — sus processors se **eliminaron** en
+  D-037.11: persistían la salida en Mongo (retirado del ecosistema) y no tenían
+  consumidor (worker nunca desplegado).
+- `material.deleted` — la limpieza es **síncrona en edugo-api-learning** (D-037.4).
+- `assessment.assigned` / `student.enrolled` — learning llama **directo al
+  Notification Gateway** de platform (patrón 032-A4); ya no se publican a Rabbit.
 
 ## 📦 Requisitos
 
 - Go 1.25 o superior
-- PostgreSQL 14+
-- MongoDB 6.0+
 - RabbitMQ 3.11+
 - Docker y Docker Compose (para desarrollo)
+
+> Ya **no** requiere PostgreSQL ni MongoDB (estado esqueleto, plan 037 D-037.11).
 
 ## 🚀 Instalación
 
@@ -101,19 +137,7 @@ El worker se configura mediante variables de entorno o archivo `config.yaml`.
 ### Variables de Entorno Requeridas
 
 ```bash
-# PostgreSQL
-POSTGRES_HOST=localhost
-POSTGRES_PORT=5432
-POSTGRES_USER=edugo
-POSTGRES_PASSWORD=secret
-POSTGRES_DB=edugo_db
-POSTGRES_SSLMODE=disable
-
-# MongoDB
-MONGODB_URI=mongodb://localhost:27017
-MONGODB_DATABASE=edugo_materials
-
-# RabbitMQ
+# RabbitMQ (única dependencia obligatoria del esqueleto)
 RABBITMQ_URL=amqp://guest:guest@localhost:5672/
 
 # Logging
@@ -130,29 +154,14 @@ API_IDENTITY_CACHE_ENABLED=true
 ### Ejemplo config.yaml
 
 ```yaml
-database:
-  postgres:
-    host: localhost
-    port: 5432
-    database: edugo_db
-    user: edugo
-    password: secret
-    ssl_mode: disable
-    max_connections: 25
-  mongodb:
-    uri: mongodb://localhost:27017
-    database: edugo_materials
-    timeout: 10s
-
 messaging:
   rabbitmq:
     url: amqp://guest:guest@localhost:5672/
     prefetch_count: 10
     queues:
       material_uploaded: material.uploaded
-      assessment_attempt: assessment.attempt
     exchanges:
-      materials: materials
+      materials: edugo.materials
 
 logging:
   level: info
@@ -200,22 +209,21 @@ edugo-worker/
 ├── internal/
 │   ├── application/
 │   │   ├── dto/                # Data Transfer Objects
-│   │   └── processor/          # Procesadores de eventos
+│   │   └── processor/          # Registry + interfaz + retry (registry VACÍO)
 │   │       ├── registry.go     # Registro de procesadores
-│   │       └── *_processor.go  # Implementaciones
+│   │       └── processor.go    # Interfaz Processor (sin implementaciones aún)
 │   ├── bootstrap/              # Inicialización de recursos
-│   │   ├── adapter/            # Adaptadores (logger)
 │   │   ├── resource_builder.go # Builder Pattern para recursos
 │   │   └── DESIGN_RESOURCE_BUILDER.md # Documentación de diseño
 │   ├── client/                 # Clientes externos (AuthClient)
 │   ├── config/                 # Configuración
-│   ├── container/              # Contenedor de dependencias
 │   ├── domain/                 # Lógica de dominio
-│   │   ├── service/            # Servicios de dominio
 │   │   └── valueobject/        # Value Objects
 │   └── infrastructure/         # Capa de infraestructura
 │       ├── messaging/          # RabbitMQ consumer
-│       └── persistence/        # Repositorios
+│       ├── storage/ pdf/ nlp/  # S3 · extracción PDF · NLP (listos para F3)
+│       ├── health/ metrics/    # Liveness/readiness · Prometheus
+│       └── ratelimiter/ circuitbreaker/ shutdown/
 ├── docs/                       # Documentación técnica (arquitectura, eventos, etc.)
 ├── Dockerfile
 ├── docker-compose.yml
@@ -225,37 +233,20 @@ edugo-worker/
 
 ## 🔄 Procesadores de Eventos
 
-El worker procesa los siguientes tipos de eventos:
+**El `ProcessorRegistry` arranca vacío** (estado esqueleto, plan 037 D-037.11): el
+worker no registra ningún processor de negocio. Los processors del carril LLM se
+añadirán en **037-F3**, que definirá su store y orquestación.
 
-### material_uploaded
-Procesa materiales educativos subidos (PDFs, imágenes, videos).
-- Extrae texto de PDFs
-- Genera embeddings para búsqueda semántica
-- Almacena metadatos en PostgreSQL y MongoDB
+Para agregar uno nuevo (cuando llegue F3): implementa un `*_processor.go` que
+satisfaga la interfaz de `processor.go`, regístralo en el `ProcessorRegistry`
+(bootstrap, `WithProcessors`) y mapea su `event_type`/binding en RabbitMQ.
 
-### material_deleted
-Elimina materiales educativos del sistema.
-- Limpia datos en PostgreSQL
-- Elimina documentos de MongoDB
-- Gestiona cleanup de recursos asociados
-
-### material_reprocess
-Reprocesa materiales existentes.
-- Re-extrae texto
-- Regenera embeddings
-- Actualiza metadatos
-
-### assessment_attempt
-Procesa intentos de evaluación.
-- Registra respuestas del estudiante
-- Calcula puntuación
-- Actualiza estadísticas
-
-### student_enrolled
-Procesa inscripciones de estudiantes.
-- Registra inscripción
-- Inicializa progreso
-- Notifica al sistema
+> Los processors `material.uploaded` / `material.reprocess` se **eliminaron** en
+> D-037.11 (persistían en Mongo, ya retirado, y no tenían consumidor). Los eventos
+> `material.deleted`, `assessment.assigned` y `student.enrolled` ya se habían
+> retirado antes: su negocio migró a las APIs de dominio (limpieza síncrona en
+> learning; notificaciones directas al Notification Gateway de platform, patrón
+> 032-A4). Ver [Topología RabbitMQ](#topología-rabbitmq-estado-esqueleto-plan-037-d-03711).
 
 ## 🧪 Testing
 

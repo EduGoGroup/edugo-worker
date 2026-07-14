@@ -1,26 +1,11 @@
 # Configuración Base - Worker
-database:
-  postgres:
-    host: "localhost"
-    port: 5432
-    database: "edugo"
-    user: "edugo_user"
-    max_connections: 10
-    ssl_mode: "disable"
-
-  mongodb:
-    database: "edugo"
-    timeout: 10s
-
+# Plan 037 (D-037.11): worker en estado esqueleto, sin Postgres ni Mongo.
 messaging:
   rabbitmq:
     queues:
       material_uploaded: "edugo.material.uploaded"
-      assessment_attempt: "edugo.assessment.attempt"
-      assessment_notifications: "edugo.assessment.notifications"
     exchanges:
       materials: "edugo.materials"
-      assessments: "edugo.assessments"
     prefetch_count: 5
     dlq:
       enabled: true
@@ -69,23 +54,9 @@ api_identity:
   cache_enabled: true
   max_bulk_size: 50
 
-# Notification Gateway (edugo-api-platform) — el worker delega in-app + push (plan 020 D13).
-# El worker ya NO escribe notifications.* ni tiene credenciales FCM/APNs.
-notification_gateway:
-  base_url: "http://api-platform:8075"
-  timeout: "5s"
-  service_jwt:
-    secret: "" # Set via NOTIFICATION_GATEWAY_SERVICE_JWT_SECRET (SERVICE_JWT_SECRET compartido con platform)
-    issuer: "edugo-identity"
-    audience: "edugo-api-platform"
-    client_id: "edugo-worker"
-    ttl: "15m"
-
 # Health Checks
 health:
   timeouts:
-    mongodb: "5s"
-    postgres: "3s"
     rabbitmq: "3s"
 
 # Circuit Breakers
@@ -111,13 +82,9 @@ rate_limiter:
       requests_per_second: 5.0 # Procesamiento PDF es costoso
       burst_size: 10.0
 
-    material.updated:
-      requests_per_second: 10.0 # Actualizaciones son más ligeras
-      burst_size: 20.0
-
-    assessment.attempt:
-      requests_per_second: 15.0 # Mayor throughput para quizzes
-      burst_size: 30.0
+    material.reprocess:
+      requests_per_second: 5.0 # Reproceso reusa el pipeline pesado de material
+      burst_size: 10.0
 
   # Configuración por defecto para eventos no especificados
   default:
