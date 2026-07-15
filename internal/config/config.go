@@ -10,10 +10,13 @@ import (
 type Config struct {
 	Messaging       MessagingConfig       `mapstructure:"messaging"`
 	NLP             NLPConfig             `mapstructure:"nlp"`
-	Storage         StorageConfig         `mapstructure:"storage"`
 	PDF             PDFConfig             `mapstructure:"pdf"`
 	Logging         LoggingConfig         `mapstructure:"logging"`
 	APIIdentity     APIIdentityConfig     `mapstructure:"api_identity"`
+	APIAcademic     APIAcademicConfig     `mapstructure:"api_academic"`
+	APILearning     APILearningConfig     `mapstructure:"api_learning"`
+	ServiceJWT      ServiceJWTConfig      `mapstructure:"service_jwt"`
+	LLM             LLMConfig             `mapstructure:"llm"`
 	Metrics         MetricsConfig         `mapstructure:"metrics"`
 	Health          HealthConfig          `mapstructure:"health"`
 	CircuitBreakers CircuitBreakersConfig `mapstructure:"circuit_breakers"`
@@ -60,11 +63,22 @@ func (c DLQConfig) ToShared() rabbit.DLQConfig {
 }
 
 type QueuesConfig struct {
+	// MaterialUploaded es la cola del carril de materiales. Plan 040: el worker
+	// dejó de consumirla (su processor/binding se retiraron); el plan 041 la revive
+	// con su propio processor. Se conserva en config para ese retorno.
 	MaterialUploaded string `mapstructure:"material_uploaded"`
+	// AttemptReviewRequested es la cola del carril de revisión asistida (plan 040):
+	// recibe los eventos attempt.review_requested que publica learning al hacer submit.
+	AttemptReviewRequested string `mapstructure:"attempt_review_requested"`
 }
 
 type ExchangeConfig struct {
+	// Materials lo publica learning (carril materiales). El worker sigue declarándolo
+	// aunque no consuma su cola: el publisher no declara exchanges, así que un Rabbit
+	// fresco rompería el publish de material si el worker dejara de declararlo.
 	Materials string `mapstructure:"materials"`
+	// Assessments lo publica learning para el carril de evaluaciones/revisión (plan 040).
+	Assessments string `mapstructure:"assessments"`
 }
 
 type NLPConfig struct {
@@ -102,22 +116,6 @@ type AnthropicConfig struct {
 	Timeout     time.Duration `mapstructure:"timeout"`
 }
 
-type StorageConfig struct {
-	Provider string        `mapstructure:"provider"`
-	S3       S3Config      `mapstructure:"s3"`
-	Timeout  time.Duration `mapstructure:"timeout"`
-}
-
-type S3Config struct {
-	Region          string        `mapstructure:"region"`
-	Bucket          string        `mapstructure:"bucket"`
-	Endpoint        string        `mapstructure:"endpoint"` // Para MinIO
-	AccessKeyID     string        `mapstructure:"access_key_id"`
-	SecretAccessKey string        `mapstructure:"secret_access_key"`
-	UsePathStyle    bool          `mapstructure:"use_path_style"` // Para MinIO
-	Timeout         time.Duration `mapstructure:"timeout"`
-}
-
 type PDFConfig struct {
 	MaxSizeMB    int           `mapstructure:"max_size_mb"`
 	AllowedTypes []string      `mapstructure:"allowed_types"`
@@ -145,8 +143,7 @@ type HealthTimeoutsConfig struct {
 }
 
 type CircuitBreakersConfig struct {
-	NLP     CircuitBreakerConfig `mapstructure:"nlp"`
-	Storage CircuitBreakerConfig `mapstructure:"storage"`
+	NLP CircuitBreakerConfig `mapstructure:"nlp"`
 }
 
 type CircuitBreakerConfig struct {
@@ -163,6 +160,62 @@ type APIIdentityConfig struct {
 	CacheTTL     time.Duration `mapstructure:"cache_ttl"`
 	CacheEnabled bool          `mapstructure:"cache_enabled"`
 	MaxBulkSize  int           `mapstructure:"max_bulk_size"`
+}
+
+// APIAcademicConfig configura el cliente M2M hacia edugo-api-academic (lectura de
+// settings de escuela, plan 039 D-039.6). CacheTTL corto mitiga el riesgo de leer
+// config por M2M en runtime (design 039 §7).
+type APIAcademicConfig struct {
+	BaseURL  string        `mapstructure:"base_url"`
+	Timeout  time.Duration `mapstructure:"timeout"`
+	CacheTTL time.Duration `mapstructure:"cache_ttl"`
+}
+
+// APILearningConfig configura el cliente M2M hacia edugo-api-learning. En 039 es
+// solo andamiaje (stub); el plan 040 define qué endpoints consume.
+type APILearningConfig struct {
+	BaseURL string        `mapstructure:"base_url"`
+	Timeout time.Duration `mapstructure:"timeout"`
+}
+
+// ServiceJWTConfig configura la firma del service JWT M2M (HS256) que el worker
+// presenta a las APIs de dominio. Secret = SERVICE_JWT_SECRET (env, Secret
+// Manager en cloud), distinto del secret de usuarios. Issuer/Audience siguen la
+// convención del ecosistema (academic espera iss=edugo-identity, aud=edugo-api-academic).
+type ServiceJWTConfig struct {
+	Secret   string        `mapstructure:"secret"`
+	Issuer   string        `mapstructure:"issuer"`
+	Audience string        `mapstructure:"audience"`
+	ClientID string        `mapstructure:"client_id"`
+	TTL      time.Duration `mapstructure:"ttl"`
+}
+
+// LLMConfig agrupa la configuración de los providers LLM (plan 039 D-039.3). Las
+// credenciales/URL/modelo son de EduGo (NO por escuela); lo por-escuela es solo
+// la política, que se lee vía M2M. Estos valores se inyectan al constructor del
+// provider —el provider NUNCA lee env directo—.
+type LLMConfig struct {
+	Local LLMLocalConfig `mapstructure:"local"`
+	API   LLMAPIConfig   `mapstructure:"api"`
+}
+
+// LLMLocalConfig configura el provider local (Ollama). Env: LLM_LOCAL_BASE_URL,
+// LLM_LOCAL_MODEL.
+type LLMLocalConfig struct {
+	BaseURL string        `mapstructure:"base_url"`
+	Model   string        `mapstructure:"model"`
+	Timeout time.Duration `mapstructure:"timeout"`
+}
+
+// LLMAPIConfig configura el provider por API (Claude/Gemini). Env:
+// LLM_API_PROVIDER, LLM_API_KEY (Secret Manager en cloud), LLM_API_MODEL.
+type LLMAPIConfig struct {
+	Provider  string        `mapstructure:"provider"`
+	APIKey    string        `mapstructure:"api_key"`
+	Model     string        `mapstructure:"model"`
+	BaseURL   string        `mapstructure:"base_url"`
+	Timeout   time.Duration `mapstructure:"timeout"`
+	MaxTokens int           `mapstructure:"max_tokens"`
 }
 
 func (c *Config) Validate() error {
@@ -260,6 +313,76 @@ func (c *Config) GetAPIIdentityConfigWithDefaults() APIIdentityConfig {
 	return cfg
 }
 
+// GetAPIAcademicConfigWithDefaults retorna la config del cliente M2M de academic
+// con defaults (base_url local :8060, timeout 5s, cache 60s).
+func (c *Config) GetAPIAcademicConfigWithDefaults() APIAcademicConfig {
+	cfg := c.APIAcademic
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = "http://localhost:8060"
+	}
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 5 * time.Second
+	}
+	if cfg.CacheTTL == 0 {
+		cfg.CacheTTL = 60 * time.Second
+	}
+	return cfg
+}
+
+// GetAPILearningConfigWithDefaults retorna la config del stub M2M de learning con
+// defaults (base_url local :8065, timeout 5s).
+func (c *Config) GetAPILearningConfigWithDefaults() APILearningConfig {
+	cfg := c.APILearning
+	if cfg.BaseURL == "" {
+		cfg.BaseURL = "http://localhost:8065"
+	}
+	if cfg.Timeout == 0 {
+		cfg.Timeout = 5 * time.Second
+	}
+	return cfg
+}
+
+// GetServiceJWTConfigWithDefaults retorna la config del service JWT con defaults.
+// Issuer/Audience/ClientID por convención del ecosistema; Secret NO tiene default
+// (viene de env SERVICE_JWT_SECRET, vacío en local sin M2M real).
+func (c *Config) GetServiceJWTConfigWithDefaults() ServiceJWTConfig {
+	cfg := c.ServiceJWT
+	if cfg.Issuer == "" {
+		cfg.Issuer = "edugo-identity"
+	}
+	if cfg.Audience == "" {
+		cfg.Audience = "edugo-api-academic"
+	}
+	if cfg.ClientID == "" {
+		cfg.ClientID = "edugo-worker"
+	}
+	if cfg.TTL == 0 {
+		cfg.TTL = 15 * time.Minute
+	}
+	return cfg
+}
+
+// GetLLMConfigWithDefaults retorna la config LLM con defaults conservadores.
+func (c *Config) GetLLMConfigWithDefaults() LLMConfig {
+	cfg := c.LLM
+	if cfg.Local.BaseURL == "" {
+		cfg.Local.BaseURL = "http://localhost:11434"
+	}
+	if cfg.Local.Timeout == 0 {
+		cfg.Local.Timeout = 120 * time.Second
+	}
+	if cfg.API.Provider == "" {
+		cfg.API.Provider = "anthropic"
+	}
+	if cfg.API.Timeout == 0 {
+		cfg.API.Timeout = 60 * time.Second
+	}
+	if cfg.API.MaxTokens == 0 {
+		cfg.API.MaxTokens = 4096
+	}
+	return cfg
+}
+
 // GetMetricsConfigWithDefaults retorna la configuración de métricas con valores por defecto
 func (c *Config) GetMetricsConfigWithDefaults() MetricsConfig {
 	cfg := c.Metrics
@@ -295,7 +418,10 @@ func (c *Config) GetDLQConfigWithDefaults() DLQConfig {
 		cfg.DLXExchange = "edugo_dlx"
 	}
 	if cfg.DLXRoutingKey == "" {
-		cfg.DLXRoutingKey = "edugo.material.uploaded.dlq"
+		// El único consumidor activo del worker es el carril de revisión (plan 040);
+		// la cola muerta se nombra por él. Es también el nombre de la cola DLQ que
+		// declara el consumer compartido (setupDLQ usa la routing key como nombre).
+		cfg.DLXRoutingKey = "edugo.attempt.review_requested.dlq"
 	}
 	if !cfg.UseExponentialBackoff {
 		cfg.UseExponentialBackoff = true
@@ -309,6 +435,21 @@ func (c *Config) GetExchangesConfigWithDefaults() ExchangeConfig {
 	cfg := c.Messaging.RabbitMQ.Exchanges
 	if cfg.Materials == "" {
 		cfg.Materials = "edugo.materials"
+	}
+	if cfg.Assessments == "" {
+		cfg.Assessments = "edugo.assessments"
+	}
+	return cfg
+}
+
+// GetQueuesConfigWithDefaults retorna la configuración de colas con valores por defecto.
+func (c *Config) GetQueuesConfigWithDefaults() QueuesConfig {
+	cfg := c.Messaging.RabbitMQ.Queues
+	if cfg.MaterialUploaded == "" {
+		cfg.MaterialUploaded = "edugo.material.uploaded"
+	}
+	if cfg.AttemptReviewRequested == "" {
+		cfg.AttemptReviewRequested = "edugo.attempt.review_requested"
 	}
 	return cfg
 }

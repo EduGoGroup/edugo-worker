@@ -11,13 +11,16 @@ import (
 	sharedMetrics "github.com/EduGoGroup/edugo-shared/metrics"
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
 	"github.com/EduGoGroup/edugo-worker/internal/client"
+	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/health"
 	httpInfra "github.com/EduGoGroup/edugo-worker/internal/infrastructure/http"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
-	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
+	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	llmapi "github.com/EduGoGroup/edugo-worker/internal/llm/api"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/ollama"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -27,6 +30,9 @@ type Resources struct {
 	RabbitMQConn      *rabbit.Connection
 	RabbitMQChannel   *amqp.Channel
 	AuthClient        *client.AuthClient
+	SettingsClient    *m2m.SettingsClient
+	LearningClient    *m2m.LearningClient
+	LLMProvider       llm.LLMProvider
 	LifecycleManager  *lifecycle.Manager
 	ProcessorRegistry *processor.Registry
 	MetricsServer     *httpInfra.MetricsServer
@@ -46,12 +52,15 @@ type ResourceBuilder struct {
 	rabbitChannel    *amqp.Channel
 
 	// Servicios de infraestructura externa
-	storageClient storage.Client
-	pdfExtractor  pdf.Extractor
-	nlpClient     nlp.Client
+	pdfExtractor pdf.Extractor
+	nlpClient    nlp.Client
 
 	// Recursos de aplicación
 	authClient        *client.AuthClient
+	settingsClient    *m2m.SettingsClient
+	learningClient    *m2m.LearningClient
+	llmProvider       llm.LLMProvider
+	llmProviders      map[string]llm.LLMProvider
 	processorRegistry *processor.Registry
 	metricsServer     *httpInfra.MetricsServer
 	healthChecker     *health.Checker
@@ -179,7 +188,152 @@ func (b *ResourceBuilder) WithAuthClient() *ResourceBuilder {
 	return b
 }
 
-// WithInfrastructure configura los servicios de infraestructura externa (S3, PDF, NLP)
+// WithM2MClients configura los clientes máquina-a-máquina del worker (plan 039
+// F4, D-039.7): el provider de service JWT (HS256) + el cliente de lectura de
+// settings hacia academic (con caché TTL corta) + el stub de learning (lo llena
+// el plan 040). No hace llamadas de red: solo construye. Un Secret vacío no
+// impide el arranque (academic rechazará el token si se usa sin secret).
+func (b *ResourceBuilder) WithM2MClients() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+	if b.logger == nil {
+		b.err = fmt.Errorf("logger required before M2M clients")
+		return b
+	}
+
+	jwtCfg := b.config.GetServiceJWTConfigWithDefaults()
+	academicCfg := b.config.GetAPIAcademicConfigWithDefaults()
+	learningCfg := b.config.GetAPILearningConfigWithDefaults()
+
+	// Token provider hacia academic (audience/scope de settings).
+	academicToken, err := m2m.NewServiceTokenProvider(m2m.ServiceTokenConfig{
+		Secret:   jwtCfg.Secret,
+		Issuer:   jwtCfg.Issuer,
+		Audience: jwtCfg.Audience,
+		ClientID: jwtCfg.ClientID,
+		Scopes:   []string{"schools.settings.read"},
+		TTL:      jwtCfg.TTL,
+	})
+	if err != nil {
+		b.err = fmt.Errorf("failed to create academic service token provider: %w", err)
+		return b
+	}
+
+	// Token provider hacia learning: distinta audience (edugo-api-learning) y scope
+	// (attempts.review). El audience va en el token, así que necesita su propia
+	// instancia; comparte secret/issuer/clientID/TTL con el de academic.
+	learningToken, err := m2m.NewServiceTokenProvider(m2m.ServiceTokenConfig{
+		Secret:   jwtCfg.Secret,
+		Issuer:   jwtCfg.Issuer,
+		Audience: audienceLearning,
+		ClientID: jwtCfg.ClientID,
+		Scopes:   []string{scopeAttemptsReview},
+		TTL:      jwtCfg.TTL,
+	})
+	if err != nil {
+		b.err = fmt.Errorf("failed to create learning service token provider: %w", err)
+		return b
+	}
+
+	b.settingsClient = m2m.NewSettingsClient(m2m.SettingsClientConfig{
+		BaseURL:       academicCfg.BaseURL,
+		Timeout:       academicCfg.Timeout,
+		CacheTTL:      academicCfg.CacheTTL,
+		TokenProvider: academicToken,
+	})
+
+	b.learningClient = m2m.NewLearningClient(m2m.LearningClientConfig{
+		BaseURL:       learningCfg.BaseURL,
+		Timeout:       learningCfg.Timeout,
+		TokenProvider: learningToken,
+	})
+
+	b.logger.Info("✅ M2M clients initialized",
+		"academic_base_url", academicCfg.BaseURL,
+		"academic_audience", jwtCfg.Audience,
+		"learning_base_url", learningCfg.BaseURL,
+		"learning_audience", audienceLearning,
+		"secret_present", jwtCfg.Secret != "",
+	)
+	return b
+}
+
+// Contrato M2M del carril de revisión (plan 040 F2): el service JWT hacia learning
+// lleva esta audience y scope.
+const (
+	audienceLearning    = "edugo-api-learning"
+	scopeAttemptsReview = "attempts.review"
+)
+
+// WithLLMProvider construye el provider LLM según la política de plataforma
+// (plan 039 D-039.3/D-039.4). En 039 el worker no dispara generación/corrección
+// (eso es 040/041): se elige un provider por defecto (local Ollama) listo para
+// que los planes siguientes lo seleccionen por carril/escuela vía M2M. La config
+// se inyecta al constructor; el provider NUNCA lee env.
+func (b *ResourceBuilder) WithLLMProvider() *ResourceBuilder {
+	if b.err != nil {
+		return b
+	}
+	if b.logger == nil {
+		b.err = fmt.Errorf("logger required before LLM provider")
+		return b
+	}
+
+	llmCfg := b.config.GetLLMConfigWithDefaults()
+
+	// Provider local (Ollama). Es también el default histórico expuesto en
+	// Resources.LLMProvider.
+	localProvider := ollama.New(ollama.Config{
+		BaseURL: llmCfg.Local.BaseURL,
+		Model:   llmCfg.Local.Model,
+		Timeout: llmCfg.Local.Timeout,
+	})
+	b.llmProvider = localProvider
+
+	// Mapa de providers por mode del carril de revisión (plan 040 F2): el processor
+	// selecciona "local" u "api" según la política de la escuela. El provider por API
+	// se construye best-effort: si la config no permite construirlo (proveedor no
+	// soportado), se omite la clave "api" y el processor errará claro solo si una
+	// escuela pide mode=api sin provider disponible —sin romper el carril local—.
+	b.llmProviders = map[string]llm.LLMProvider{"local": localProvider}
+	if apiProvider, err := BuildAPIProvider(llmCfg.API); err != nil {
+		b.logger.Warn("provider LLM por API no disponible (mode=api fallará hasta corregir config)",
+			"error", err.Error(), "api_provider", llmCfg.API.Provider)
+	} else {
+		b.llmProviders["api"] = apiProvider
+	}
+
+	b.logger.Info("✅ LLM providers initialized (selección por mode de escuela: local|api)",
+		"local_provider", localProvider.Name(),
+		"local_base_url", llmCfg.Local.BaseURL,
+		"api_provider", llmCfg.API.Provider,
+		"api_available", b.llmProviders["api"] != nil,
+	)
+	return b
+}
+
+// buildAPIProvider construye el provider por API a demanda (plan 040/041 lo usa
+// cuando la política de una escuela pide modo "api"). Se expone para no atar el
+// import del paquete api solo al harness. Devuelve error si la config no permite
+// construirlo (proveedor no soportado, etc.).
+func BuildAPIProvider(cfg config.LLMAPIConfig) (llm.LLMProvider, error) {
+	return llmapi.New(llmapi.Config{
+		Provider:  cfg.Provider,
+		APIKey:    cfg.APIKey,
+		Model:     cfg.Model,
+		BaseURL:   cfg.BaseURL,
+		Timeout:   cfg.Timeout,
+		MaxTokens: cfg.MaxTokens,
+	})
+}
+
+// WithInfrastructure configura los servicios de infraestructura externa (PDF, NLP).
+//
+// El storage (S3/MinIO) se retiró del bootstrap (bug 0040): ningún processor lo
+// consume tras la dieta del plan 037 y su validación de bucket (HeadBucket) mataba
+// el arranque sin MinIO local. El worker es orquestador M2M (D-037/D-040.8); si un
+// carril futuro necesita acceso directo a storage, el plan 041 lo reintroduce.
 func (b *ResourceBuilder) WithInfrastructure() *ResourceBuilder {
 	if b.err != nil {
 		return b
@@ -194,14 +348,6 @@ func (b *ResourceBuilder) WithInfrastructure() *ResourceBuilder {
 
 	// Crear factory
 	factory := infrastructure.NewFactory(*b.config, b.logger)
-
-	// Crear cliente de almacenamiento (S3/MinIO)
-	storageClient, err := factory.CreateStorageClient(b.ctx)
-	if err != nil {
-		b.err = fmt.Errorf("failed to create storage client: %w", err)
-		return b
-	}
-	b.storageClient = storageClient
 
 	// Crear extractor PDF
 	pdfExtractor, err := factory.CreatePDFExtractor()
@@ -223,15 +369,12 @@ func (b *ResourceBuilder) WithInfrastructure() *ResourceBuilder {
 	return b
 }
 
-// WithProcessors crea el registry de processors.
+// WithProcessors crea el registry de processors y registra los del carril LLM.
 //
-// Plan 037 (D-037.11): el worker quedó como ESQUELETO sin processors. El único
-// carril que le quedaba (`material.uploaded`/`material.reprocess`) persistía su
-// salida en Mongo y no tenía consumidor (el worker nunca se desplegó); al retirar
-// Mongo del ecosistema, esos processors se eliminaron. El registry queda VACÍO a
-// propósito: los processors del carril LLM llegan en 037-F3, que definirá el store
-// y la orquestación nuevos. El consumer tolera un registry sin processors (los
-// mensajes que llegasen irían al DLQ por "no processor registered").
+// Plan 040 (F1): el registry deja de estar vacío. Se registra el primer processor
+// post-dieta —AttemptReviewProcessor (event_type attempt.review_requested)— que lee
+// la política de la escuela vía SettingsClient y corta-circuito si la revisión está
+// apagada. Requiere que WithM2MClients haya corrido antes (settingsClient listo).
 func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	if b.err != nil {
 		return b
@@ -241,10 +384,24 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		b.err = fmt.Errorf("logger required before processors")
 		return b
 	}
+	if b.settingsClient == nil {
+		b.err = fmt.Errorf("settings client required before processors (call WithM2MClients first)")
+		return b
+	}
+	if b.learningClient == nil {
+		b.err = fmt.Errorf("learning client required before processors (call WithM2MClients first)")
+		return b
+	}
+	if len(b.llmProviders) == 0 {
+		b.err = fmt.Errorf("LLM providers required before processors (call WithLLMProvider first)")
+		return b
+	}
 
 	b.processorRegistry = processor.NewRegistry(b.logger)
+	b.processorRegistry.Register(processor.NewAttemptReviewProcessor(
+		b.settingsClient, b.learningClient, b.llmProviders, b.logger))
 
-	b.logger.Info("✅ Processor registry initialized (skeleton, 0 processors — carril LLM en 037-F3)",
+	b.logger.Info("✅ Processor registry initialized (carril revisión LLM, plan 040)",
 		"count", b.processorRegistry.Count())
 	return b
 }
@@ -365,6 +522,9 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 		RabbitMQConn:      b.rabbitSharedConn,
 		RabbitMQChannel:   b.rabbitChannel,
 		AuthClient:        b.authClient,
+		SettingsClient:    b.settingsClient,
+		LearningClient:    b.learningClient,
+		LLMProvider:       b.llmProvider,
 		LifecycleManager:  b.lifecycleManager,
 		ProcessorRegistry: b.processorRegistry,
 		MetricsServer:     b.metricsServer,

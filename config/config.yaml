@@ -3,16 +3,20 @@
 messaging:
   rabbitmq:
     queues:
+      # Carril materiales (plan 041 lo revive como consumidor); hoy el worker no lo consume.
       material_uploaded: "edugo.material.uploaded"
+      # Carril revisión asistida (plan 040): cola que consume el worker hoy.
+      attempt_review_requested: "edugo.attempt.review_requested"
     exchanges:
       materials: "edugo.materials"
+      assessments: "edugo.assessments"
     prefetch_count: 5
     dlq:
       enabled: true
       max_retries: 3
       retry_delay: "5s"
       dlx_exchange: "edugo_dlx"
-      dlx_routing_key: "edugo.material.uploaded.dlq"
+      dlx_routing_key: "edugo.attempt.review_requested.dlq"
       use_exponential_backoff: true
 
 nlp:
@@ -54,6 +58,43 @@ api_identity:
   cache_enabled: true
   max_bulk_size: 50
 
+# Clientes M2M de dominio (plan 039 F4). El worker lee la política LLM por escuela
+# desde academic con un service JWT (scope schools.settings.read). El cliente de
+# learning es andamiaje (stub) que llena el plan 040.
+api_academic:
+  base_url: "http://api-academic:8060"
+  timeout: "5s"
+  cache_ttl: "60s" # TTL corto: config leída por M2M en runtime (design 039 §7)
+
+api_learning:
+  base_url: "http://api-learning:8065"
+  timeout: "5s"
+
+# Firma del service JWT M2M (HS256). secret = env SERVICE_JWT_SECRET (Secret
+# Manager en cloud), distinto del secret de usuarios. Issuer/Audience por
+# convención del ecosistema (academic espera iss=edugo-identity, aud=edugo-api-academic).
+service_jwt:
+  secret: "${SERVICE_JWT_SECRET}"
+  issuer: "edugo-identity"
+  audience: "edugo-api-academic"
+  client_id: "edugo-worker"
+  ttl: "15m"
+
+# Providers LLM (plan 039 D-039.3). Credenciales/URL/modelo son de EduGo, NO por
+# escuela; lo por-escuela es solo la política (se lee vía M2M). El worker NO
+# dispara generación/corrección todavía (eso es 040/041): esto deja la infra lista.
+llm:
+  local: # provider Ollama (modo "local")
+    base_url: "${LLM_LOCAL_BASE_URL}" # ej. http://localhost:11434
+    model: "${LLM_LOCAL_MODEL}" # ej. llama3.1, qwen2.5:7b
+    timeout: "120s"
+  api: # provider por API (modo "api": Claude/Gemini)
+    provider: "${LLM_API_PROVIDER}" # anthropic | gemini
+    api_key: "${LLM_API_KEY}" # Secret Manager en cloud
+    model: "${LLM_API_MODEL}"
+    timeout: "60s"
+    max_tokens: 4096
+
 # Health Checks
 health:
   timeouts:
@@ -62,11 +103,6 @@ health:
 # Circuit Breakers
 circuit_breakers:
   nlp:
-    max_failures: 5
-    timeout: "60s"
-    max_requests: 1
-    success_threshold: 2
-  storage:
     max_failures: 5
     timeout: "60s"
     max_requests: 1

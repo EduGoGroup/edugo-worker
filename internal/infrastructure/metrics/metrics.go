@@ -133,7 +133,7 @@ var (
 			Name: "worker_circuit_breaker_state",
 			Help: "Current state of circuit breakers (0=closed, 1=half-open, 2=open)",
 		},
-		[]string{"service"}, // nlp, storage
+		[]string{"service"}, // nlp
 	)
 
 	// CircuitBreakerTransitions cuenta las transiciones de estado
@@ -225,7 +225,6 @@ func RecordPDFExtraction(status string, durationSeconds float64, pageCount int) 
 //
 // Valores esperados para el parámetro service:
 // - "nlp": Cliente de procesamiento de lenguaje natural (OpenAI/Fallback)
-// - "storage": Cliente de almacenamiento (S3/MinIO)
 //
 // IMPORTANTE: No usar sufijos como "-test" en producción. Los sufijos solo
 // deben usarse en tests unitarios para aislar las métricas de prueba.
@@ -237,7 +236,6 @@ func SetCircuitBreakerState(service string, state int) {
 //
 // Valores esperados para el parámetro service:
 // - "nlp": Cliente de procesamiento de lenguaje natural (OpenAI/Fallback)
-// - "storage": Cliente de almacenamiento (S3/MinIO)
 //
 // IMPORTANTE: No usar sufijos como "-test" en producción. Los sufijos solo
 // deben usarse en tests unitarios para aislar las métricas de prueba.

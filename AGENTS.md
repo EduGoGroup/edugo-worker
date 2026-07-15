@@ -15,8 +15,9 @@
 > processors se eliminaron, junto con **Postgres** y **Mongo** (conexiones, config, health, métricas de BD).
 > Sigue vivo como cáscara: conecta a RabbitMQ (declara exchange/cola + consumer con DLQ), healthcheck,
 > métricas Prometheus, AuthClient (identity), rate limiter, circuit breakers, shutdown, y la infra
-> S3/PDF/NLP lista para reusar. Los processors del carril **LLM** llegan en **037-F3** (store y
-> orquestación nuevos).
+> PDF/NLP lista para reusar (el storage S3/MinIO se retiró — sin consumidores post-dieta 037; los
+> materiales viven en Cloudflare R2 y los sirve learning; ver bug 0040). Los processors del carril
+> **LLM** llegan en **037-F3** (store y orquestación nuevos).
 
 ## Arquitectura (clean / DDD por capas — distinta a las APIs)
 
@@ -35,7 +36,7 @@ internal/
     valueobject/             lógica y contratos de dominio
   infrastructure/
     messaging/   consumidor RabbitMQ
-    storage/     S3 · pdf/ extracción · nlp/ embeddings (listos para reusar en F3)
+    pdf/         extracción · nlp/ embeddings (listos para reusar en F3)
     http/ health/ metrics/ ratelimiter/ circuitbreaker/ shutdown/
 ```
 

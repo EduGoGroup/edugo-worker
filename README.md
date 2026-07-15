@@ -10,7 +10,7 @@ Lo que **sigue vivo** hoy es la cáscara operativa:
 
 - Conecta a **RabbitMQ**, declara el exchange/cola y arranca el consumer con soporte DLQ.
 - Expone **healthcheck** (liveness/readiness) y servidor de **métricas** Prometheus.
-- Mantiene **AuthClient** (identity), rate limiter, circuit breakers, graceful shutdown y el pipeline de infraestructura (S3/PDF/NLP) listo para reusar.
+- Mantiene **AuthClient** (identity), rate limiter, circuit breakers, graceful shutdown y el pipeline de infraestructura (PDF/NLP) listo para reusar.
 - El **`ProcessorRegistry` arranca vacío**: no hay processor de negocio. Cualquier mensaje que llegara iría al DLQ por "no processor registered".
 
 Ya **no** hay Postgres ni Mongo: sus conexiones, config, health checks y métricas de BD se retiraron. Los processors del carril LLM (store y orquestación nuevos) llegan en **037-F3**.
@@ -151,6 +151,55 @@ API_IDENTITY_CACHE_TTL=60s
 API_IDENTITY_CACHE_ENABLED=true
 ```
 
+### Variables del carril LLM y M2M (plan 039 F4)
+
+El worker estrena clientes M2M de dominio y el puerto `LLMProvider`. Estas variables
+son **opcionales en local** (el worker arranca sin ellas; el M2M queda inerte y el
+provider LLM apunta a Ollama por defecto), y **obligatorias en cloud** cuando se
+enciendan los planes 040/041.
+
+```bash
+# M2M — service JWT (HS256) que el worker presenta a las APIs de dominio.
+# El secret es DISTINTO del de usuarios; en cloud vive en Secret Manager (patrón
+# service-jwt-secret). Issuer/Audience por convención: academic espera
+# iss=edugo-identity, aud=edugo-api-academic. Scope requerido: schools.settings.read.
+SERVICE_JWT_SECRET=<secret-hs256>          # vacío en local => M2M no operativo (academic rechaza el token)
+
+# M2M — base URLs de las APIs de dominio que consulta el worker.
+API_ACADEMIC_BASE_URL=http://localhost:8060  # lectura de settings de escuela (política LLM)
+API_LEARNING_BASE_URL=http://localhost:8065  # stub, lo consume el plan 040
+
+# LLM local (modo "local" = Ollama). Credenciales/URL/modelo son de EduGo, NO por
+# escuela (D-039.3): lo por-escuela es solo la política (se lee vía M2M).
+LLM_LOCAL_BASE_URL=http://localhost:11434
+LLM_LOCAL_MODEL=llama3.1                    # o qwen2.5:7b, gemma2:9b, etc.
+
+# LLM por API (modo "api" = Claude/Gemini). La API key en cloud va en Secret Manager.
+LLM_API_PROVIDER=anthropic                  # anthropic (completo) | gemini (stub)
+LLM_API_KEY=<api-key>
+LLM_API_MODEL=claude-sonnet-5
+```
+
+> **Cloud (Secret Manager):** `SERVICE_JWT_SECRET` y `LLM_API_KEY` se montan como
+> secretos (nunca en la imagen ni en el repo), igual que el `service-jwt-secret`
+> del plan 020. Las base URLs apuntan a los servicios internos de Cloud Run.
+
+### Harness de providers LLM (D-039.8)
+
+`make llm-harness ARGS="..."` (o `go run ./cmd/llm-harness ...`) toma un material
+de muestra, corre `GenerateAssessment` con el provider elegido y **valida el JSON
+contra las reglas del contrato `assessment_import` v1** (plan 038), reportando
+pass/fail y tiempos. Sirve para elegir el modelo local **midiendo** (design 039 §6)
+y como regresión de prompts para el plan 041.
+
+```bash
+# Contra un Ollama local (no instala nada; si no hay Ollama, reporta el error):
+make llm-harness ARGS="-provider ollama -model qwen2.5:7b -questions 3"
+
+# Contra la API (Anthropic):
+make llm-harness ARGS="-provider api -api-provider anthropic -api-key $LLM_API_KEY -api-model claude-sonnet-5 -material ./material.txt"
+```
+
 ### Ejemplo config.yaml
 
 ```yaml
@@ -221,7 +270,7 @@ edugo-worker/
 │   │   └── valueobject/        # Value Objects
 │   └── infrastructure/         # Capa de infraestructura
 │       ├── messaging/          # RabbitMQ consumer
-│       ├── storage/ pdf/ nlp/  # S3 · extracción PDF · NLP (listos para F3)
+│       ├── pdf/ nlp/           # extracción PDF · NLP (listos para F3)
 │       ├── health/ metrics/    # Liveness/readiness · Prometheus
 │       └── ratelimiter/ circuitbreaker/ shutdown/
 ├── docs/                       # Documentación técnica (arquitectura, eventos, etc.)

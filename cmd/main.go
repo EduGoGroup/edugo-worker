@@ -33,6 +33,8 @@ func main() {
 		WithSharedMetrics().
 		WithRabbitMQ().
 		WithAuthClient().
+		WithM2MClients().
+		WithLLMProvider().
 		WithInfrastructure().
 		WithProcessors().
 		WithHealthChecks().
@@ -136,14 +138,15 @@ func main() {
 	}
 
 	// 7. Iniciar consumo con soporte DLQ
+	reviewQueue := cfg.GetQueuesConfigWithDefaults().AttemptReviewRequested
 	consumerCtx, cancelConsumer := context.WithCancel(ctx)
-	if err := consumer.ConsumeWithDLQ(consumerCtx, cfg.Messaging.RabbitMQ.Queues.MaterialUploaded, handler); err != nil {
+	if err := consumer.ConsumeWithDLQ(consumerCtx, reviewQueue, handler); err != nil {
 		resources.Logger.Error("Error iniciando consumer", "error", err.Error())
 		log.Fatal(err)
 	}
 
 	resources.Logger.Info("Worker escuchando eventos",
-		"queue", cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
+		"queue", reviewQueue,
 		"prefetch_count", prefetchCount,
 		"dlq_enabled", dlqCfg.Enabled,
 		"max_retries", dlqCfg.MaxRetries)
@@ -198,11 +201,26 @@ func main() {
 	resources.Logger.Info("✅ Worker cerrado correctamente")
 }
 
-// setupRabbitMQ configura exchange, queue y bindings
+// setupRabbitMQ configura exchanges, queue y bindings.
+//
+// Topología post-dieta (plan 040 §6.2):
+//   - Declara el exchange `edugo.assessments` (topic, durable) — carril de revisión.
+//   - Declara la cola `edugo.attempt.review_requested` (durable, prioridad + DLX) y la
+//     bindea a `edugo.assessments` con routing key `attempt.review_requested`. Es la cola
+//     que consume el worker hoy (processor AttemptReviewProcessor, registry ya no vacío).
+//   - Sigue declarando el exchange `edugo.materials` aunque NO consuma su cola: learning
+//     publica ahí y el publisher no declara exchanges; un Rabbit fresco rompería el publish
+//     de material si el worker dejara de declararlo. El plan 041 revive la cola/consumer.
+//   - DLX coherente: el arg `x-dead-letter-exchange` de la cola toma el nombre desde config
+//     (antes hardcodeaba `edugo_dlq`, que nadie declaraba, mientras el consumer declara
+//     `edugo_dlx`). Se añade `x-dead-letter-routing-key` para que el dead-letter nativo caiga
+//     en la misma cola DLQ que declara el consumer compartido.
 func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 	exchanges := cfg.GetExchangesConfigWithDefaults()
+	queues := cfg.GetQueuesConfigWithDefaults()
+	dlq := cfg.GetDLQConfigWithDefaults()
 
-	// Declarar exchange de materiales
+	// Declarar exchange de materiales (solo declaración; sin cola/consumer — plan 041).
 	if err := ch.ExchangeDeclare(
 		exchanges.Materials,
 		"topic",
@@ -215,34 +233,45 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 		return fmt.Errorf("error declarando materials exchange: %w", err)
 	}
 
-	// Declarar cola de materiales
+	// Declarar exchange de evaluaciones (carril de revisión).
+	if err := ch.ExchangeDeclare(
+		exchanges.Assessments,
+		"topic",
+		true,  // durable
+		false, // auto-deleted
+		false, // internal
+		false, // no-wait
+		nil,
+	); err != nil {
+		return fmt.Errorf("error declarando assessments exchange: %w", err)
+	}
+
+	// Declarar cola de revisión con prioridad + DLX coherente con config.
 	_, err := ch.QueueDeclare(
-		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
+		queues.AttemptReviewRequested,
 		true,  // durable
 		false, // delete when unused
 		false, // exclusive
 		false, // no-wait
 		amqp.Table{
-			"x-max-priority":         10,
-			"x-dead-letter-exchange": "edugo_dlq",
+			"x-max-priority":            10,
+			"x-dead-letter-exchange":    dlq.DLXExchange,
+			"x-dead-letter-routing-key": dlq.DLXRoutingKey,
 		},
 	)
 	if err != nil {
-		return fmt.Errorf("error declarando cola: %w", err)
+		return fmt.Errorf("error declarando cola de revisión: %w", err)
 	}
 
-	// Bind cola de materiales al routing key material.uploaded. El worker declara
-	// exchange + cola + binding y arranca el consumer como cáscara, pero el registry
-	// está VACÍO (plan 037 D-037.11): no hay processor de negocio hasta que el carril
-	// LLM (037-F3) registre los suyos. Ver README (topología Rabbit / estado esqueleto).
+	// Bind cola de revisión al routing key attempt.review_requested.
 	if err := ch.QueueBind(
-		cfg.Messaging.RabbitMQ.Queues.MaterialUploaded,
-		"material.uploaded",
-		exchanges.Materials,
+		queues.AttemptReviewRequested,
+		"attempt.review_requested",
+		exchanges.Assessments,
 		false,
 		nil,
 	); err != nil {
-		return fmt.Errorf("error binding cola: %w", err)
+		return fmt.Errorf("error binding cola de revisión: %w", err)
 	}
 
 	return nil
