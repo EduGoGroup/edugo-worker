@@ -18,7 +18,6 @@ import (
 	httpInfra "github.com/EduGoGroup/edugo-worker/internal/infrastructure/http"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
-	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/storage"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
 	llmapi "github.com/EduGoGroup/edugo-worker/internal/llm/api"
 	"github.com/EduGoGroup/edugo-worker/internal/llm/ollama"
@@ -53,9 +52,8 @@ type ResourceBuilder struct {
 	rabbitChannel    *amqp.Channel
 
 	// Servicios de infraestructura externa
-	storageClient storage.Client
-	pdfExtractor  pdf.Extractor
-	nlpClient     nlp.Client
+	pdfExtractor pdf.Extractor
+	nlpClient    nlp.Client
 
 	// Recursos de aplicación
 	authClient        *client.AuthClient
@@ -330,7 +328,12 @@ func BuildAPIProvider(cfg config.LLMAPIConfig) (llm.LLMProvider, error) {
 	})
 }
 
-// WithInfrastructure configura los servicios de infraestructura externa (S3, PDF, NLP)
+// WithInfrastructure configura los servicios de infraestructura externa (PDF, NLP).
+//
+// El storage (S3/MinIO) se retiró del bootstrap (bug 0040): ningún processor lo
+// consume tras la dieta del plan 037 y su validación de bucket (HeadBucket) mataba
+// el arranque sin MinIO local. El worker es orquestador M2M (D-037/D-040.8); si un
+// carril futuro necesita acceso directo a storage, el plan 041 lo reintroduce.
 func (b *ResourceBuilder) WithInfrastructure() *ResourceBuilder {
 	if b.err != nil {
 		return b
@@ -345,14 +348,6 @@ func (b *ResourceBuilder) WithInfrastructure() *ResourceBuilder {
 
 	// Crear factory
 	factory := infrastructure.NewFactory(*b.config, b.logger)
-
-	// Crear cliente de almacenamiento (S3/MinIO)
-	storageClient, err := factory.CreateStorageClient(b.ctx)
-	if err != nil {
-		b.err = fmt.Errorf("failed to create storage client: %w", err)
-		return b
-	}
-	b.storageClient = storageClient
 
 	// Crear extractor PDF
 	pdfExtractor, err := factory.CreatePDFExtractor()

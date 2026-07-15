@@ -107,11 +107,6 @@ circuit_breakers:
     timeout: "60s"
     max_requests: 1
     success_threshold: 2
-  storage:
-    max_failures: 5
-    timeout: "60s"
-    max_requests: 1
-    success_threshold: 2
 
 # Rate Limiter
 rate_limiter:

@@ -1,7 +1,6 @@
 package infrastructure
 
 import (
-	"context"
 	"io"
 	"log/slog"
 	"testing"
@@ -87,25 +86,4 @@ func TestFactory_CreateNLPClient(t *testing.T) {
 			}
 		})
 	}
-}
-
-func TestFactory_CreateStorageClient_UnsupportedProvider(t *testing.T) {
-	// Arrange
-	cfg := config.Config{
-		Storage: config.StorageConfig{
-			Provider: "azure", // Provider no soportado
-		},
-	}
-	logger := createTestLogger()
-	factory := NewFactory(cfg, logger)
-	ctx := context.Background()
-
-	// Act
-	client, err := factory.CreateStorageClient(ctx)
-
-	// Assert
-	require.Error(t, err, "debería haber error con provider no soportado")
-	assert.Nil(t, client, "el cliente debería ser nil cuando hay error")
-	assert.Contains(t, err.Error(), "proveedor de almacenamiento no soportado", "el error debería indicar que el proveedor no está soportado")
-	assert.Contains(t, err.Error(), "azure", "el error debería mencionar el proveedor específico")
 }

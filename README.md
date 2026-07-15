@@ -10,7 +10,7 @@ Lo que **sigue vivo** hoy es la cáscara operativa:
 
 - Conecta a **RabbitMQ**, declara el exchange/cola y arranca el consumer con soporte DLQ.
 - Expone **healthcheck** (liveness/readiness) y servidor de **métricas** Prometheus.
-- Mantiene **AuthClient** (identity), rate limiter, circuit breakers, graceful shutdown y el pipeline de infraestructura (S3/PDF/NLP) listo para reusar.
+- Mantiene **AuthClient** (identity), rate limiter, circuit breakers, graceful shutdown y el pipeline de infraestructura (PDF/NLP) listo para reusar.
 - El **`ProcessorRegistry` arranca vacío**: no hay processor de negocio. Cualquier mensaje que llegara iría al DLQ por "no processor registered".
 
 Ya **no** hay Postgres ni Mongo: sus conexiones, config, health checks y métricas de BD se retiraron. Los processors del carril LLM (store y orquestación nuevos) llegan en **037-F3**.
@@ -270,7 +270,7 @@ edugo-worker/
 │   │   └── valueobject/        # Value Objects
 │   └── infrastructure/         # Capa de infraestructura
 │       ├── messaging/          # RabbitMQ consumer
-│       ├── storage/ pdf/ nlp/  # S3 · extracción PDF · NLP (listos para F3)
+│       ├── pdf/ nlp/           # extracción PDF · NLP (listos para F3)
 │       ├── health/ metrics/    # Liveness/readiness · Prometheus
 │       └── ratelimiter/ circuitbreaker/ shutdown/
 ├── docs/                       # Documentación técnica (arquitectura, eventos, etc.)

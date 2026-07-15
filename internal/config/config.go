@@ -10,7 +10,6 @@ import (
 type Config struct {
 	Messaging       MessagingConfig       `mapstructure:"messaging"`
 	NLP             NLPConfig             `mapstructure:"nlp"`
-	Storage         StorageConfig         `mapstructure:"storage"`
 	PDF             PDFConfig             `mapstructure:"pdf"`
 	Logging         LoggingConfig         `mapstructure:"logging"`
 	APIIdentity     APIIdentityConfig     `mapstructure:"api_identity"`
@@ -117,22 +116,6 @@ type AnthropicConfig struct {
 	Timeout     time.Duration `mapstructure:"timeout"`
 }
 
-type StorageConfig struct {
-	Provider string        `mapstructure:"provider"`
-	S3       S3Config      `mapstructure:"s3"`
-	Timeout  time.Duration `mapstructure:"timeout"`
-}
-
-type S3Config struct {
-	Region          string        `mapstructure:"region"`
-	Bucket          string        `mapstructure:"bucket"`
-	Endpoint        string        `mapstructure:"endpoint"` // Para MinIO
-	AccessKeyID     string        `mapstructure:"access_key_id"`
-	SecretAccessKey string        `mapstructure:"secret_access_key"`
-	UsePathStyle    bool          `mapstructure:"use_path_style"` // Para MinIO
-	Timeout         time.Duration `mapstructure:"timeout"`
-}
-
 type PDFConfig struct {
 	MaxSizeMB    int           `mapstructure:"max_size_mb"`
 	AllowedTypes []string      `mapstructure:"allowed_types"`
@@ -160,8 +143,7 @@ type HealthTimeoutsConfig struct {
 }
 
 type CircuitBreakersConfig struct {
-	NLP     CircuitBreakerConfig `mapstructure:"nlp"`
-	Storage CircuitBreakerConfig `mapstructure:"storage"`
+	NLP CircuitBreakerConfig `mapstructure:"nlp"`
 }
 
 type CircuitBreakerConfig struct {
