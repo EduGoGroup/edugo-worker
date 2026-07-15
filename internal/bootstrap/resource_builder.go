@@ -62,6 +62,7 @@ type ResourceBuilder struct {
 	settingsClient    *m2m.SettingsClient
 	learningClient    *m2m.LearningClient
 	llmProvider       llm.LLMProvider
+	llmProviders      map[string]llm.LLMProvider
 	processorRegistry *processor.Registry
 	metricsServer     *httpInfra.MetricsServer
 	healthChecker     *health.Checker
@@ -207,7 +208,8 @@ func (b *ResourceBuilder) WithM2MClients() *ResourceBuilder {
 	academicCfg := b.config.GetAPIAcademicConfigWithDefaults()
 	learningCfg := b.config.GetAPILearningConfigWithDefaults()
 
-	tokenProvider, err := m2m.NewServiceTokenProvider(m2m.ServiceTokenConfig{
+	// Token provider hacia academic (audience/scope de settings).
+	academicToken, err := m2m.NewServiceTokenProvider(m2m.ServiceTokenConfig{
 		Secret:   jwtCfg.Secret,
 		Issuer:   jwtCfg.Issuer,
 		Audience: jwtCfg.Audience,
@@ -216,7 +218,23 @@ func (b *ResourceBuilder) WithM2MClients() *ResourceBuilder {
 		TTL:      jwtCfg.TTL,
 	})
 	if err != nil {
-		b.err = fmt.Errorf("failed to create service token provider: %w", err)
+		b.err = fmt.Errorf("failed to create academic service token provider: %w", err)
+		return b
+	}
+
+	// Token provider hacia learning: distinta audience (edugo-api-learning) y scope
+	// (attempts.review). El audience va en el token, así que necesita su propia
+	// instancia; comparte secret/issuer/clientID/TTL con el de academic.
+	learningToken, err := m2m.NewServiceTokenProvider(m2m.ServiceTokenConfig{
+		Secret:   jwtCfg.Secret,
+		Issuer:   jwtCfg.Issuer,
+		Audience: audienceLearning,
+		ClientID: jwtCfg.ClientID,
+		Scopes:   []string{scopeAttemptsReview},
+		TTL:      jwtCfg.TTL,
+	})
+	if err != nil {
+		b.err = fmt.Errorf("failed to create learning service token provider: %w", err)
 		return b
 	}
 
@@ -224,23 +242,31 @@ func (b *ResourceBuilder) WithM2MClients() *ResourceBuilder {
 		BaseURL:       academicCfg.BaseURL,
 		Timeout:       academicCfg.Timeout,
 		CacheTTL:      academicCfg.CacheTTL,
-		TokenProvider: tokenProvider,
+		TokenProvider: academicToken,
 	})
 
 	b.learningClient = m2m.NewLearningClient(m2m.LearningClientConfig{
 		BaseURL:       learningCfg.BaseURL,
 		Timeout:       learningCfg.Timeout,
-		TokenProvider: tokenProvider,
+		TokenProvider: learningToken,
 	})
 
 	b.logger.Info("✅ M2M clients initialized",
 		"academic_base_url", academicCfg.BaseURL,
+		"academic_audience", jwtCfg.Audience,
 		"learning_base_url", learningCfg.BaseURL,
-		"jwt_audience", jwtCfg.Audience,
+		"learning_audience", audienceLearning,
 		"secret_present", jwtCfg.Secret != "",
 	)
 	return b
 }
+
+// Contrato M2M del carril de revisión (plan 040 F2): el service JWT hacia learning
+// lleva esta audience y scope.
+const (
+	audienceLearning    = "edugo-api-learning"
+	scopeAttemptsReview = "attempts.review"
+)
 
 // WithLLMProvider construye el provider LLM según la política de plataforma
 // (plan 039 D-039.3/D-039.4). En 039 el worker no dispara generación/corrección
@@ -258,18 +284,33 @@ func (b *ResourceBuilder) WithLLMProvider() *ResourceBuilder {
 
 	llmCfg := b.config.GetLLMConfigWithDefaults()
 
-	// Default de infraestructura: provider local (Ollama). El plan 040/041 elige
-	// entre local/api por carril y escuela leyendo la política vía SettingsClient.
-	b.llmProvider = ollama.New(ollama.Config{
+	// Provider local (Ollama). Es también el default histórico expuesto en
+	// Resources.LLMProvider.
+	localProvider := ollama.New(ollama.Config{
 		BaseURL: llmCfg.Local.BaseURL,
 		Model:   llmCfg.Local.Model,
 		Timeout: llmCfg.Local.Timeout,
 	})
+	b.llmProvider = localProvider
 
-	b.logger.Info("✅ LLM provider initialized (default local; selección por carril/escuela en 040/041)",
-		"provider", b.llmProvider.Name(),
+	// Mapa de providers por mode del carril de revisión (plan 040 F2): el processor
+	// selecciona "local" u "api" según la política de la escuela. El provider por API
+	// se construye best-effort: si la config no permite construirlo (proveedor no
+	// soportado), se omite la clave "api" y el processor errará claro solo si una
+	// escuela pide mode=api sin provider disponible —sin romper el carril local—.
+	b.llmProviders = map[string]llm.LLMProvider{"local": localProvider}
+	if apiProvider, err := BuildAPIProvider(llmCfg.API); err != nil {
+		b.logger.Warn("provider LLM por API no disponible (mode=api fallará hasta corregir config)",
+			"error", err.Error(), "api_provider", llmCfg.API.Provider)
+	} else {
+		b.llmProviders["api"] = apiProvider
+	}
+
+	b.logger.Info("✅ LLM providers initialized (selección por mode de escuela: local|api)",
+		"local_provider", localProvider.Name(),
 		"local_base_url", llmCfg.Local.BaseURL,
 		"api_provider", llmCfg.API.Provider,
+		"api_available", b.llmProviders["api"] != nil,
 	)
 	return b
 }
@@ -352,9 +393,18 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		b.err = fmt.Errorf("settings client required before processors (call WithM2MClients first)")
 		return b
 	}
+	if b.learningClient == nil {
+		b.err = fmt.Errorf("learning client required before processors (call WithM2MClients first)")
+		return b
+	}
+	if len(b.llmProviders) == 0 {
+		b.err = fmt.Errorf("LLM providers required before processors (call WithLLMProvider first)")
+		return b
+	}
 
 	b.processorRegistry = processor.NewRegistry(b.logger)
-	b.processorRegistry.Register(processor.NewAttemptReviewProcessor(b.settingsClient, b.logger))
+	b.processorRegistry.Register(processor.NewAttemptReviewProcessor(
+		b.settingsClient, b.learningClient, b.llmProviders, b.logger))
 
 	b.logger.Info("✅ Processor registry initialized (carril revisión LLM, plan 040)",
 		"count", b.processorRegistry.Count())

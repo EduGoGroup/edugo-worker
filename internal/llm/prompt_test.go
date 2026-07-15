@@ -62,6 +62,38 @@ func TestExtractJSON(t *testing.T) {
 	}
 }
 
+func TestExtractJSON_UnwrapEnvelope(t *testing.T) {
+	// Envoltura espuria conocida de una sola clave → se desenvuelve al objeto interno.
+	got, err := ExtractJSON(`{"bytes":{"verdict":"correct","score":1.0,"feedback":"ok"}}`)
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if !strings.Contains(string(got), `"verdict"`) || strings.Contains(string(got), "bytes") {
+		t.Fatalf("no se desenvolvió el envoltorio: %s", got)
+	}
+}
+
+func TestExtractJSON_NoUnwrapLegitObject(t *testing.T) {
+	// Objeto legítimo de una clave NO envolvente → NO se toca.
+	in := `{"verdict":"correct"}`
+	got, err := ExtractJSON(in)
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if string(got) != in {
+		t.Fatalf("se alteró un objeto legítimo: got %q, want %q", got, in)
+	}
+	// Contrato con varias claves de tope → intacto aunque una fuera "data".
+	multi := `{"data":1,"format":"x"}`
+	got2, err := ExtractJSON(multi)
+	if err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+	if string(got2) != multi {
+		t.Fatalf("se alteró un objeto multi-clave: got %q", got2)
+	}
+}
+
 func TestExtractJSON_NoObject(t *testing.T) {
 	if _, err := ExtractJSON("sin json aquí"); err == nil {
 		t.Fatal("esperaba error")

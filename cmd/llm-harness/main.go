@@ -1,13 +1,22 @@
-// Command llm-harness es el entregable D-039.8: toma un material de muestra,
-// corre GenerateAssessment con el provider elegido por flag, valida el JSON
-// resultante contra las reglas replicadas del contrato 038 y reporta pass/fail y
-// tiempos. Sirve para (a) smoke de la infra LLM, (b) elegir el modelo local
-// midiendo (no en papel) y (c) regresión de prompts en 041.
+// Command llm-harness es el entregable D-039.8 (extendido en 040 T2c): con el
+// provider elegido por flag corre uno de dos modos y reporta pass/fail y tiempos:
+//
+//   - mode=generate (default, D-039.8): toma un material de muestra, corre
+//     GenerateAssessment y valida el JSON contra las reglas del contrato 038.
+//   - mode=review (040 T2c): corre ReviewAnswer contra una batería de casos de
+//     muestra en español (correcto, incorrecto, parcial, vacío/sin sentido,
+//     parafraseo, prompt-injection) y evalúa verdict/score esperados PASS/FAIL.
+//
+// Sirve para (a) smoke de la infra LLM, (b) elegir el modelo local midiendo (no
+// en papel) y (c) regresión de prompts. Mide el PROMPT, no el modelo: con modelos
+// chicos (qwen3:1.7b) algún caso puede quedar known-flaky; la corrección real usa
+// modelos mejores.
 //
 // Uso:
 //
-//	go run ./cmd/llm-harness -provider ollama -model llama3.1 -questions 3
-//	go run ./cmd/llm-harness -provider api -api-provider anthropic \
+//	go run ./cmd/llm-harness -mode generate -provider ollama -model qwen3:1.7b -questions 3
+//	go run ./cmd/llm-harness -mode review   -provider ollama -model qwen3:1.7b
+//	go run ./cmd/llm-harness -mode generate -provider api -api-provider anthropic \
 //	    -api-key "$LLM_API_KEY" -api-model claude-sonnet-5 -material ./material.txt
 //
 // NO instala nada ni asume que hay un Ollama corriendo: si el provider local no
@@ -37,6 +46,7 @@ oxígeno. En la fase oscura (ciclo de Calvin), el dióxido de carbono se fija pa
 glucosa. La ecuación general es: 6 CO2 + 6 H2O + luz -> C6H12O6 + 6 O2.`
 
 func main() {
+	mode := flag.String("mode", "generate", "modo del harness: generate (contrato 038) | review (corrección de respuestas, 040 T2c)")
 	provider := flag.String("provider", "local", "provider LLM: local (alias de ollama) | ollama | api. 'local'/'api' espejan el vocabulario de la política por escuela (D-039.2; 'off' no aplica al harness)")
 	materialPath := flag.String("material", "", "ruta a un archivo de texto con el material (vacío = muestra interna)")
 	title := flag.String("title", "Fotosíntesis — capítulo 3", "título del material")
@@ -77,15 +87,27 @@ func main() {
 		fatalf("construyendo provider: %v", err)
 	}
 
-	fmt.Printf("== llm-harness ==\n")
+	switch *mode {
+	case "generate":
+		material := llm.MaterialInput{Title: *title, Content: content, SubjectHint: *subjectHint}
+		params := llm.GenerationParams{NumQuestions: *numQuestions, Language: "es", Difficulty: *difficulty}
+		runGenerate(p, material, params, len(content), *timeout)
+	case "review":
+		runReview(p, *timeout)
+	default:
+		fatalf("modo desconocido %q (usa generate|review)", *mode)
+	}
+}
+
+// runGenerate corre el modo generación (D-039.8): genera una evaluación y la
+// valida contra el contrato 038. Sale con código != 0 si falla.
+func runGenerate(p llm.LLMProvider, material llm.MaterialInput, params llm.GenerationParams, contentBytes int, timeout time.Duration) {
+	fmt.Printf("== llm-harness (generate) ==\n")
 	fmt.Printf("provider : %s\n", p.Name())
-	fmt.Printf("preguntas: %d\n", *numQuestions)
-	fmt.Printf("material : %q (%d bytes)\n\n", *title, len(content))
+	fmt.Printf("preguntas: %d\n", params.NumQuestions)
+	fmt.Printf("material : %q (%d bytes)\n\n", material.Title, contentBytes)
 
-	material := llm.MaterialInput{Title: *title, Content: content, SubjectHint: *subjectHint}
-	params := llm.GenerationParams{NumQuestions: *numQuestions, Language: "es", Difficulty: *difficulty}
-
-	ctx, cancel := context.WithTimeout(context.Background(), *timeout)
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
 
 	start := time.Now()

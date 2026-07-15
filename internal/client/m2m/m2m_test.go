@@ -3,6 +3,7 @@ package m2m
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
 	"strings"
@@ -153,9 +154,111 @@ func TestSettingsClient_EmptySchoolID(t *testing.T) {
 	}
 }
 
-func TestLearningClient_Stub(t *testing.T) {
-	c := NewLearningClient(LearningClientConfig{BaseURL: "http://x", TokenProvider: staticToken{"t"}})
-	if err := c.Ping(context.Background()); err != nil {
-		t.Fatalf("Ping stub no debe fallar: %v", err)
+func TestLearningClient_GetPendingAnswers(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodGet {
+			t.Errorf("método esperado GET, hubo %s", r.Method)
+		}
+		if !strings.Contains(r.URL.Path, "/api/v1/internal/attempts/att-1/answers") {
+			t.Errorf("path inesperado: %s", r.URL.Path)
+		}
+		if r.URL.Query().Get("review") != "pending" {
+			t.Errorf("query review=pending ausente: %s", r.URL.RawQuery)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer t" {
+			t.Errorf("Authorization esperado 'Bearer t', hubo %q", got)
+		}
+		_, _ = w.Write([]byte(`{"attempt_id":"att-1","answers":[{"answer_id":"a1","points":10}]}`))
+	}))
+	defer srv.Close()
+
+	c := NewLearningClient(LearningClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"t"}})
+	resp, err := c.GetPendingAnswers(context.Background(), "att-1")
+	if err != nil {
+		t.Fatalf("GetPendingAnswers falló: %v", err)
+	}
+	if len(resp.Answers) != 1 || resp.Answers[0].AnswerID != "a1" || resp.Answers[0].Points != 10 {
+		t.Fatalf("respuesta inesperada: %+v", resp)
+	}
+}
+
+func TestLearningClient_PostAnswerReview(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("método esperado POST, hubo %s", r.Method)
+		}
+		if !strings.HasSuffix(r.URL.Path, "/answers/a1/review") {
+			t.Errorf("path inesperado: %s", r.URL.Path)
+		}
+		var body AnswerReviewRequest
+		if err := json.NewDecoder(r.Body).Decode(&body); err != nil {
+			t.Errorf("body no decodificable: %v", err)
+		}
+		if body.PointsAwarded != 7.5 || body.Feedback != "bien" {
+			t.Errorf("body inesperado: %+v", body)
+		}
+		_, _ = w.Write([]byte(`{"answer_id":"a1","review_status":"reviewed"}`))
+	}))
+	defer srv.Close()
+
+	c := NewLearningClient(LearningClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"t"}})
+	resp, err := c.PostAnswerReview(context.Background(), "att-1", "a1", AnswerReviewRequest{PointsAwarded: 7.5, Feedback: "bien"})
+	if err != nil {
+		t.Fatalf("PostAnswerReview falló: %v", err)
+	}
+	if resp.ReviewStatus != "reviewed" {
+		t.Fatalf("review_status inesperado: %q", resp.ReviewStatus)
+	}
+}
+
+func TestLearningClient_FinalizeAttempt(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/attempts/att-1/finalize") {
+			t.Errorf("path inesperado: %s", r.URL.Path)
+		}
+		_, _ = w.Write([]byte(`{"attempt_id":"att-1","status":"completed"}`))
+	}))
+	defer srv.Close()
+
+	c := NewLearningClient(LearningClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"t"}})
+	resp, err := c.FinalizeAttempt(context.Background(), "att-1")
+	if err != nil {
+		t.Fatalf("FinalizeAttempt falló: %v", err)
+	}
+	if resp.Status != "completed" {
+		t.Fatalf("status inesperado: %q", resp.Status)
+	}
+}
+
+func TestLearningClient_Permanent4xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+		_, _ = w.Write([]byte(`{"error":"not found"}`))
+	}))
+	defer srv.Close()
+
+	c := NewLearningClient(LearningClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"t"}})
+	_, err := c.GetPendingAnswers(context.Background(), "att-1")
+	if err == nil {
+		t.Fatal("esperaba error por 404")
+	}
+	if !errors.Is(err, ErrLearningPermanent) {
+		t.Fatalf("404 debe envolver ErrLearningPermanent, hubo: %v", err)
+	}
+}
+
+func TestLearningClient_Transient5xx(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusServiceUnavailable)
+	}))
+	defer srv.Close()
+
+	c := NewLearningClient(LearningClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"t"}})
+	_, err := c.FinalizeAttempt(context.Background(), "att-1")
+	if err == nil {
+		t.Fatal("esperaba error por 503")
+	}
+	if errors.Is(err, ErrLearningPermanent) {
+		t.Fatal("503 NO debe ser permanente (es transitorio)")
 	}
 }

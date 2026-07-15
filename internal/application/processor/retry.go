@@ -5,6 +5,7 @@ import (
 
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-shared/resilience/retry"
+	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	pdfErrors "github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 )
 
@@ -47,6 +48,12 @@ func classifyError(err error) ErrorType {
 
 	// Evento malformado: reintentar no lo arregla, debe ir al DLQ sin reprocesar.
 	if errors.Is(err, ErrMalformedEvent) {
+		return ErrorTypePermanent
+	}
+
+	// 4xx permanente de learning (request malformada, answer inexistente, scope
+	// insuficiente): reintentar no lo arregla.
+	if errors.Is(err, m2m.ErrLearningPermanent) {
 		return ErrorTypePermanent
 	}
 
