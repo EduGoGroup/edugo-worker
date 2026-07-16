@@ -34,10 +34,13 @@ bin/
 *~
 .DS_Store
 
-# Environment variables
+# Environment variables. Se ignora todo .env* (suelen llevar credenciales reales:
+# .env.staging tiene la URL de CloudAMQP con usuario/clave); solo los *.example
+# —plantillas sin secretos— se versionan.
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+!.env.*.example
 
 # Logs
 *.log
