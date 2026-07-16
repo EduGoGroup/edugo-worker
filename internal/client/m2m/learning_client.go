@@ -19,11 +19,20 @@ import (
 // transitorios y se devuelven sin envolver con este sentinel.
 var ErrLearningPermanent = errors.New("learning respondió error permanente (4xx)")
 
-// Rutas de los endpoints M2M en learning (plan 040 F2). Base = api_learning.base_url.
+// ErrClaimConflict marca un 409 de POST claim: el intento NO es reclamable por la
+// IA (ya lo completó el profesor, o hay un candado ajeno vigente <10min). No es un
+// fallo: el worker DEBE ABSTENERSE (log y saltar el intento, sin error fatal). El
+// clasificador de retry no lo ve porque el processor lo convierte en ACK. Ver
+// contrato del candado en el plan 040 F4.
+var ErrClaimConflict = errors.New("intento no reclamable por la IA (candado ajeno vigente o ya completado)")
+
+// Rutas de los endpoints M2M en learning (plan 040 F2/F4). Base = api_learning.base_url.
 const (
 	pendingAnswersPathFmt  = "/api/v1/internal/attempts/%s/answers?review=pending"
 	answerReviewPathFmt    = "/api/v1/internal/attempts/%s/answers/%s/review"
 	finalizeAttemptPathFmt = "/api/v1/internal/attempts/%s/finalize"
+	claimPathFmt           = "/api/v1/internal/attempts/%s/claim"
+	releaseClaimPathFmt    = "/api/v1/internal/attempts/%s/release-claim"
 )
 
 // PendingAnswer es una respuesta pendiente de revisión asistida (solo open_ended,
@@ -145,6 +154,93 @@ func (c *LearningClient) FinalizeAttempt(ctx context.Context, attemptID string) 
 		return FinalizeResponse{}, err
 	}
 	return out, nil
+}
+
+// Claim reclama el intento para la revisión asistida por IA (candado con
+// vencimiento del contrato del plan 040 F4). Semántica de estado:
+//   - 200/2xx → reclamado (el intento queda tomado por la IA); nil.
+//   - 409     → ErrClaimConflict: intento ya completado por el profe o candado
+//     ajeno vigente; el caller DEBE abstenerse (no es error fatal).
+//   - 404 y otros 4xx (salvo 408/429) → ErrLearningPermanent (permanente).
+//   - 5xx / red / timeout / 408 / 429 → error transitorio (reintentable).
+func (c *LearningClient) Claim(ctx context.Context, attemptID string) error {
+	if attemptID == "" {
+		return fmt.Errorf("attempt_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(claimPathFmt, attemptID)
+
+	status, body, err := c.postStatus(ctx, url)
+	if err != nil {
+		return err
+	}
+	switch {
+	case status >= 200 && status < 300:
+		return nil
+	case status == http.StatusConflict:
+		return fmt.Errorf("%w: %s", ErrClaimConflict, strings.TrimSpace(string(body)))
+	case status >= 400 && status < 500 &&
+		status != http.StatusRequestTimeout && status != http.StatusTooManyRequests:
+		return fmt.Errorf("%w: claim status %d: %s", ErrLearningPermanent, status, strings.TrimSpace(string(body)))
+	default:
+		return fmt.Errorf("claim returned status %d: %s", status, strings.TrimSpace(string(body)))
+	}
+}
+
+// ReleaseClaim libera el candado del intento (idempotente). El worker lo llama al
+// TERMINAR su lote de reviews cuando NO finaliza (flujo teacher / short_answer),
+// en lugar de finalizar. Un 404/409 aquí NO es fatal: el candado ya no existe o
+// expiró por TTL, así que se trata como no-op. El resto de 4xx (salvo 408/429) es
+// permanente; 5xx/red/timeout es transitorio.
+func (c *LearningClient) ReleaseClaim(ctx context.Context, attemptID string) error {
+	if attemptID == "" {
+		return fmt.Errorf("attempt_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(releaseClaimPathFmt, attemptID)
+
+	status, body, err := c.postStatus(ctx, url)
+	if err != nil {
+		return err
+	}
+	switch {
+	case status >= 200 && status < 300,
+		status == http.StatusNotFound, status == http.StatusConflict:
+		// Idempotente: candado liberado, ya inexistente o expirado → no-op.
+		return nil
+	case status >= 400 && status < 500 &&
+		status != http.StatusRequestTimeout && status != http.StatusTooManyRequests:
+		return fmt.Errorf("%w: release-claim status %d: %s", ErrLearningPermanent, status, strings.TrimSpace(string(body)))
+	default:
+		return fmt.Errorf("release-claim returned status %d: %s", status, strings.TrimSpace(string(body)))
+	}
+}
+
+// postStatus ejecuta un POST M2M autenticado SIN cuerpo y devuelve el código de
+// estado y el cuerpo crudo, sin clasificar. Lo usan Claim/ReleaseClaim, que tienen
+// semántica de estado propia (409 no es un error genérico). NUNCA loguea el token.
+func (c *LearningClient) postStatus(ctx context.Context, url string) (int, []byte, error) {
+	token, err := c.tokenProvider.Token()
+	if err != nil {
+		return 0, nil, fmt.Errorf("obtaining service token: %w", err)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
+	if err != nil {
+		return 0, nil, fmt.Errorf("creating learning request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Accept", "application/json")
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return 0, nil, fmt.Errorf("learning request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return resp.StatusCode, nil, fmt.Errorf("reading learning response: %w", err)
+	}
+	return resp.StatusCode, respBody, nil
 }
 
 // do ejecuta una request M2M autenticada y decodifica la respuesta JSON. Clasifica

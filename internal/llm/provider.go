@@ -36,10 +36,21 @@ type GenerationParams struct {
 	QuestionTypes []string
 }
 
+// Tipos de pregunta que ramifican el prompt de corrección (plan 040 F3/F4). El
+// resto de tipos (multiple_choice, etc.) los resuelve learning sin LLM.
+const (
+	QuestionTypeOpenEnded   = "open_ended"
+	QuestionTypeShortAnswer = "short_answer"
+)
+
 // ReviewRequest es la petición de corrección de una respuesta (plan 040).
 type ReviewRequest struct {
+	// QuestionType ramifica el prompt: "open_ended" (rúbrica, correct/partial/
+	// incorrect) vs "short_answer" (equivalencia semántica, correct/incorrect).
+	// Vacío se trata como open_ended (compatibilidad F3).
+	QuestionType   string
 	QuestionText   string
-	ExpectedAnswer string // respuesta esperada (si la hay)
+	ExpectedAnswer string // respuesta esperada (canónica en short_answer)
 	Rubric         string // rúbrica/criterios (si aplica, para open_ended)
 	StudentAnswer  string
 	Language       string // default "es"

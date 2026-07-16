@@ -55,6 +55,12 @@ type SchoolSettingsReader interface {
 // para orquestar la revisión. Se define como interfaz para mockearla en tests.
 // *m2m.LearningClient la satisface.
 type LearningReviewClient interface {
+	// Claim reclama el candado «en revisión por IA» del intento antes de procesar.
+	// Un m2m.ErrClaimConflict (409) obliga a abstenerse (no es fallo).
+	Claim(ctx context.Context, attemptID string) error
+	// ReleaseClaim libera el candado al terminar el lote cuando NO se finaliza
+	// (flujo teacher / short_answer). Idempotente.
+	ReleaseClaim(ctx context.Context, attemptID string) error
 	GetPendingAnswers(ctx context.Context, attemptID string) (m2m.PendingAnswersResponse, error)
 	PostAnswerReview(ctx context.Context, attemptID, answerID string, review m2m.AnswerReviewRequest) (m2m.AnswerReviewResponse, error)
 	FinalizeAttempt(ctx context.Context, attemptID string) (m2m.FinalizeResponse, error)
@@ -129,7 +135,7 @@ func (p *AttemptReviewProcessor) Process(ctx context.Context, payload []byte) er
 		return nil
 	}
 
-	return p.orchestrate(ctx, evt.Payload.AttemptID, mode, flow)
+	return p.orchestrate(ctx, evt.Payload.AttemptID, mode, flow, evt.Payload.Answers)
 }
 
 // orchestrate ejecuta la revisión asistida de un intento con la política resuelta.
@@ -143,7 +149,7 @@ func (p *AttemptReviewProcessor) Process(ctx context.Context, payload []byte) er
 // clasificador marca permanente; aun así el consumer con DLQ reintenta MaxRetries
 // antes de mandar el mensaje al DLQ (ConsumeWithDLQ no consulta el clasificador),
 // lo cual es inofensivo porque el reproceso es idempotente.
-func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mode, flow string) error {
+func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mode, flow string, answers []events.AttemptReviewAnswerRef) error {
 	provider, ok := p.providers[mode]
 	if !ok || provider == nil {
 		// mode desconocido o provider no disponible: es config errónea, no un fallo
@@ -151,25 +157,52 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 		return fmt.Errorf("%w: no hay LLMProvider para mode=%q", ErrMalformedEvent, mode)
 	}
 
+	// Candado «en revisión por IA»: reclamar ANTES de tocar nada, para que profe y
+	// worker no choquen (plan 040 F4). Un 409 (candado ajeno vigente o intento ya
+	// completado por el profe) NO es un fallo: el worker se abstiene y ACKea.
+	if err := p.learning.Claim(ctx, attemptID); err != nil {
+		if errors.Is(err, m2m.ErrClaimConflict) {
+			p.logger.Info("intento no reclamable (candado ajeno o ya completado), se abstiene (ACK)",
+				"attempt_id", attemptID, "motivo", err.Error())
+			return nil
+		}
+		return fmt.Errorf("reclamando candado de attempt %s: %w", attemptID, err)
+	}
+
+	// Regla de fondo (mixto open_ended + short_answer): la presencia de CUALQUIER
+	// short_answer fuerza el flujo teacher (no finalizar), porque la corrección de
+	// respuesta corta es una PROPUESTA que el profesor debe visar. Solo se finaliza
+	// un intento 100% open_ended con flow=direct. Ver reporte del paso 1.
+	hasShortAnswer := false
+	for _, a := range answers {
+		if a.QuestionType == llm.QuestionTypeShortAnswer {
+			hasShortAnswer = true
+			break
+		}
+	}
+	finalizeAtEnd := flow == reviewFlowDirect && !hasShortAnswer
+
 	pending, err := p.learning.GetPendingAnswers(ctx, attemptID)
 	if err != nil {
 		return fmt.Errorf("leyendo answers pendientes de attempt %s: %w", attemptID, err)
 	}
 
 	// Sin pendientes: nada que corregir. Puede ser un redelivery de un intento ya
-	// revisado. En flow=direct intentamos finalize (idempotente) para cerrar el
-	// intento si quedó a medias; en flow=teacher solo ACK.
+	// revisado. Si toca finalizar (direct + solo open_ended) intentamos finalize
+	// idempotente; si no, liberamos el candado para el profesor.
 	if len(pending.Answers) == 0 {
-		if flow == reviewFlowDirect {
+		if finalizeAtEnd {
 			return p.finalize(ctx, attemptID, "sin pendientes (posible redelivery)")
 		}
-		p.logger.Info("review sin pendientes, flow teacher: ACK",
-			"attempt_id", attemptID, "mode", mode, "flow", flow)
+		p.logger.Info("review sin pendientes, flujo teacher/short_answer: release-claim",
+			"attempt_id", attemptID, "mode", mode, "flow", flow, "has_short_answer", hasShortAnswer)
+		p.releaseClaim(ctx, attemptID, "sin pendientes (posible redelivery)")
 		return nil
 	}
 
 	for _, ans := range pending.Answers {
 		result, err := provider.ReviewAnswer(ctx, llm.ReviewRequest{
+			QuestionType:   ans.QuestionType,
 			QuestionText:   ans.QuestionText,
 			ExpectedAnswer: ans.ExpectedAnswer,
 			Rubric:         ans.Rubric,
@@ -193,6 +226,7 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 		p.logger.Info("answer revisada por LLM",
 			"attempt_id", attemptID,
 			"answer_id", ans.AnswerID,
+			"question_type", ans.QuestionType,
 			"verdict", string(result.Verdict),
 			"score", result.Score,
 			"points_awarded", points,
@@ -201,14 +235,28 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 	}
 
 	// Todas las pendientes quedaron revisadas.
-	if flow == reviewFlowDirect {
+	if finalizeAtEnd {
 		return p.finalize(ctx, attemptID, "todas las respuestas revisadas")
 	}
 
-	// flow=teacher: NO finalize. El intento queda ai_reviewed para el profesor (F3).
-	p.logger.Info("review completada, flow teacher: intento queda para el profesor (sin finalize)",
-		"attempt_id", attemptID, "answers", len(pending.Answers))
+	// Flujo teacher (o presencia de short_answer): NO finalize. Se libera el candado
+	// y el intento queda ai_reviewed para que el profesor lo vise (plan 040 F4).
+	p.logger.Info("review completada, flujo teacher/short_answer: release-claim (sin finalize)",
+		"attempt_id", attemptID, "answers", len(pending.Answers), "has_short_answer", hasShortAnswer)
+	p.releaseClaim(ctx, attemptID, "revisión completada, intento queda para el profesor")
 	return nil
+}
+
+// releaseClaim libera el candado de mejor esfuerzo: un fallo NO es fatal (el
+// candado vence por TTL del lado de learning), así que se loguea y se sigue. Las
+// reviews ya quedaron escritas; reprocesar por un release fallido sería en vano.
+func (p *AttemptReviewProcessor) releaseClaim(ctx context.Context, attemptID, reason string) {
+	if err := p.learning.ReleaseClaim(ctx, attemptID); err != nil {
+		p.logger.Warn("no se pudo liberar el candado (vencerá por TTL)",
+			"attempt_id", attemptID, "motivo", err.Error(), "contexto", reason)
+		return
+	}
+	p.logger.Info("candado liberado", "attempt_id", attemptID, "motivo", reason)
 }
 
 // finalize cierra la revisión del intento (flow direct). Es idempotente del lado

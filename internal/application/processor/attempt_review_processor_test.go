@@ -29,6 +29,11 @@ func (m *mockSettingsReader) GetSettings(_ context.Context, _ string) (m2m.Schoo
 
 // mockLearningClient implementa LearningReviewClient y registra las llamadas.
 type mockLearningClient struct {
+	claimErr    error
+	claimCalls  int
+	releaseErr  error
+	releaseCall int
+
 	pending    m2m.PendingAnswersResponse
 	pendingErr error
 
@@ -38,6 +43,16 @@ type mockLearningClient struct {
 
 	finalizeErr   error
 	finalizeCalls int
+}
+
+func (m *mockLearningClient) Claim(_ context.Context, _ string) error {
+	m.claimCalls++
+	return m.claimErr
+}
+
+func (m *mockLearningClient) ReleaseClaim(_ context.Context, _ string) error {
+	m.releaseCall++
+	return m.releaseErr
 }
 
 func (m *mockLearningClient) GetPendingAnswers(_ context.Context, _ string) (m2m.PendingAnswersResponse, error) {
@@ -130,6 +145,39 @@ func pendingAnswer(id string, points float64) m2m.PendingAnswer {
 		StudentAnswer:  "las plantas usan la luz del sol",
 		Points:         points,
 	}
+}
+
+func shortAnswerPending(id string, points float64) m2m.PendingAnswer {
+	return m2m.PendingAnswer{
+		AnswerID:       id,
+		QuestionType:   "short_answer",
+		QuestionText:   "¿Capital de Francia?",
+		ExpectedAnswer: "París",
+		StudentAnswer:  "paris",
+		Points:         points,
+	}
+}
+
+func shortAnswerEventPayload(t *testing.T) []byte {
+	t.Helper()
+	evt := events.AttemptReviewRequestedEvent{
+		EventID:      "evt-sa",
+		EventType:    EventTypeAttemptReviewRequested,
+		EventVersion: "1.0",
+		Payload: events.AttemptReviewRequestedPayload{
+			AttemptID:    "attempt-1",
+			AssessmentID: "assessment-1",
+			SchoolID:     "school-1",
+			Answers: []events.AttemptReviewAnswerRef{
+				{AnswerID: "a1", QuestionType: "short_answer"},
+			},
+		},
+	}
+	b, err := json.Marshal(evt)
+	if err != nil {
+		t.Fatalf("marshal evento short_answer: %v", err)
+	}
+	return b
 }
 
 func newProcessor(settings SchoolSettingsReader, learning LearningReviewClient, provider llm.LLMProvider) *AttemptReviewProcessor {
@@ -337,5 +385,137 @@ func TestAttemptReviewProcessor_ModeSinProvider_ErrorPermanente(t *testing.T) {
 	err := p.Process(context.Background(), validEventPayload(t))
 	if !errors.Is(err, ErrMalformedEvent) {
 		t.Fatalf("mode sin provider debe ser permanente (ErrMalformedEvent), hubo: %v", err)
+	}
+}
+
+// --- tests del candado (plan 040 F4: claim/release) ---
+
+func TestAttemptReviewProcessor_ReclamaAntesDeProcesar(t *testing.T) {
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{pendingAnswer("a1", 10)},
+	}}
+	provider := &mockLLMProvider{score: 1.0, verdict: llm.VerdictCorrect}
+	p := newProcessor(reader, learning, provider)
+
+	if err := p.Process(context.Background(), validEventPayload(t)); err != nil {
+		t.Fatalf("flujo con claim OK no debe fallar: %v", err)
+	}
+	if learning.claimCalls != 1 {
+		t.Fatalf("esperaba 1 claim antes de procesar, hubo %d", learning.claimCalls)
+	}
+	// open_ended + direct → finalize (no release).
+	if learning.finalizeCalls != 1 {
+		t.Fatalf("open_ended direct debe finalizar, hubo %d", learning.finalizeCalls)
+	}
+	if learning.releaseCall != 0 {
+		t.Fatalf("no debe liberar candado cuando finaliza, hubo %d", learning.releaseCall)
+	}
+}
+
+func TestAttemptReviewProcessor_ClaimConflict_SeAbstiene(t *testing.T) {
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+	learning := &mockLearningClient{
+		claimErr: fmt.Errorf("%w: candado ajeno vigente", m2m.ErrClaimConflict),
+		pending:  m2m.PendingAnswersResponse{Answers: []m2m.PendingAnswer{pendingAnswer("a1", 10)}},
+	}
+	provider := &mockLLMProvider{score: 1.0, verdict: llm.VerdictCorrect}
+	p := newProcessor(reader, learning, provider)
+
+	// 409 → abstenerse: ACK sin error, sin tocar el resto de learning ni el LLM.
+	if err := p.Process(context.Background(), validEventPayload(t)); err != nil {
+		t.Fatalf("claim 409 debe abstenerse (ACK), hubo error: %v", err)
+	}
+	if learning.claimCalls != 1 {
+		t.Fatalf("esperaba 1 intento de claim, hubo %d", learning.claimCalls)
+	}
+	if len(learning.reviewCalls) != 0 || learning.finalizeCalls != 0 || learning.releaseCall != 0 {
+		t.Fatalf("tras 409 no debe revisar/finalizar/liberar: reviews=%d finalize=%d release=%d",
+			len(learning.reviewCalls), learning.finalizeCalls, learning.releaseCall)
+	}
+	if provider.calls != 0 {
+		t.Fatalf("tras 409 no debe invocar al LLM, hubo %d", provider.calls)
+	}
+}
+
+func TestAttemptReviewProcessor_ClaimTransitorio_Error(t *testing.T) {
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+	learning := &mockLearningClient{claimErr: errors.New("learning 503")}
+	p := newProcessor(reader, learning, &mockLLMProvider{})
+
+	err := p.Process(context.Background(), validEventPayload(t))
+	if err == nil {
+		t.Fatal("esperaba error transitorio por fallo de claim (no 409)")
+	}
+	if classifyError(err) != ErrorTypeTransient {
+		t.Fatalf("fallo de claim (no 409) debe clasificar transitorio")
+	}
+}
+
+func TestAttemptReviewProcessor_ShortAnswer_ReleaseSinFinalize(t *testing.T) {
+	// short_answer con flow=direct: la presencia de short_answer FUERZA teacher →
+	// se revisa, se libera el candado y NO se finaliza (queda para el profesor).
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{shortAnswerPending("a1", 5)},
+	}}
+	provider := &mockLLMProvider{score: 1.0, verdict: llm.VerdictCorrect, feedback: "equivalente"}
+	p := newProcessor(reader, learning, provider)
+
+	if err := p.Process(context.Background(), shortAnswerEventPayload(t)); err != nil {
+		t.Fatalf("flujo short_answer no debe fallar: %v", err)
+	}
+	if learning.claimCalls != 1 {
+		t.Fatalf("esperaba 1 claim, hubo %d", learning.claimCalls)
+	}
+	if len(learning.reviewCalls) != 1 {
+		t.Fatalf("esperaba 1 review de short_answer, hubo %d", len(learning.reviewCalls))
+	}
+	if learning.finalizeCalls != 0 {
+		t.Fatalf("short_answer NO debe finalizar (aunque flow=direct), hubo %d", learning.finalizeCalls)
+	}
+	if learning.releaseCall != 1 {
+		t.Fatalf("short_answer debe liberar el candado 1 vez, hubo %d", learning.releaseCall)
+	}
+}
+
+func TestAttemptReviewProcessor_Mixto_NoFinalize(t *testing.T) {
+	// Intento MIXTO (open_ended + short_answer) con flow=direct: la presencia de
+	// short_answer impide finalizar; se revisan ambas y se libera el candado.
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{pendingAnswer("a1", 10), shortAnswerPending("a2", 5)},
+	}}
+	provider := &mockLLMProvider{score: 1.0, verdict: llm.VerdictCorrect}
+	p := newProcessor(reader, learning, provider)
+
+	evt := events.AttemptReviewRequestedEvent{
+		EventID: "evt-mix", EventType: EventTypeAttemptReviewRequested, EventVersion: "1.0",
+		Payload: events.AttemptReviewRequestedPayload{
+			AttemptID: "attempt-1", AssessmentID: "assessment-1", SchoolID: "school-1",
+			Answers: []events.AttemptReviewAnswerRef{
+				{AnswerID: "a1", QuestionType: "open_ended"},
+				{AnswerID: "a2", QuestionType: "short_answer"},
+			},
+		},
+	}
+	payload, _ := json.Marshal(evt)
+
+	if err := p.Process(context.Background(), payload); err != nil {
+		t.Fatalf("flujo mixto no debe fallar: %v", err)
+	}
+	if len(learning.reviewCalls) != 2 {
+		t.Fatalf("esperaba 2 reviews en mixto, hubo %d", len(learning.reviewCalls))
+	}
+	if learning.finalizeCalls != 0 {
+		t.Fatalf("mixto con short_answer NO debe finalizar, hubo %d", learning.finalizeCalls)
+	}
+	if learning.releaseCall != 1 {
+		t.Fatalf("mixto debe liberar el candado, hubo %d", learning.releaseCall)
 	}
 }

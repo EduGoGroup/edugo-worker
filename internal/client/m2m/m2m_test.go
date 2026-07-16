@@ -230,6 +230,87 @@ func TestLearningClient_FinalizeAttempt(t *testing.T) {
 	}
 }
 
+func TestLearningClient_Claim_OK(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("método esperado POST, hubo %s", r.Method)
+		}
+		if !strings.HasSuffix(r.URL.Path, "/attempts/att-1/claim") {
+			t.Errorf("path inesperado: %s", r.URL.Path)
+		}
+		if got := r.Header.Get("Authorization"); got != "Bearer t" {
+			t.Errorf("Authorization esperado 'Bearer t', hubo %q", got)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := NewLearningClient(LearningClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"t"}})
+	if err := c.Claim(context.Background(), "att-1"); err != nil {
+		t.Fatalf("Claim 200 no debe fallar: %v", err)
+	}
+}
+
+func TestLearningClient_Claim_Conflict(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusConflict)
+		_, _ = w.Write([]byte(`{"error":"candado ajeno vigente"}`))
+	}))
+	defer srv.Close()
+
+	c := NewLearningClient(LearningClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"t"}})
+	err := c.Claim(context.Background(), "att-1")
+	if !errors.Is(err, ErrClaimConflict) {
+		t.Fatalf("409 debe envolver ErrClaimConflict, hubo: %v", err)
+	}
+	// 409 NO es permanente: el processor lo convierte en abstención, no en DLQ.
+	if errors.Is(err, ErrLearningPermanent) {
+		t.Fatal("409 de claim no debe ser ErrLearningPermanent")
+	}
+}
+
+func TestLearningClient_Claim_NotFound_Permanente(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusNotFound)
+	}))
+	defer srv.Close()
+
+	c := NewLearningClient(LearningClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"t"}})
+	err := c.Claim(context.Background(), "att-1")
+	if !errors.Is(err, ErrLearningPermanent) {
+		t.Fatalf("404 de claim debe ser ErrLearningPermanent, hubo: %v", err)
+	}
+}
+
+func TestLearningClient_ReleaseClaim_OK(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !strings.HasSuffix(r.URL.Path, "/attempts/att-1/release-claim") {
+			t.Errorf("path inesperado: %s", r.URL.Path)
+		}
+		w.WriteHeader(http.StatusOK)
+	}))
+	defer srv.Close()
+
+	c := NewLearningClient(LearningClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"t"}})
+	if err := c.ReleaseClaim(context.Background(), "att-1"); err != nil {
+		t.Fatalf("ReleaseClaim 200 no debe fallar: %v", err)
+	}
+}
+
+func TestLearningClient_ReleaseClaim_Idempotente404(t *testing.T) {
+	// 404/409 en release = candado ya inexistente/expirado → no-op (sin error).
+	for _, code := range []int{http.StatusNotFound, http.StatusConflict} {
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			w.WriteHeader(code)
+		}))
+		c := NewLearningClient(LearningClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"t"}})
+		if err := c.ReleaseClaim(context.Background(), "att-1"); err != nil {
+			t.Fatalf("release %d debe ser no-op idempotente, hubo: %v", code, err)
+		}
+		srv.Close()
+	}
+}
+
 func TestLearningClient_Permanent4xx(t *testing.T) {
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
 		w.WriteHeader(http.StatusNotFound)

@@ -37,6 +37,41 @@ func TestBuildReviewPrompt_ContainsSections(t *testing.T) {
 	}
 }
 
+func TestBuildReviewPrompt_ShortAnswer_Equivalencia(t *testing.T) {
+	p := BuildReviewPrompt(ReviewRequest{
+		QuestionType:   QuestionTypeShortAnswer,
+		QuestionText:   "PREG",
+		ExpectedAnswer: "ESP",
+		StudentAnswer:  "ALU",
+	})
+	// Debe ser el prompt de equivalencia (segunda opinión, binario correct|incorrect).
+	for _, want := range []string{"EQUIVALENTE", "SEGUNDA OPINIÓN", "correct|incorrect", "PREG", "ESP", "ALU"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("el prompt short_answer no contiene %q", want)
+		}
+	}
+	// NO debe ofrecer "partial" (solo hay dos veredictos en respuestas cortas).
+	if strings.Contains(p, "correct|partial|incorrect") {
+		t.Errorf("el prompt short_answer no debe ofrecer el veredicto partial")
+	}
+	// Mantiene el endurecimiento anti-injection.
+	for _, want := range []string{"SEGURIDAD", "NUNCA instrucciones", "<<<"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("el prompt short_answer perdió el endurecimiento anti-injection: falta %q", want)
+		}
+	}
+}
+
+func TestBuildReviewPrompt_OpenEnded_PorDefecto(t *testing.T) {
+	// QuestionType vacío o open_ended → prompt con rúbrica y verdict de 3 valores.
+	for _, qt := range []string{"", QuestionTypeOpenEnded} {
+		p := BuildReviewPrompt(ReviewRequest{QuestionType: qt, QuestionText: "Q", StudentAnswer: "A"})
+		if !strings.Contains(p, "correct|partial|incorrect") {
+			t.Errorf("qt=%q debe usar el prompt open_ended (3 veredictos)", qt)
+		}
+	}
+}
+
 func TestExtractJSON(t *testing.T) {
 	cases := []struct {
 		name string
