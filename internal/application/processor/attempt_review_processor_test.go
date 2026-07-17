@@ -92,14 +92,22 @@ type mockLLMProvider struct {
 	// pareo binario (carril triturado short_answer, F3c).
 	pairVerdict llm.Verdict // veredicto que devuelve JudgePairEquivalence
 	pairCalls   int
+
+	// comprobación por criterio (carril open_ended, F4b). criterionMet indexa por
+	// texto de criterio el veredicto; ausente ⇒ incorrect.
+	criterionMet   map[string]bool
+	criterionCalls int
+	// lastReviewReq captura la última ReviewRequest (para verificar el enriquecimiento F4a).
+	lastReviewReq llm.ReviewRequest
 }
 
 func (m *mockLLMProvider) GenerateAssessment(_ context.Context, _ llm.MaterialInput, _ llm.GenerationParams) (json.RawMessage, error) {
 	return nil, errors.New("no usado en estos tests")
 }
 
-func (m *mockLLMProvider) ReviewAnswer(_ context.Context, _ llm.ReviewRequest) (llm.ReviewResult, error) {
+func (m *mockLLMProvider) ReviewAnswer(_ context.Context, req llm.ReviewRequest) (llm.ReviewResult, error) {
 	m.calls++
+	m.lastReviewReq = req
 	if m.failOnCall != 0 && m.calls == m.failOnCall {
 		return llm.ReviewResult{}, m.err
 	}
@@ -121,6 +129,19 @@ func (m *mockLLMProvider) JudgePairEquivalence(_ context.Context, _ llm.PairEqui
 		score = 1.0
 	}
 	return llm.ReviewResult{Verdict: v, Score: score, Feedback: "par: " + string(v)}, nil
+}
+
+func (m *mockLLMProvider) CheckCriterion(_ context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
+	m.criterionCalls++
+	v := llm.VerdictIncorrect
+	if m.criterionMet[req.Criterion] {
+		v = llm.VerdictCorrect
+	}
+	score := 0.0
+	if v == llm.VerdictCorrect {
+		score = 1.0
+	}
+	return llm.ReviewResult{Verdict: v, Score: score, Feedback: "criterio: " + string(v)}, nil
 }
 
 func (m *mockLLMProvider) Name() string { return "mock" }
@@ -694,5 +715,127 @@ func TestAttemptReviewProcessor_ShortAnswer_SinPrep_FlujoGlobal(t *testing.T) {
 	}
 	if provider.pairCalls != 0 {
 		t.Fatalf("sin prep no hay pares, hubo %d", provider.pairCalls)
+	}
+}
+
+// criteriaPrepRaw es un prep válido open_ended con 3 criterios (F4b).
+const criteriaPrepRaw = `{"version":1,"question_type":"open_ended",` +
+	`"question_intent":"medir si explica la fotosíntesis",` +
+	`"main_ideas":["convierte luz en energía"],` +
+	`"criteria":["menciona los cloroplastos","menciona la luz","menciona el oxígeno"]}`
+
+// enrichPrepRaw es un prep válido open_ended SIN criterios (solo enriquecimiento F4a).
+const enrichPrepRaw = `{"version":1,"question_type":"open_ended",` +
+	`"question_intent":"medir si identifica el nivel de agua",` +
+	`"main_ideas":["el vaso tiene la mitad de agua"],` +
+	`"valid_variants":["el vaso está medio lleno","el vaso está medio vacío"]}`
+
+func openEndedPending(id string, points float64, prep string) m2m.PendingAnswer {
+	return m2m.PendingAnswer{
+		AnswerID:       id,
+		QuestionType:   "open_ended",
+		QuestionText:   "Explica la fotosíntesis.",
+		ExpectedAnswer: "las plantas convierten luz en energía",
+		StudentAnswer:  "las plantas usan la luz para producir energía y sueltan oxígeno",
+		Points:         points,
+		LLMPrep:        json.RawMessage(prep),
+	}
+}
+
+func openEndedEventPayload(t *testing.T) []byte {
+	t.Helper()
+	evt := events.AttemptReviewRequestedEvent{
+		EventID: "evt-oe", EventType: EventTypeAttemptReviewRequested, EventVersion: "1.0",
+		Payload: events.AttemptReviewRequestedPayload{
+			AttemptID: "attempt-1", AssessmentID: "assessment-1", SchoolID: "school-1",
+			Answers: []events.AttemptReviewAnswerRef{{AnswerID: "a1", QuestionType: "open_ended"}},
+		},
+	}
+	b, err := json.Marshal(evt)
+	if err != nil {
+		t.Fatalf("marshal evento open_ended: %v", err)
+	}
+	return b
+}
+
+func TestAttemptReviewProcessor_OpenEnded_Criterios_Partial(t *testing.T) {
+	// Prep con 3 criterios, el alumno cumple 2 → una llamada por criterio (3), NO se
+	// usa ReviewAnswer, y la review posteada es partial con puntaje proporcional.
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowTeacher)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{openEndedPending("a1", 9, criteriaPrepRaw)},
+	}}
+	provider := &mockLLMProvider{criterionMet: map[string]bool{
+		"menciona la luz":     true,
+		"menciona el oxígeno": true,
+	}}
+	p := newProcessor(reader, learning, provider)
+
+	if err := p.Process(context.Background(), openEndedEventPayload(t)); err != nil {
+		t.Fatalf("carril por criterios no debe fallar: %v", err)
+	}
+	if provider.criterionCalls != 3 {
+		t.Fatalf("esperaba 3 llamadas de criterio, hubo %d", provider.criterionCalls)
+	}
+	if provider.calls != 0 {
+		t.Fatalf("el carril por criterios NO debe llamar ReviewAnswer, hubo %d", provider.calls)
+	}
+	if len(learning.reviewCalls) != 1 {
+		t.Fatalf("esperaba 1 review, hubo %d", len(learning.reviewCalls))
+	}
+	// 2/3 → score 0.3+0.4*(2/3)=0.5667 → puntos 9*0.5667=5.10 (redondeo 2 dec).
+	got := learning.reviewCalls[0].PointsAwarded
+	if got < 5.09 || got > 5.11 {
+		t.Fatalf("esperaba ~5.10 puntos (partial 2/3 de 9), hubo %.2f", got)
+	}
+}
+
+func TestAttemptReviewProcessor_OpenEnded_SinCriterios_EnriquecePrompt(t *testing.T) {
+	// Prep open_ended sin criterios: se usa ReviewAnswer (flujo global) PERO con el
+	// prompt enriquecido (req.Prep != nil con intención/ideas/variantes).
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowTeacher)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{openEndedPending("a1", 10, enrichPrepRaw)},
+	}}
+	provider := &mockLLMProvider{score: 1.0, verdict: llm.VerdictCorrect}
+	p := newProcessor(reader, learning, provider)
+
+	if err := p.Process(context.Background(), openEndedEventPayload(t)); err != nil {
+		t.Fatalf("flujo global enriquecido no debe fallar: %v", err)
+	}
+	if provider.calls != 1 {
+		t.Fatalf("esperaba 1 ReviewAnswer, hubo %d", provider.calls)
+	}
+	if provider.criterionCalls != 0 {
+		t.Fatalf("sin criterios no hay llamadas de criterio, hubo %d", provider.criterionCalls)
+	}
+	if provider.lastReviewReq.Prep == nil {
+		t.Fatal("el prompt de open_ended debe recibir el prep (req.Prep != nil)")
+	}
+	if len(provider.lastReviewReq.Prep.ValidVariants) != 2 {
+		t.Fatalf("esperaba 2 variantes válidas en el prep, hubo %d", len(provider.lastReviewReq.Prep.ValidVariants))
+	}
+}
+
+func TestAttemptReviewProcessor_OpenEnded_SinPrep_FlujoGlobal(t *testing.T) {
+	// Sin prep: flujo global intacto, req.Prep nil (fallback F4a).
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowTeacher)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{pendingAnswer("a1", 10)},
+	}}
+	provider := &mockLLMProvider{score: 0.9, verdict: llm.VerdictCorrect}
+	p := newProcessor(reader, learning, provider)
+
+	if err := p.Process(context.Background(), validEventPayload(t)); err != nil {
+		t.Fatalf("flujo global sin prep no debe fallar: %v", err)
+	}
+	if provider.calls != 1 || provider.criterionCalls != 0 {
+		t.Fatalf("esperaba 1 ReviewAnswer y 0 criterios, hubo calls=%d crit=%d", provider.calls, provider.criterionCalls)
+	}
+	if provider.lastReviewReq.Prep != nil {
+		t.Fatal("sin prep, req.Prep debe ser nil")
 	}
 }

@@ -97,7 +97,7 @@ func main() {
 	case "prep":
 		runPrep(p, *timeout)
 	case "review-prep":
-		runShortAnswerPrep(p, *timeout)
+		runReviewPrep(p, *timeout)
 	default:
 		fatalf("modo desconocido %q (usa generate|review|prep|review-prep)", *mode)
 	}

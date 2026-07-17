@@ -43,6 +43,9 @@ func (m *mockProvider) JudgePairEquivalence(_ context.Context, req llm.PairEquiv
 	}
 	return llm.ReviewResult{Verdict: v, Score: score}, nil
 }
+func (m *mockProvider) CheckCriterion(_ context.Context, _ llm.CriterionCheckRequest) (llm.ReviewResult, error) {
+	return llm.ReviewResult{}, nil
+}
 func (m *mockProvider) Name() string { return "mock" }
 
 func TestSplit(t *testing.T) {

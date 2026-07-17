@@ -132,6 +132,25 @@ func (p *Provider) JudgePairEquivalence(ctx context.Context, req llm.PairEquival
 	return result, nil
 }
 
+// CheckCriterion pide el cumplimiento binario de un criterio (plan 042 F4b). Mismo
+// camino que ReviewAnswer: el resultado es un ReviewResult (verdict/score/feedback).
+func (p *Provider) CheckCriterion(ctx context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
+	prompt := llm.BuildCriterionCheckPrompt(req)
+	out, err := p.generate(ctx, prompt)
+	if err != nil {
+		return llm.ReviewResult{}, err
+	}
+	rawJSON, err := llm.ExtractJSON(out)
+	if err != nil {
+		return llm.ReviewResult{}, err
+	}
+	var result llm.ReviewResult
+	if err := json.Unmarshal(rawJSON, &result); err != nil {
+		return llm.ReviewResult{}, fmt.Errorf("respuesta de criterio no parseable: %w", err)
+	}
+	return result, nil
+}
+
 // generate ejecuta POST /api/generate y devuelve el texto crudo del modelo.
 func (p *Provider) generate(ctx context.Context, prompt string) (string, error) {
 	reqBody := generateRequest{

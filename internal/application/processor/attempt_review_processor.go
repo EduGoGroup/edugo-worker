@@ -12,6 +12,7 @@ import (
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/openended"
 	"github.com/EduGoGroup/edugo-worker/internal/questionprep"
 	"github.com/EduGoGroup/edugo-worker/internal/shortanswer"
 )
@@ -300,6 +301,29 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 		// term/number/date/free: mejora barata del prompt global (D-042.10 §short_answer,
 		// punto 5) sin cambiar el contrato del POST review.
 		req.ExpectedAnswer = enrichExpectedWithPrep(ans.ExpectedAnswer, prep)
+	}
+
+	if ans.QuestionType == questionprep.QuestionTypeOpenEnded && prep != nil {
+		// F4b: con criterios (≥1), el juicio global se reemplaza por una llamada binaria
+		// por criterio + agregación determinista en Go.
+		if len(prep.Criteria) > 0 {
+			p.logger.Info("open_ended con prep criteria: carril por criterios (una llamada por criterio)",
+				"answer_id", ans.AnswerID, "criteria", len(prep.Criteria))
+			return openended.Grade(ctx, provider, openended.GradeInput{
+				QuestionText:   ans.QuestionText,
+				ExpectedAnswer: ans.ExpectedAnswer,
+				StudentAnswer:  ans.StudentAnswer,
+				Criteria:       prep.Criteria,
+				Language:       reviewLanguage,
+			})
+		}
+		// F4a: sin criterios, se enriquece el prompt global con intención/ideas/variantes.
+		req.Prep = &llm.ReviewPrep{
+			QuestionIntent: prep.QuestionIntent,
+			MainIdeas:      prep.MainIdeas,
+			SecondaryIdeas: prep.SecondaryIdeas,
+			ValidVariants:  prep.ValidVariants,
+		}
 	}
 
 	return provider.ReviewAnswer(ctx, req)

@@ -11,16 +11,23 @@ import (
 )
 
 // countingProvider decora un provider para contar las llamadas de par (equivalencia
-// binaria). El conteo es comportamiento DETERMINISTA del worker (no depende del
-// modelo), así que el harness lo verifica exacto aunque el veredicto sea flaky.
+// binaria) y de criterio. El conteo es comportamiento DETERMINISTA del worker (no
+// depende del modelo), así que el harness lo verifica exacto aunque el veredicto sea
+// flaky.
 type countingProvider struct {
 	llm.LLMProvider
-	pairCalls int
+	pairCalls      int
+	criterionCalls int
 }
 
 func (c *countingProvider) JudgePairEquivalence(ctx context.Context, req llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
 	c.pairCalls++
 	return c.LLMProvider.JudgePairEquivalence(ctx, req)
+}
+
+func (c *countingProvider) CheckCriterion(ctx context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
+	c.criterionCalls++
+	return c.LLMProvider.CheckCriterion(ctx, req)
 }
 
 // saPrepCase es un caso del modo review-prep: una entrada del carril triturado más la
@@ -73,12 +80,24 @@ var saPrepCases = []saPrepCase{
 	},
 }
 
+// runReviewPrep corre las dos baterías del carril de corrección con prep: el
+// triturado de short_answer (F3d) y el de open_ended (F4c). Sale con código != 0 si
+// alguna reporta un fallo duro.
+func runReviewPrep(base llm.LLMProvider, timeout time.Duration) {
+	hardSA := runShortAnswerPrep(base, timeout)
+	fmt.Printf("\n")
+	hardOE := runOpenEndedPrep(base, timeout)
+	if hardSA || hardOE {
+		os.Exit(1)
+	}
+}
+
 // runShortAnswerPrep corre la batería del carril triturado (F3d) contra el provider
 // real. Verifica DOS cosas por caso: el número exacto de llamadas de par (duro,
 // determinista) y el veredicto recompuesto (flaky donde depende del rescate del
-// modelo). Sale con código != 0 si algún caso NO-flaky falla en cualquiera de las dos.
-func runShortAnswerPrep(base llm.LLMProvider, timeout time.Duration) {
-	fmt.Printf("== llm-harness (review-prep, carril triturado short_answer F3c/F3d) ==\n")
+// modelo). Devuelve true si algún caso NO-flaky falló en cualquiera de las dos.
+func runShortAnswerPrep(base llm.LLMProvider, timeout time.Duration) bool {
+	fmt.Printf("== llm-harness (review-prep · carril triturado short_answer F3c/F3d) ==\n")
 	fmt.Printf("provider : %s\n", base.Name())
 	fmt.Printf("casos    : %d\n\n", len(saPrepCases))
 
@@ -147,7 +166,5 @@ func runShortAnswerPrep(base llm.LLMProvider, timeout time.Duration) {
 	}
 
 	fmt.Printf("\nRESULTADO : %d/%d casos no-flaky en PASS (el conteo de pares es duro en todos)\n", pass, effectiveTotal)
-	if hardFail {
-		os.Exit(1)
-	}
+	return hardFail
 }
