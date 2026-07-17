@@ -17,6 +17,7 @@ require (
 	github.com/EduGoGroup/edugo-shared/resilience/ratelimiter v0.1.0
 	github.com/EduGoGroup/edugo-shared/resilience/retry v0.1.0
 	github.com/EduGoGroup/edugo-shared/testing v0.1.0
+	github.com/EduGoGroup/edugo-shared/textmatch v0.900.0
 	github.com/pdfcpu/pdfcpu v0.11.1
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2

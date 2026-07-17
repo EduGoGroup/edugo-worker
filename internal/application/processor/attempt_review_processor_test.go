@@ -656,11 +656,14 @@ func TestAttemptReviewProcessor_ShortAnswer_PrepList_Determinista(t *testing.T) 
 }
 
 func TestAttemptReviewProcessor_ShortAnswer_PrepList_ParRescata(t *testing.T) {
-	// Prep list + typo (benezuela): un ítem residual → una llamada de par que rescata.
+	// Prep list + un ítem representado por un token LEJANO que el fuzzy no cubre
+	// ("caracas"↔"venezuela", metonimia) → un ítem residual que escala a UNA llamada de
+	// par que lo rescata semánticamente. (Un typo cercano como "benezuela" ya lo
+	// resolvería el fuzzy sin LLM; ver el unit test TestGrade_TypoRescatadoPorFuzzy.)
 	reader := &mockSettingsReader{settings: settingsWith(
 		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
 	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
-		Answers: []m2m.PendingAnswer{shortAnswerListPending("a1", "ecuador, benezuela y colombia")},
+		Answers: []m2m.PendingAnswer{shortAnswerListPending("a1", "ecuador, caracas y colombia")},
 	}}
 	provider := &mockLLMProvider{pairVerdict: llm.VerdictCorrect}
 	p := newProcessor(reader, learning, provider)

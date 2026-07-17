@@ -3,19 +3,19 @@ package shortanswer
 import (
 	"context"
 	"encoding/json"
-	"reflect"
 	"testing"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
 )
 
-// mockProvider implementa llm.LLMProvider; solo JudgePairEquivalence hace algo. Las
-// llamadas de par se resuelven consultando pairVerdicts por el par (Expected|Candidate)
-// normalizado; ausente ⇒ incorrect. Cuenta las llamadas para verificar el conteo.
+// mockProvider implementa llm.LLMProvider; solo JudgePairEquivalence hace algo. Cuenta
+// las llamadas de par (para verificar el modelo de costo del carril) y responde según
+// la config: pairErr fuerza un error; alwaysCorrect devuelve siempre correct/1.0. Sin
+// config, el par devuelve incorrect por defecto.
 type mockProvider struct {
-	pairVerdicts map[string]llm.Verdict
-	pairCalls    int
-	pairErr      error
+	alwaysCorrect bool
+	pairCalls     int
+	pairErr       error
 }
 
 func (m *mockProvider) GenerateAssessment(_ context.Context, _ llm.MaterialInput, _ llm.GenerationParams) (json.RawMessage, error) {
@@ -27,88 +27,123 @@ func (m *mockProvider) ReviewAnswer(_ context.Context, _ llm.ReviewRequest) (llm
 func (m *mockProvider) PrepareQuestion(_ context.Context, _ llm.PrepRequest) (json.RawMessage, error) {
 	return nil, nil
 }
-func (m *mockProvider) JudgePairEquivalence(_ context.Context, req llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
+func (m *mockProvider) JudgePairEquivalence(_ context.Context, _ llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
 	m.pairCalls++
 	if m.pairErr != nil {
 		return llm.ReviewResult{}, m.pairErr
 	}
-	key := normalize(req.Expected) + "|" + normalize(req.Candidate)
-	v := m.pairVerdicts[key]
-	if v == "" {
-		v = llm.VerdictIncorrect
+	if m.alwaysCorrect {
+		return llm.ReviewResult{Verdict: llm.VerdictCorrect, Score: 1.0}, nil
 	}
-	score := 0.0
-	if v == llm.VerdictCorrect {
-		score = 1.0
-	}
-	return llm.ReviewResult{Verdict: v, Score: score}, nil
+	return llm.ReviewResult{Verdict: llm.VerdictIncorrect, Score: 0.0}, nil
 }
 func (m *mockProvider) CheckCriterion(_ context.Context, _ llm.CriterionCheckRequest) (llm.ReviewResult, error) {
 	return llm.ReviewResult{}, nil
 }
 func (m *mockProvider) Name() string { return "mock" }
 
-func TestSplit(t *testing.T) {
-	cases := []struct {
-		name string
-		in   string
-		want []string
-	}{
-		{"comas y conjuncion", "Ecuador, Venezuela y Colombia", []string{"ecuador", "venezuela", "colombia"}},
-		{"solo espacios y conjuncion", "Ecuador Venezuela y Colombia", []string{"ecuador venezuela", "colombia"}},
-		{"barra y punto y coma", "rojo | verde; azul", []string{"rojo", "verde", "azul"}},
-		{"conjuncion e (conserva ñ)", "España e Italia", []string{"españa", "italia"}},
-		{"tildes y mayusculas", "Panamá , PERÚ", []string{"panama", "peru"}},
-		{"no corta palabras con y/e", "hoy y ley", []string{"hoy", "ley"}},
-		{"vacios se descartan", "a,, b", []string{"a", "b"}},
+// TestGrade_Caso1_TodoFuzzy_SinLlamadas es el ASSERT ESTRELLA del plan 045 F3: el Caso 1
+// del research (redes sociales con dos typos + relleno de cortesía) se resuelve por la
+// cascada exacto→fuzzy, SIN una sola llamada al modelo. "whastapp"≈"whatsapp" es una
+// transposición (OSA dist 1, sim 0.875) e "instalgram"≈"instagram" una inserción (dist
+// 1, sim 0.9); ambos superan el umbral 0.85. "el famoso" sobra y Lenient lo ignora.
+func TestGrade_Caso1_TodoFuzzy_SinLlamadas(t *testing.T) {
+	prov := &mockProvider{}
+	in := GradeInput{
+		QuestionText:  "Nombra tres redes sociales",
+		StudentAnswer: "whastapp instalgram y el famoso facebook",
+		Items:         []string{"facebook", "instagram", "whatsapp"},
+		ItemsVerbatim: []string{"Facebook", "Instagram", "WhatsApp"},
 	}
-	for _, tc := range cases {
-		t.Run(tc.name, func(t *testing.T) {
-			got := Split(tc.in)
-			if !reflect.DeepEqual(got, tc.want) {
-				t.Fatalf("Split(%q) = %v, quería %v", tc.in, got, tc.want)
-			}
-		})
+	res, err := Grade(context.Background(), prov, in)
+	if err != nil {
+		t.Fatalf("Grade error: %v", err)
+	}
+	if res.Verdict != llm.VerdictCorrect || res.Score != 1.0 {
+		t.Fatalf("esperaba correct/1.0, hubo %s/%.2f", res.Verdict, res.Score)
+	}
+	if prov.pairCalls != 0 {
+		t.Fatalf("esperaba 0 llamadas al provider (todo por fuzzy), hubo %d", prov.pairCalls)
 	}
 }
 
-func TestMatchItems(t *testing.T) {
-	items := []string{"ecuador", "venezuela", "colombia"}
+// TestGrade_TypoRescatadoPorFuzzy_SinLlamada documenta el cambio de comportamiento de la
+// migración: antes "benezuela" (typo de "venezuela") escalaba a UNA llamada de par; con
+// el escalón fuzzy nuevo (dist 1, sim 0.888 ≥ 0.85) se rescata determinista, sin LLM.
+// Reemplaza al viejo TestGrade_TypoRescatadoPorUnPar (que esperaba 1 llamada).
+func TestGrade_TypoRescatadoPorFuzzy_SinLlamada(t *testing.T) {
+	prov := &mockProvider{}
+	res, err := Grade(context.Background(), prov, grandColombia("ecuador, benezuela y colombia"))
+	if err != nil {
+		t.Fatalf("Grade error: %v", err)
+	}
+	if res.Verdict != llm.VerdictCorrect || res.Score != 1.0 {
+		t.Fatalf("esperaba correct/1.0 (fuzzy rescata el typo), hubo %s/%.2f", res.Verdict, res.Score)
+	}
+	if prov.pairCalls != 0 {
+		t.Fatalf("esperaba 0 llamadas (fuzzy, no LLM), hubo %d", prov.pairCalls)
+	}
+}
 
-	t.Run("sin comas, match por palabra cubre los tres", func(t *testing.T) {
-		frags := Split("Ecuador Venezuela y Colombia")
-		res := matchItems(items, frags)
-		for i, m := range res.itemMatched {
-			if !m {
-				t.Fatalf("ítem %d (%q) debería casar de forma determinista", i, items[i])
-			}
-		}
-	})
+// TestGrade_FaltanteReal_SinCandidato_Incorrect: falta un ítem y el alumno no dejó
+// ningún fragmento sobrante que ofrecer ⇒ incorrect sin gastar una llamada (no adivina).
+func TestGrade_FaltanteReal_SinCandidato_Incorrect(t *testing.T) {
+	prov := &mockProvider{}
+	in := GradeInput{
+		QuestionText:  "Nombra dos países de Sudamérica",
+		StudentAnswer: "brasil",
+		Items:         []string{"brasil", "argentina"},
+		ItemsVerbatim: []string{"Brasil", "Argentina"},
+	}
+	res, err := Grade(context.Background(), prov, in)
+	if err != nil {
+		t.Fatalf("Grade error: %v", err)
+	}
+	if res.Verdict != llm.VerdictIncorrect || res.Score != 0.0 {
+		t.Fatalf("esperaba incorrect/0.0, hubo %s/%.2f", res.Verdict, res.Score)
+	}
+	if prov.pairCalls != 0 {
+		t.Fatalf("esperaba 0 llamadas (sin candidato sobrante), hubo %d", prov.pairCalls)
+	}
+}
 
-	t.Run("un ítem con typo NO casa determinista y deja fragmento libre", func(t *testing.T) {
-		frags := Split("ecuador, benezuela y colombia") // benezuela != venezuela
-		res := matchItems(items, frags)
-		if !res.itemMatched[0] || res.itemMatched[1] || !res.itemMatched[2] {
-			t.Fatalf("esperaba ecuador✓ venezuela✗ colombia✓, hubo %v", res.itemMatched)
-		}
-		// El fragmento "benezuela" (índice 1) debe quedar SIN usar (candidato del par).
-		if res.fragUsed[1] {
-			t.Fatalf("el fragmento benezuela no debería estar usado: %v", res.fragUsed)
-		}
-	})
+// TestGrade_Escalado_UnaLlamada_Cubre: un ítem que el fuzzy NO cubre pero hay un
+// candidato sobrante ⇒ exactamente UNA llamada al provider para ese ítem; si el fake
+// dice correct, el ítem queda cubierto y el veredicto es correct.
+func TestGrade_Escalado_UnaLlamada_Cubre(t *testing.T) {
+	prov := &mockProvider{alwaysCorrect: true}
+	in := GradeInput{
+		QuestionText:  "¿Cuál es el país de los aztecas?",
+		StudentAnswer: "pais azteca",
+		Items:         []string{"mexico"},
+		ItemsVerbatim: []string{"México"},
+	}
+	res, err := Grade(context.Background(), prov, in)
+	if err != nil {
+		t.Fatalf("Grade error: %v", err)
+	}
+	if res.Verdict != llm.VerdictCorrect || res.Score != 1.0 {
+		t.Fatalf("esperaba correct/1.0 tras escalado, hubo %s/%.2f", res.Verdict, res.Score)
+	}
+	if prov.pairCalls != 1 {
+		t.Fatalf("esperaba exactamente 1 llamada de par, hubo %d", prov.pairCalls)
+	}
+}
 
-	t.Run("falta un ítem y no hay fragmento sobrante", func(t *testing.T) {
-		frags := Split("ecuador y colombia")
-		res := matchItems(items, frags)
-		if !res.itemMatched[0] || res.itemMatched[1] || !res.itemMatched[2] {
-			t.Fatalf("esperaba venezuela ausente, hubo %v", res.itemMatched)
-		}
-		for _, u := range res.fragUsed {
-			if !u {
-				t.Fatalf("ambos fragmentos deberían estar usados: %v", res.fragUsed)
-			}
-		}
-	})
+// TestGrade_ErrorProviderSePropaga: un error del provider en la fase de escalado se
+// propaga (transitorio; el caller reintenta el intento).
+func TestGrade_ErrorProviderSePropaga(t *testing.T) {
+	prov := &mockProvider{pairErr: context.DeadlineExceeded}
+	in := GradeInput{
+		QuestionText:  "¿Cuál es el país de los aztecas?",
+		StudentAnswer: "pais azteca",
+		Items:         []string{"mexico"},
+		ItemsVerbatim: []string{"México"},
+	}
+	_, err := Grade(context.Background(), prov, in)
+	if err == nil {
+		t.Fatal("esperaba que el error del provider se propagara")
+	}
 }
 
 func grandColombia(student string) GradeInput {
@@ -120,6 +155,8 @@ func grandColombia(student string) GradeInput {
 	}
 }
 
+// TestGrade_TodoDeterminista_SinLlamadas: la respuesta calza exacta (separada solo por
+// espacios y conjunción) ⇒ correct sin llamadas.
 func TestGrade_TodoDeterminista_SinLlamadas(t *testing.T) {
 	prov := &mockProvider{}
 	res, err := Grade(context.Background(), prov, grandColombia("Ecuador Venezuela y Colombia"))
@@ -131,58 +168,5 @@ func TestGrade_TodoDeterminista_SinLlamadas(t *testing.T) {
 	}
 	if prov.pairCalls != 0 {
 		t.Fatalf("esperaba 0 llamadas de par (todo determinista), hubo %d", prov.pairCalls)
-	}
-}
-
-func TestGrade_TypoRescatadoPorUnPar(t *testing.T) {
-	prov := &mockProvider{pairVerdicts: map[string]llm.Verdict{
-		"venezuela|benezuela": llm.VerdictCorrect,
-	}}
-	res, err := Grade(context.Background(), prov, grandColombia("ecuador, benezuela y colombia"))
-	if err != nil {
-		t.Fatalf("Grade error: %v", err)
-	}
-	if res.Verdict != llm.VerdictCorrect || res.Score != 1.0 {
-		t.Fatalf("esperaba correct/1.0 tras rescate, hubo %s/%.2f", res.Verdict, res.Score)
-	}
-	if prov.pairCalls != 1 {
-		t.Fatalf("esperaba exactamente 1 llamada de par, hubo %d", prov.pairCalls)
-	}
-}
-
-func TestGrade_TypoNoRescatado_Incorrect(t *testing.T) {
-	prov := &mockProvider{} // el par devuelve incorrect por defecto
-	res, err := Grade(context.Background(), prov, grandColombia("ecuador, benezuela y colombia"))
-	if err != nil {
-		t.Fatalf("Grade error: %v", err)
-	}
-	if res.Verdict != llm.VerdictIncorrect || res.Score != 0.0 {
-		t.Fatalf("esperaba incorrect/0.0, hubo %s/%.2f", res.Verdict, res.Score)
-	}
-	if prov.pairCalls != 1 {
-		t.Fatalf("esperaba 1 llamada de par (benezuela candidato), hubo %d", prov.pairCalls)
-	}
-}
-
-func TestGrade_FaltaItem_SinLlamada(t *testing.T) {
-	prov := &mockProvider{}
-	res, err := Grade(context.Background(), prov, grandColombia("ecuador y colombia"))
-	if err != nil {
-		t.Fatalf("Grade error: %v", err)
-	}
-	if res.Verdict != llm.VerdictIncorrect || res.Score != 0.0 {
-		t.Fatalf("esperaba incorrect/0.0, hubo %s/%.2f", res.Verdict, res.Score)
-	}
-	// Sin fragmento sobrante para venezuela ⇒ NO se gasta llamada (no se adivina).
-	if prov.pairCalls != 0 {
-		t.Fatalf("esperaba 0 llamadas de par (sin candidato), hubo %d", prov.pairCalls)
-	}
-}
-
-func TestGrade_ErrorProviderSePropaga(t *testing.T) {
-	prov := &mockProvider{pairErr: context.DeadlineExceeded}
-	_, err := Grade(context.Background(), prov, grandColombia("ecuador, benezuela y colombia"))
-	if err == nil {
-		t.Fatal("esperaba que el error del provider se propagara")
 	}
 }
