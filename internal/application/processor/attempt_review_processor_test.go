@@ -102,6 +102,10 @@ func (m *mockLLMProvider) ReviewAnswer(_ context.Context, _ llm.ReviewRequest) (
 	return llm.ReviewResult{Verdict: m.verdict, Score: m.score, Feedback: m.feedback}, nil
 }
 
+func (m *mockLLMProvider) PrepareQuestion(_ context.Context, _ llm.PrepRequest) (json.RawMessage, error) {
+	return nil, errors.New("no usado en estos tests")
+}
+
 func (m *mockLLMProvider) Name() string { return "mock" }
 
 // --- helpers ---

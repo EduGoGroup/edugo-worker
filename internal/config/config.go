@@ -70,6 +70,11 @@ type QueuesConfig struct {
 	// AttemptReviewRequested es la cola del carril de revisión asistida (plan 040):
 	// recibe los eventos attempt.review_requested que publica learning al hacer submit.
 	AttemptReviewRequested string `mapstructure:"attempt_review_requested"`
+	// QuestionPrepRequested es la cola del carril de preparación (plan 042 F2a):
+	// recibe los eventos question.prep_requested que publica learning al crear/editar
+	// una pregunta short_answer/open_ended. Canal propio por riel (D-042.3): NO comparte
+	// cola con el carril de revisión.
+	QuestionPrepRequested string `mapstructure:"question_prep_requested"`
 }
 
 type ExchangeConfig struct {
@@ -451,7 +456,20 @@ func (c *Config) GetQueuesConfigWithDefaults() QueuesConfig {
 	if cfg.AttemptReviewRequested == "" {
 		cfg.AttemptReviewRequested = "edugo.attempt.review_requested"
 	}
+	if cfg.QuestionPrepRequested == "" {
+		cfg.QuestionPrepRequested = "edugo.question.prep_requested"
+	}
 	return cfg
+}
+
+// PrepDLQName es el nombre de la cola muerta del carril de preparación. Sigue la
+// convención del carril de revisión (cola + ".dlq"): dead-letters propios por riel.
+func (c QueuesConfig) PrepDLQName() string {
+	q := c.QuestionPrepRequested
+	if q == "" {
+		q = "edugo.question.prep_requested"
+	}
+	return q + ".dlq"
 }
 
 // GetCircuitBreakerConfigWithDefaults retorna la configuración de un circuit breaker con valores por defecto

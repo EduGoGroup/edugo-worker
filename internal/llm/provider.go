@@ -73,8 +73,32 @@ type ReviewResult struct {
 	Feedback string  `json:"feedback"`
 }
 
+// PrepRequest es la petición de PREPARACIÓN de una pregunta para el LLM (plan 042
+// D-042.4): a partir de la canónica del profesor se produce el artefacto llm_prep
+// (descomposición para short_answer, enriquecimiento para open_ended). El worker
+// valida la salida contra el contrato v1 antes de persistirla; el modelo NUNCA
+// corrige ni inventa contenido (los ítems salen textuales del texto del profesor).
+type PrepRequest struct {
+	// QuestionType ramifica el prompt: "short_answer" (descomponer/clasificar) vs
+	// "open_ended" (intención/ideas/variantes/criterios).
+	QuestionType string
+	QuestionText string
+	// CorrectAnswer es la respuesta canónica (short_answer) o esperada (open_ended);
+	// puede venir vacía en open_ended.
+	CorrectAnswer string
+	// Explanation es la explicación/rúbrica de la pregunta (si existe). En open_ended
+	// alimenta los criterios cuando es una rúbrica.
+	Explanation string
+	// Feedback es el comentario del profesor sobre una prep previa (reason=feedback,
+	// D-042.7). Vacío en el caso normal; si viene, el prompt lo prioriza.
+	Feedback string
+	// Language del contenido (default "es").
+	Language string
+}
+
 // LLMProvider es el puerto que abstrae al modelo (local vía Ollama o remoto vía
-// API). Dos operaciones, una por carril (D-039.4).
+// API). Una operación por carril (D-039.4): generación (038), corrección (040) y
+// preparación (042).
 type LLMProvider interface {
 	// GenerateAssessment produce un JSON que DEBE cumplir el contrato
 	// `edugo.assessment_import` v1 (plan 038). El caller lo valida con el mismo
@@ -84,6 +108,11 @@ type LLMProvider interface {
 
 	// ReviewAnswer corrige la respuesta de un alumno contra la esperada/rúbrica.
 	ReviewAnswer(ctx context.Context, req ReviewRequest) (ReviewResult, error)
+
+	// PrepareQuestion produce el artefacto de preparación (JSON crudo del contrato
+	// llm_prep v1, plan 042). El caller lo valida contra el contrato antes de
+	// persistirlo; un prep que no valida es fallo transitorio (nunca se guarda).
+	PrepareQuestion(ctx context.Context, req PrepRequest) (json.RawMessage, error)
 
 	// Name identifica al provider para logs/harness (ej. "ollama", "anthropic").
 	Name() string

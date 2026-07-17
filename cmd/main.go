@@ -7,6 +7,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	rabbit "github.com/EduGoGroup/edugo-shared/messaging/rabbit"
 	"github.com/EduGoGroup/edugo-worker/internal/bootstrap"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
@@ -105,6 +106,23 @@ func main() {
 		log.Fatal("failed to create RabbitMQ consumer: unexpected type")
 	}
 
+	// Consumer del carril de PREPARACIÓN (plan 042 F2a): instancia PROPIA porque el
+	// consumer compartido tiene guard `running` (una sola ConsumeWithDLQ por
+	// instancia) y porque su DLQ es propia (DLXRoutingKey = cola de prep + ".dlq").
+	// Comparte el mismo ProcessorRegistry (enruta por event_type).
+	prepDLQCfg := dlqCfg
+	prepDLQCfg.DLXRoutingKey = cfg.GetQueuesConfigWithDefaults().PrepDLQName()
+	prepConsumerCfg := rabbit.ConsumerConfig{
+		Name:          "edugo-worker-prep",
+		AutoAck:       false,
+		PrefetchCount: prefetchCount,
+		DLQ:           prepDLQCfg,
+	}
+	prepConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, prepConsumerCfg).(*rabbit.RabbitMQConsumer)
+	if !ok {
+		log.Fatal("failed to create RabbitMQ prep consumer: unexpected type")
+	}
+
 	// 6. Crear handler con rate limiting integrado
 	handler := func(ctx context.Context, body []byte) error {
 		if rateLimiter != nil {
@@ -137,16 +155,23 @@ func main() {
 		return nil
 	}
 
-	// 7. Iniciar consumo con soporte DLQ
-	reviewQueue := cfg.GetQueuesConfigWithDefaults().AttemptReviewRequested
+	// 7. Iniciar consumo con soporte DLQ (un consumer por riel, mismo handler/registry)
+	queuesCfg := cfg.GetQueuesConfigWithDefaults()
+	reviewQueue := queuesCfg.AttemptReviewRequested
+	prepQueue := queuesCfg.QuestionPrepRequested
 	consumerCtx, cancelConsumer := context.WithCancel(ctx)
 	if err := consumer.ConsumeWithDLQ(consumerCtx, reviewQueue, handler); err != nil {
-		resources.Logger.Error("Error iniciando consumer", "error", err.Error())
+		resources.Logger.Error("Error iniciando consumer de revisión", "error", err.Error())
+		log.Fatal(err)
+	}
+	if err := prepConsumer.ConsumeWithDLQ(consumerCtx, prepQueue, handler); err != nil {
+		resources.Logger.Error("Error iniciando consumer de preparación", "error", err.Error())
 		log.Fatal(err)
 	}
 
 	resources.Logger.Info("Worker escuchando eventos",
-		"queue", reviewQueue,
+		"review_queue", reviewQueue,
+		"prep_queue", prepQueue,
 		"prefetch_count", prefetchCount,
 		"dlq_enabled", dlqCfg.Enabled,
 		"max_retries", dlqCfg.MaxRetries)
@@ -158,16 +183,20 @@ func main() {
 	// 9. Registrar tareas de shutdown en orden inverso de inicialización
 	// Ultimo en inicializarse, primero en cerrarse (LIFO)
 
-	// 9.1 Detener consumer (dejar de aceptar nuevos mensajes)
+	// 9.1 Detener consumers (dejar de aceptar nuevos mensajes en ambos rieles)
 	gracefulShutdown.Register("consumer", func(shutdownCtx context.Context) error {
-		resources.Logger.Info("Deteniendo consumer de mensajes...")
+		resources.Logger.Info("Deteniendo consumers de mensajes...")
 		cancelConsumer()
 		consumer.Stop()
+		prepConsumer.Stop()
 
 		if shutdownCfg.WaitForMessages {
 			resources.Logger.Info("Esperando que terminen los mensajes en proceso...")
 			if err := consumer.Wait(); err != nil {
-				resources.Logger.Warn("Material consumer detenido con error", "error", err.Error())
+				resources.Logger.Warn("Consumer de revisión detenido con error", "error", err.Error())
+			}
+			if err := prepConsumer.Wait(); err != nil {
+				resources.Logger.Warn("Consumer de preparación detenido con error", "error", err.Error())
 			}
 			resources.Logger.Info("Todos los mensajes fueron procesados")
 		}
@@ -272,6 +301,35 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 		nil,
 	); err != nil {
 		return fmt.Errorf("error binding cola de revisión: %w", err)
+	}
+
+	// Cola del carril de PREPARACIÓN (plan 042 F2a): canal propio por riel (D-042.3),
+	// sobre el mismo exchange edugo.assessments pero con routing key y DLQ propias
+	// (no comparte cola con revisión). Su dead-letter cae en la DLQ del riel de prep.
+	if _, err := ch.QueueDeclare(
+		queues.QuestionPrepRequested,
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		amqp.Table{
+			"x-max-priority":            10,
+			"x-dead-letter-exchange":    dlq.DLXExchange,
+			"x-dead-letter-routing-key": queues.PrepDLQName(),
+		},
+	); err != nil {
+		return fmt.Errorf("error declarando cola de preparación: %w", err)
+	}
+
+	// Bind cola de preparación al routing key question.prep_requested.
+	if err := ch.QueueBind(
+		queues.QuestionPrepRequested,
+		events.EventTypeQuestionPrepRequested,
+		exchanges.Assessments,
+		false,
+		nil,
+	); err != nil {
+		return fmt.Errorf("error binding cola de preparación: %w", err)
 	}
 
 	return nil

@@ -112,6 +112,17 @@ func (p *Provider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest) (llm
 	return result, nil
 }
 
+// PrepareQuestion pide el artefacto de preparación (JSON crudo del contrato
+// llm_prep v1). El caller valida el JSON contra el contrato antes de persistirlo.
+func (p *Provider) PrepareQuestion(ctx context.Context, req llm.PrepRequest) (json.RawMessage, error) {
+	prompt := llm.BuildPrepPrompt(req)
+	out, err := p.complete(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+	return llm.ExtractJSON(out)
+}
+
 // complete enruta al backend concreto.
 func (p *Provider) complete(ctx context.Context, prompt string) (string, error) {
 	switch p.cfg.Provider {

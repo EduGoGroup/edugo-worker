@@ -26,18 +26,19 @@ import (
 
 // Resources contiene todos los recursos inicializados para el worker
 type Resources struct {
-	Logger            logger.Logger
-	RabbitMQConn      *rabbit.Connection
-	RabbitMQChannel   *amqp.Channel
-	AuthClient        *client.AuthClient
-	SettingsClient    *m2m.SettingsClient
-	LearningClient    *m2m.LearningClient
-	LLMProvider       llm.LLMProvider
-	LifecycleManager  *lifecycle.Manager
-	ProcessorRegistry *processor.Registry
-	MetricsServer     *httpInfra.MetricsServer
-	HealthChecker     *health.Checker
-	SharedMetrics     *sharedMetrics.Metrics
+	Logger             logger.Logger
+	RabbitMQConn       *rabbit.Connection
+	RabbitMQChannel    *amqp.Channel
+	AuthClient         *client.AuthClient
+	SettingsClient     *m2m.SettingsClient
+	LearningClient     *m2m.LearningClient
+	LearningPrepClient *m2m.LearningPrepClient
+	LLMProvider        llm.LLMProvider
+	LifecycleManager   *lifecycle.Manager
+	ProcessorRegistry  *processor.Registry
+	MetricsServer      *httpInfra.MetricsServer
+	HealthChecker      *health.Checker
+	SharedMetrics      *sharedMetrics.Metrics
 }
 
 // ResourceBuilder construye Resources de forma incremental usando el patrón Builder
@@ -56,15 +57,16 @@ type ResourceBuilder struct {
 	nlpClient    nlp.Client
 
 	// Recursos de aplicación
-	authClient        *client.AuthClient
-	settingsClient    *m2m.SettingsClient
-	learningClient    *m2m.LearningClient
-	llmProvider       llm.LLMProvider
-	llmProviders      map[string]llm.LLMProvider
-	processorRegistry *processor.Registry
-	metricsServer     *httpInfra.MetricsServer
-	healthChecker     *health.Checker
-	sharedMetrics     *sharedMetrics.Metrics
+	authClient         *client.AuthClient
+	settingsClient     *m2m.SettingsClient
+	learningClient     *m2m.LearningClient
+	learningPrepClient *m2m.LearningPrepClient
+	llmProvider        llm.LLMProvider
+	llmProviders       map[string]llm.LLMProvider
+	processorRegistry  *processor.Registry
+	metricsServer      *httpInfra.MetricsServer
+	healthChecker      *health.Checker
+	sharedMetrics      *sharedMetrics.Metrics
 
 	// Lifecycle
 	lifecycleManager *lifecycle.Manager
@@ -249,6 +251,29 @@ func (b *ResourceBuilder) WithM2MClients() *ResourceBuilder {
 		TokenProvider: learningToken,
 	})
 
+	// Token provider del carril de PREPARACIÓN (plan 042 F2): misma audience
+	// (edugo-api-learning) pero scope propio (questions.prep) — un scope por riel
+	// (SOLID). El handler de prep en learning valida este scope, distinto del de
+	// revisión; por eso necesita su propia instancia de token.
+	prepToken, err := m2m.NewServiceTokenProvider(m2m.ServiceTokenConfig{
+		Secret:   jwtCfg.Secret,
+		Issuer:   jwtCfg.Issuer,
+		Audience: audienceLearning,
+		ClientID: jwtCfg.ClientID,
+		Scopes:   []string{scopeQuestionsPrep},
+		TTL:      jwtCfg.TTL,
+	})
+	if err != nil {
+		b.err = fmt.Errorf("failed to create learning prep service token provider: %w", err)
+		return b
+	}
+
+	b.learningPrepClient = m2m.NewLearningPrepClient(m2m.LearningPrepClientConfig{
+		BaseURL:       learningCfg.BaseURL,
+		Timeout:       learningCfg.Timeout,
+		TokenProvider: prepToken,
+	})
+
 	b.logger.Info("✅ M2M clients initialized",
 		"academic_base_url", academicCfg.BaseURL,
 		"academic_audience", jwtCfg.Audience,
@@ -259,11 +284,12 @@ func (b *ResourceBuilder) WithM2MClients() *ResourceBuilder {
 	return b
 }
 
-// Contrato M2M del carril de revisión (plan 040 F2): el service JWT hacia learning
-// lleva esta audience y scope.
+// Contrato M2M hacia learning: la audience es común, pero cada riel mintea su token
+// con su propio scope (revisión: plan 040 F2; preparación: plan 042 F2).
 const (
 	audienceLearning    = "edugo-api-learning"
 	scopeAttemptsReview = "attempts.review"
+	scopeQuestionsPrep  = "questions.prep"
 )
 
 // WithLLMProvider construye el provider LLM según la política de plataforma
@@ -392,6 +418,10 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		b.err = fmt.Errorf("learning client required before processors (call WithM2MClients first)")
 		return b
 	}
+	if b.learningPrepClient == nil {
+		b.err = fmt.Errorf("learning prep client required before processors (call WithM2MClients first)")
+		return b
+	}
 	if len(b.llmProviders) == 0 {
 		b.err = fmt.Errorf("LLM providers required before processors (call WithLLMProvider first)")
 		return b
@@ -400,8 +430,12 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	b.processorRegistry = processor.NewRegistry(b.logger)
 	b.processorRegistry.Register(processor.NewAttemptReviewProcessor(
 		b.settingsClient, b.learningClient, b.llmProviders, b.logger))
+	// Carril de preparación (plan 042 F2): comparte registry (enruta por event_type),
+	// pero consume su propia cola (canal por riel, main.go arranca su consumer).
+	b.processorRegistry.Register(processor.NewQuestionPrepProcessor(
+		b.settingsClient, b.learningPrepClient, b.llmProviders, b.logger))
 
-	b.logger.Info("✅ Processor registry initialized (carril revisión LLM, plan 040)",
+	b.logger.Info("✅ Processor registry initialized (carriles revisión 040 + preparación 042)",
 		"count", b.processorRegistry.Count())
 	return b
 }
@@ -518,18 +552,19 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 
 	// Construir Resources
 	resources := &Resources{
-		Logger:            b.logger,
-		RabbitMQConn:      b.rabbitSharedConn,
-		RabbitMQChannel:   b.rabbitChannel,
-		AuthClient:        b.authClient,
-		SettingsClient:    b.settingsClient,
-		LearningClient:    b.learningClient,
-		LLMProvider:       b.llmProvider,
-		LifecycleManager:  b.lifecycleManager,
-		ProcessorRegistry: b.processorRegistry,
-		MetricsServer:     b.metricsServer,
-		HealthChecker:     b.healthChecker,
-		SharedMetrics:     b.sharedMetrics,
+		Logger:             b.logger,
+		RabbitMQConn:       b.rabbitSharedConn,
+		RabbitMQChannel:    b.rabbitChannel,
+		AuthClient:         b.authClient,
+		SettingsClient:     b.settingsClient,
+		LearningClient:     b.learningClient,
+		LearningPrepClient: b.learningPrepClient,
+		LLMProvider:        b.llmProvider,
+		LifecycleManager:   b.lifecycleManager,
+		ProcessorRegistry:  b.processorRegistry,
+		MetricsServer:      b.metricsServer,
+		HealthChecker:      b.healthChecker,
+		SharedMetrics:      b.sharedMetrics,
 	}
 
 	// Crear función de cleanup

@@ -23,6 +23,56 @@ func TestBuildGenerationPrompt_ContainsRulesAndMaterial(t *testing.T) {
 	}
 }
 
+func TestBuildPrepPrompt_ShortAnswer(t *testing.T) {
+	p := BuildPrepPrompt(PrepRequest{
+		QuestionType:  QuestionTypeShortAnswer,
+		QuestionText:  "¿Cuáles países formaron la Gran Colombia?",
+		CorrectAnswer: "Ecuador, Venezuela y Colombia",
+	})
+	for _, want := range []string{
+		"short_answer", "content_kind", "items_verbatim", "Gran Colombia",
+		"OTRO LLM", "PROHIBIDO corregir", "SEGURIDAD", "\"version\":1",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("el prompt short_answer no contiene %q", want)
+		}
+	}
+	// Sin feedback no debe aparecer la sección del comentario del profesor.
+	if strings.Contains(p, "COMENTARIO DEL PROFESOR") {
+		t.Error("sin feedback no debe incluirse la sección del profesor")
+	}
+}
+
+func TestBuildPrepPrompt_OpenEnded(t *testing.T) {
+	p := BuildPrepPrompt(PrepRequest{
+		QuestionType: QuestionTypeOpenEnded,
+		QuestionText: "Explica la fotosíntesis.",
+		Explanation:  "Rúbrica: menciona cloroplastos.",
+	})
+	for _, want := range []string{
+		"open_ended", "question_intent", "main_ideas", "valid_variants", "criteria",
+		"Rúbrica: menciona cloroplastos", "OTRO LLM",
+	} {
+		if !strings.Contains(p, want) {
+			t.Errorf("el prompt open_ended no contiene %q", want)
+		}
+	}
+}
+
+func TestBuildPrepPrompt_WithTeacherFeedback(t *testing.T) {
+	p := BuildPrepPrompt(PrepRequest{
+		QuestionType:  QuestionTypeShortAnswer,
+		QuestionText:  "¿Cuáles países?",
+		CorrectAnswer: "Ecuador, Venezuela y Colombia",
+		Feedback:      "Panamá no formó la Gran Colombia como país aparte",
+	})
+	for _, want := range []string{"COMENTARIO DEL PROFESOR", "prioridad alta", "Panamá no formó"} {
+		if !strings.Contains(p, want) {
+			t.Errorf("con feedback el prompt debe incluir %q", want)
+		}
+	}
+}
+
 func TestBuildReviewPrompt_ContainsSections(t *testing.T) {
 	p := BuildReviewPrompt(ReviewRequest{
 		QuestionText:   "PREG",

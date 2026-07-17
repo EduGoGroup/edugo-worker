@@ -100,6 +100,19 @@ func (p *Provider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest) (llm
 	return result, nil
 }
 
+// PrepareQuestion pide al modelo el artefacto de preparación (JSON crudo del
+// contrato llm_prep v1). Hereda el mismo camino que review: format:"json" +
+// think:false (fix e7c70fe) para que qwen3 emita el objeto directo, sin el `{}` del
+// thinking. El caller valida el JSON contra el contrato antes de persistirlo.
+func (p *Provider) PrepareQuestion(ctx context.Context, req llm.PrepRequest) (json.RawMessage, error) {
+	prompt := llm.BuildPrepPrompt(req)
+	out, err := p.generate(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+	return llm.ExtractJSON(out)
+}
+
 // generate ejecuta POST /api/generate y devuelve el texto crudo del modelo.
 func (p *Provider) generate(ctx context.Context, prompt string) (string, error) {
 	reqBody := generateRequest{
