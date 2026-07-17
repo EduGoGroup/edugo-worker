@@ -46,6 +46,12 @@ type PendingAnswer struct {
 	ExpectedAnswer string  `json:"expected_answer"`
 	StudentAnswer  string  `json:"student_answer"`
 	Points         float64 `json:"points"`
+
+	// LLMPrep es el artefacto de preparación (JSON crudo del contrato llm_prep v1,
+	// plan 042) de la pregunta. Presente SOLO si el prep de esa pregunta está ready
+	// (learning lo añade por answer); ausente (omitempty) cuando la pregunta no tiene
+	// prep. El carril de corrección degrada al flujo global sin él (D-042.10 §4).
+	LLMPrep json.RawMessage `json:"llm_prep,omitempty"`
 }
 
 // PendingAnswersResponse es la respuesta de GET answers?review=pending. Answers

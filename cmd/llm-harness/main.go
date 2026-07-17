@@ -46,7 +46,7 @@ oxígeno. En la fase oscura (ciclo de Calvin), el dióxido de carbono se fija pa
 glucosa. La ecuación general es: 6 CO2 + 6 H2O + luz -> C6H12O6 + 6 O2.`
 
 func main() {
-	mode := flag.String("mode", "generate", "modo del harness: generate (contrato 038) | review (corrección, 040 T2c) | prep (preparación, 042 F2d)")
+	mode := flag.String("mode", "generate", "modo del harness: generate (contrato 038) | review (corrección, 040 T2c) | prep (preparación, 042 F2d) | review-prep (carril triturado short_answer, 042 F3d)")
 	provider := flag.String("provider", "local", "provider LLM: local (alias de ollama) | ollama | api. 'local'/'api' espejan el vocabulario de la política por escuela (D-039.2; 'off' no aplica al harness)")
 	materialPath := flag.String("material", "", "ruta a un archivo de texto con el material (vacío = muestra interna)")
 	title := flag.String("title", "Fotosíntesis — capítulo 3", "título del material")
@@ -96,8 +96,10 @@ func main() {
 		runReview(p, *timeout)
 	case "prep":
 		runPrep(p, *timeout)
+	case "review-prep":
+		runShortAnswerPrep(p, *timeout)
 	default:
-		fatalf("modo desconocido %q (usa generate|review|prep)", *mode)
+		fatalf("modo desconocido %q (usa generate|review|prep|review-prep)", *mode)
 	}
 }
 

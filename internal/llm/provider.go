@@ -96,6 +96,22 @@ type PrepRequest struct {
 	Language string
 }
 
+// PairEquivalenceRequest es la petición BINARIA de equivalencia de UN par (plan 042
+// F3c, carril short_answer triturado): el modelo decide si el fragmento de la
+// respuesta del alumno nombra el MISMO elemento que el ítem esperado del prep del
+// profesor. Se hace una llamada por ítem residual (los que el match determinista no
+// resolvió); el veredicto global se recompone en Go. Salida binaria correct|incorrect.
+type PairEquivalenceRequest struct {
+	// QuestionText da contexto (opcional) para desambiguar la equivalencia.
+	QuestionText string
+	// Expected es el ítem esperado del prep (verbatim, legible para el modelo).
+	Expected string
+	// Candidate es el fragmento sobrante de la respuesta del alumno a comparar.
+	Candidate string
+	// Language del feedback (default "es").
+	Language string
+}
+
 // LLMProvider es el puerto que abstrae al modelo (local vía Ollama o remoto vía
 // API). Una operación por carril (D-039.4): generación (038), corrección (040) y
 // preparación (042).
@@ -113,6 +129,11 @@ type LLMProvider interface {
 	// llm_prep v1, plan 042). El caller lo valida contra el contrato antes de
 	// persistirlo; un prep que no valida es fallo transitorio (nunca se guarda).
 	PrepareQuestion(ctx context.Context, req PrepRequest) (json.RawMessage, error)
+
+	// JudgePairEquivalence decide la equivalencia binaria de UN par (ítem esperado vs
+	// fragmento del alumno) del carril short_answer triturado (plan 042 F3c). Devuelve
+	// un ReviewResult binario: verdict correct|incorrect, score 1.0|0.0.
+	JudgePairEquivalence(ctx context.Context, req PairEquivalenceRequest) (ReviewResult, error)
 
 	// Name identifica al provider para logs/harness (ej. "ollama", "anthropic").
 	Name() string

@@ -88,6 +88,10 @@ type mockLLMProvider struct {
 	calls      int
 	failOnCall int // 1-indexed; 0 = nunca falla
 	err        error
+
+	// pareo binario (carril triturado short_answer, F3c).
+	pairVerdict llm.Verdict // veredicto que devuelve JudgePairEquivalence
+	pairCalls   int
 }
 
 func (m *mockLLMProvider) GenerateAssessment(_ context.Context, _ llm.MaterialInput, _ llm.GenerationParams) (json.RawMessage, error) {
@@ -104,6 +108,19 @@ func (m *mockLLMProvider) ReviewAnswer(_ context.Context, _ llm.ReviewRequest) (
 
 func (m *mockLLMProvider) PrepareQuestion(_ context.Context, _ llm.PrepRequest) (json.RawMessage, error) {
 	return nil, errors.New("no usado en estos tests")
+}
+
+func (m *mockLLMProvider) JudgePairEquivalence(_ context.Context, _ llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
+	m.pairCalls++
+	v := m.pairVerdict
+	if v == "" {
+		v = llm.VerdictIncorrect
+	}
+	score := 0.0
+	if v == llm.VerdictCorrect {
+		score = 1.0
+	}
+	return llm.ReviewResult{Verdict: v, Score: score, Feedback: "par: " + string(v)}, nil
 }
 
 func (m *mockLLMProvider) Name() string { return "mock" }
@@ -573,5 +590,109 @@ func TestAttemptReviewProcessor_Mixto_NoFinalize(t *testing.T) {
 	}
 	if learning.releaseCall != 1 {
 		t.Fatalf("mixto debe liberar el candado, hubo %d", learning.releaseCall)
+	}
+}
+
+// listPrepRaw es un prep válido content_kind=list (Gran Colombia) para inyectar en
+// la pending answer y disparar el carril triturado (F3c).
+const listPrepRaw = `{"version":1,"question_type":"short_answer","content_kind":"list",` +
+	`"items":["ecuador","venezuela","colombia"],"items_verbatim":["Ecuador","Venezuela","Colombia"]}`
+
+func shortAnswerListPending(id, student string) m2m.PendingAnswer {
+	return m2m.PendingAnswer{
+		AnswerID:      id,
+		QuestionType:  "short_answer",
+		QuestionText:  "¿Cuáles países formaron la Gran Colombia?",
+		StudentAnswer: student,
+		Points:        3,
+		LLMPrep:       json.RawMessage(listPrepRaw),
+	}
+}
+
+func TestAttemptReviewProcessor_ShortAnswer_PrepList_Determinista(t *testing.T) {
+	// Prep list + respuesta que cubre los 3 ítems por match determinista: NO se llama
+	// ReviewAnswer NI JudgePairEquivalence; la review posteada es correct (puntaje pleno).
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{shortAnswerListPending("a1", "Ecuador Venezuela y Colombia")},
+	}}
+	provider := &mockLLMProvider{}
+	p := newProcessor(reader, learning, provider)
+
+	if err := p.Process(context.Background(), shortAnswerEventPayload(t)); err != nil {
+		t.Fatalf("flujo triturado no debe fallar: %v", err)
+	}
+	if provider.calls != 0 {
+		t.Fatalf("el carril triturado NO debe llamar ReviewAnswer, hubo %d", provider.calls)
+	}
+	if provider.pairCalls != 0 {
+		t.Fatalf("todo determinista: 0 llamadas de par, hubo %d", provider.pairCalls)
+	}
+	if len(learning.reviewCalls) != 1 || learning.reviewCalls[0].PointsAwarded != 3 {
+		t.Fatalf("esperaba 1 review con 3 puntos (correct), hubo %+v", learning.reviewCalls)
+	}
+}
+
+func TestAttemptReviewProcessor_ShortAnswer_PrepList_ParRescata(t *testing.T) {
+	// Prep list + typo (benezuela): un ítem residual → una llamada de par que rescata.
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{shortAnswerListPending("a1", "ecuador, benezuela y colombia")},
+	}}
+	provider := &mockLLMProvider{pairVerdict: llm.VerdictCorrect}
+	p := newProcessor(reader, learning, provider)
+
+	if err := p.Process(context.Background(), shortAnswerEventPayload(t)); err != nil {
+		t.Fatalf("flujo triturado no debe fallar: %v", err)
+	}
+	if provider.pairCalls != 1 {
+		t.Fatalf("esperaba exactamente 1 llamada de par, hubo %d", provider.pairCalls)
+	}
+	if len(learning.reviewCalls) != 1 || learning.reviewCalls[0].PointsAwarded != 3 {
+		t.Fatalf("esperaba review correct con 3 puntos tras rescate, hubo %+v", learning.reviewCalls)
+	}
+}
+
+func TestAttemptReviewProcessor_ShortAnswer_PrepList_Falta(t *testing.T) {
+	// Prep list + falta un ítem sin candidato sobrante: incorrect/0 puntos, sin par.
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{shortAnswerListPending("a1", "ecuador y colombia")},
+	}}
+	provider := &mockLLMProvider{}
+	p := newProcessor(reader, learning, provider)
+
+	if err := p.Process(context.Background(), shortAnswerEventPayload(t)); err != nil {
+		t.Fatalf("flujo triturado no debe fallar: %v", err)
+	}
+	if provider.pairCalls != 0 {
+		t.Fatalf("sin candidato sobrante: 0 llamadas de par, hubo %d", provider.pairCalls)
+	}
+	if len(learning.reviewCalls) != 1 || learning.reviewCalls[0].PointsAwarded != 0 {
+		t.Fatalf("esperaba review incorrect con 0 puntos, hubo %+v", learning.reviewCalls)
+	}
+}
+
+func TestAttemptReviewProcessor_ShortAnswer_SinPrep_FlujoGlobal(t *testing.T) {
+	// Sin prep: se conserva el flujo global (ReviewAnswer), degradación suave (D-042.10 §4).
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{shortAnswerPending("a1", 5)},
+	}}
+	provider := &mockLLMProvider{score: 1.0, verdict: llm.VerdictCorrect}
+	p := newProcessor(reader, learning, provider)
+
+	if err := p.Process(context.Background(), shortAnswerEventPayload(t)); err != nil {
+		t.Fatalf("flujo global short_answer no debe fallar: %v", err)
+	}
+	if provider.calls != 1 {
+		t.Fatalf("sin prep debe usar ReviewAnswer 1 vez, hubo %d", provider.calls)
+	}
+	if provider.pairCalls != 0 {
+		t.Fatalf("sin prep no hay pares, hubo %d", provider.pairCalls)
 	}
 }

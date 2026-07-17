@@ -123,6 +123,25 @@ func (p *Provider) PrepareQuestion(ctx context.Context, req llm.PrepRequest) (js
 	return llm.ExtractJSON(out)
 }
 
+// JudgePairEquivalence pide la equivalencia binaria de un par (plan 042 F3c). Mismo
+// camino que ReviewAnswer: el resultado es un ReviewResult (verdict/score/feedback).
+func (p *Provider) JudgePairEquivalence(ctx context.Context, req llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
+	prompt := llm.BuildPairEquivalencePrompt(req)
+	out, err := p.complete(ctx, prompt)
+	if err != nil {
+		return llm.ReviewResult{}, err
+	}
+	rawJSON, err := llm.ExtractJSON(out)
+	if err != nil {
+		return llm.ReviewResult{}, err
+	}
+	var result llm.ReviewResult
+	if err := json.Unmarshal(rawJSON, &result); err != nil {
+		return llm.ReviewResult{}, fmt.Errorf("respuesta de equivalencia no parseable: %w", err)
+	}
+	return result, nil
+}
+
 // complete enruta al backend concreto.
 func (p *Provider) complete(ctx context.Context, prompt string) (string, error) {
 	switch p.cfg.Provider {

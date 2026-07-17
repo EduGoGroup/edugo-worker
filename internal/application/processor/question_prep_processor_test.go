@@ -60,6 +60,9 @@ func (m *mockPrepProvider) PrepareQuestion(_ context.Context, _ llm.PrepRequest)
 	}
 	return m.raw, nil
 }
+func (m *mockPrepProvider) JudgePairEquivalence(_ context.Context, _ llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
+	return llm.ReviewResult{}, errors.New("no usado")
+}
 func (m *mockPrepProvider) Name() string { return "mock-prep" }
 
 // --- helpers ---

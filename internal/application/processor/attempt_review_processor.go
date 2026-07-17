@@ -6,11 +6,14 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"strings"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/questionprep"
+	"github.com/EduGoGroup/edugo-worker/internal/shortanswer"
 )
 
 // EventTypeAttemptReviewRequested es el event_type que enruta el registry hacia
@@ -210,14 +213,7 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 	}
 
 	for _, ans := range pending.Answers {
-		result, err := provider.ReviewAnswer(ctx, llm.ReviewRequest{
-			QuestionType:   ans.QuestionType,
-			QuestionText:   ans.QuestionText,
-			ExpectedAnswer: ans.ExpectedAnswer,
-			Rubric:         ans.Rubric,
-			StudentAnswer:  ans.StudentAnswer,
-			Language:       reviewLanguage,
-		})
+		result, err := p.reviewOne(ctx, provider, ans)
 		if err != nil {
 			// Fallo del LLM: transitorio. Reintentar es seguro (aún no escribimos esta
 			// review; las ya escritas no vuelven a aparecer en el GET pending).
@@ -270,6 +266,74 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 		"attempt_id", attemptID, "answers", len(pending.Answers), "has_short_answer", hasShortAnswer)
 	p.releaseClaim(ctx, attemptID, "revisión completada, intento queda para el profesor")
 	return nil
+}
+
+// reviewOne produce el ReviewResult de UNA answer, eligiendo el carril según el prep
+// (plan 042 F3c). short_answer con prep content_kind=list ⇒ carril TRITURADO (match
+// determinista + pares binarios, reemplaza el juicio global). short_answer con prep
+// de otro content_kind ⇒ prompt global enriquecido con los ítems normalizados. Sin
+// prep (o inválido) o cualquier otro tipo ⇒ flujo global actual intacto.
+func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLMProvider, ans m2m.PendingAnswer) (llm.ReviewResult, error) {
+	prep := p.parsePrep(ans)
+
+	req := llm.ReviewRequest{
+		QuestionType:   ans.QuestionType,
+		QuestionText:   ans.QuestionText,
+		ExpectedAnswer: ans.ExpectedAnswer,
+		Rubric:         ans.Rubric,
+		StudentAnswer:  ans.StudentAnswer,
+		Language:       reviewLanguage,
+	}
+
+	if ans.QuestionType == llm.QuestionTypeShortAnswer && prep != nil {
+		if prep.ContentKind == questionprep.ContentKindList {
+			p.logger.Info("short_answer con prep list: carril triturado (match determinista + pares)",
+				"answer_id", ans.AnswerID, "items", len(prep.Items))
+			return shortanswer.Grade(ctx, provider, shortanswer.GradeInput{
+				QuestionText:  ans.QuestionText,
+				StudentAnswer: ans.StudentAnswer,
+				Items:         prep.Items,
+				ItemsVerbatim: prep.ItemsVerbatim,
+				Language:      reviewLanguage,
+			})
+		}
+		// term/number/date/free: mejora barata del prompt global (D-042.10 §short_answer,
+		// punto 5) sin cambiar el contrato del POST review.
+		req.ExpectedAnswer = enrichExpectedWithPrep(ans.ExpectedAnswer, prep)
+	}
+
+	return provider.ReviewAnswer(ctx, req)
+}
+
+// parsePrep decodifica y valida el llm_prep que learning adjuntó a la answer contra
+// el contrato v1 (reusa el validador de F2). Ausente o inválido ⇒ nil: el carril
+// degrada al flujo global (D-042.10 §4, el carril de corrección nunca espera al de
+// preparación). Un prep inválido se loguea pero no es fatal.
+func (p *AttemptReviewProcessor) parsePrep(ans m2m.PendingAnswer) *questionprep.Prep {
+	if len(ans.LLMPrep) == 0 {
+		return nil
+	}
+	prep, err := questionprep.Validate(ans.LLMPrep, ans.QuestionType)
+	if err != nil {
+		p.logger.Warn("llm_prep inválido en pending answer, se ignora (flujo global)",
+			"answer_id", ans.AnswerID, "question_type", ans.QuestionType, "motivo", err.Error())
+		return nil
+	}
+	return prep
+}
+
+// enrichExpectedWithPrep añade a la respuesta esperada los ítems normalizados del
+// prep (term/number/date/free) como pista extra para el prompt global. No cambia el
+// contrato del POST review: solo enriquece el texto que ya viaja en ExpectedAnswer.
+func enrichExpectedWithPrep(expected string, prep *questionprep.Prep) string {
+	if len(prep.Items) == 0 {
+		return expected
+	}
+	norm := strings.Join(prep.Items, ", ")
+	if strings.TrimSpace(expected) == "" {
+		return norm
+	}
+	return expected + "\nRespuesta esperada (normalizada): " + norm
 }
 
 // releaseClaim libera el candado de mejor esfuerzo: un fallo NO es fatal (el
