@@ -86,8 +86,9 @@ service_jwt:
 llm:
   local: # provider Ollama (modo "local")
     base_url: "${LLM_LOCAL_BASE_URL}" # ej. http://localhost:11434
-    model: "${LLM_LOCAL_MODEL}" # ej. llama3.1, qwen2.5:7b
+    model: "${LLM_LOCAL_MODEL}" # ej. gemma3:4b, qwen3:1.7b
     timeout: "120s"
+    temperature: 0 # greedy determinista: la corrección es JSON estructurado, no prosa creativa (045)
   api: # provider por API (modo "api": Claude/Gemini)
     provider: "${LLM_API_PROVIDER}" # anthropic | gemini
     api_key: "${LLM_API_KEY}" # Secret Manager en cloud

@@ -52,7 +52,10 @@ service_jwt:
 llm:
   local:
     base_url: "http://localhost:11434"
-    model: "qwen3:1.7b"
+    # gemma3:4b (045): un 1.7b es demasiado débil para el juicio semántico de
+    # open_ended (reprobaba respuestas válidas); el 4b discrimina bien y sigue
+    # siendo local/gratis. temperature 0 = greedy determinista (viene de config.yaml).
+    model: "gemma3:4b"
     timeout: "120s"
   api:
     provider: "anthropic"

@@ -25,13 +25,21 @@ type Config struct {
 	Model string
 	// Timeout de la request HTTP. Generar puede ser lento en CPU: default 120s.
 	Timeout time.Duration
+	// Temperature del muestreo. TODAS las llamadas del worker piden JSON
+	// estructurado (extracción/clasificación/juicio binario), no prosa creativa:
+	// el default 0 = greedy determinista hace la corrección REPRODUCIBLE (mismo
+	// intento ⇒ mismo veredicto). Sin fijarla, Ollama usa 0.8 y el veredicto
+	// parpadea entre corridas (medido en 045: criterios open_ended que oscilaban
+	// correct/incorrect sin cambiar el input).
+	Temperature float64
 }
 
 // Provider es la implementación Ollama de llm.LLMProvider.
 type Provider struct {
-	baseURL    string
-	model      string
-	httpClient *http.Client
+	baseURL     string
+	model       string
+	temperature float64
+	httpClient  *http.Client
 }
 
 // New construye el provider Ollama a partir de su config.
@@ -41,9 +49,10 @@ func New(cfg Config) *Provider {
 		timeout = 120 * time.Second
 	}
 	return &Provider{
-		baseURL:    strings.TrimRight(cfg.BaseURL, "/"),
-		model:      cfg.Model,
-		httpClient: &http.Client{Timeout: timeout},
+		baseURL:     strings.TrimRight(cfg.BaseURL, "/"),
+		model:       cfg.Model,
+		temperature: cfg.Temperature,
+		httpClient:  &http.Client{Timeout: timeout},
 	}
 }
 
@@ -64,6 +73,15 @@ type generateRequest struct {
 	// Ollama ignora el campo (inocuo). Se envía siempre (sin omitempty) para que el
 	// false explícito llegue al servidor.
 	Think bool `json:"think"`
+	// Options son las opciones de muestreo de Ollama (temperature, etc.). Se omite
+	// si es nil para no alterar el comportamiento cuando no se configura nada.
+	Options *generateOptions `json:"options,omitempty"`
+}
+
+// generateOptions son las opciones de muestreo de Ollama que el worker fija.
+// Hoy solo temperature (determinismo); ampliable (top_p, seed) sin tocar callers.
+type generateOptions struct {
+	Temperature float64 `json:"temperature"`
 }
 
 // generateResponse es la respuesta (con stream:false, un solo objeto).
@@ -171,11 +189,12 @@ func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest
 // generate ejecuta POST /api/generate y devuelve el texto crudo del modelo.
 func (p *Provider) generate(ctx context.Context, prompt string) (string, error) {
 	reqBody := generateRequest{
-		Model:  p.model,
-		Prompt: prompt,
-		Stream: false,
-		Format: "json",
-		Think:  false,
+		Model:   p.model,
+		Prompt:  prompt,
+		Stream:  false,
+		Format:  "json",
+		Think:   false,
+		Options: &generateOptions{Temperature: p.temperature},
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {

@@ -311,9 +311,10 @@ func (b *ResourceBuilder) WithLLMProvider() *ResourceBuilder {
 	// Provider local (Ollama). Es también el default histórico expuesto en
 	// Resources.LLMProvider.
 	localProvider := ollama.New(ollama.Config{
-		BaseURL: llmCfg.Local.BaseURL,
-		Model:   llmCfg.Local.Model,
-		Timeout: llmCfg.Local.Timeout,
+		BaseURL:     llmCfg.Local.BaseURL,
+		Model:       llmCfg.Local.Model,
+		Timeout:     llmCfg.Local.Timeout,
+		Temperature: llmCfg.Local.Temperature,
 	})
 	b.llmProvider = localProvider
 

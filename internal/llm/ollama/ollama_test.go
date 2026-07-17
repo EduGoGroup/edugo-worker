@@ -108,6 +108,41 @@ func TestGenerate_RequestIncluyeThinkFalse(t *testing.T) {
 	}
 }
 
+func TestGenerate_RequestIncluyeTemperature(t *testing.T) {
+	// La corrección pide JSON estructurado, no prosa: el body DEBE llevar
+	// options.temperature con el valor configurado (default 0 = greedy determinista)
+	// para que el veredicto sea reproducible entre corridas (045).
+	var captured map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(body, &captured); err != nil {
+			t.Errorf("body no parseable: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(generateResponse{
+			Response: `{"verdict":"correct","score":1,"feedback":"ok"}`,
+			Done:     true,
+		})
+	}))
+	defer srv.Close()
+
+	p := New(Config{BaseURL: srv.URL, Model: "gemma3:4b", Temperature: 0})
+	if _, err := p.ReviewAnswer(context.Background(), llm.ReviewRequest{QuestionText: "q", StudentAnswer: "a"}); err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+
+	opts, ok := captured["options"].(map[string]any)
+	if !ok {
+		t.Fatal("el body del request no incluye el objeto \"options\"")
+	}
+	temp, ok := opts["temperature"]
+	if !ok {
+		t.Fatal("options no incluye la clave \"temperature\"")
+	}
+	if temp != float64(0) {
+		t.Fatalf("temperature esperada=0, hubo %v", temp)
+	}
+}
+
 func TestName(t *testing.T) {
 	if got := New(Config{Model: "abc"}).Name(); got != "ollama:abc" {
 		t.Fatalf("Name inesperado: %s", got)

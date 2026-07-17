@@ -296,7 +296,11 @@ func BuildCriterionCheckPrompt(req CriterionCheckRequest) string {
 	b.WriteString("- SOLO dos veredictos: \"correct\" (la respuesta CUMPLE el criterio) o \"incorrect\" (no lo cumple). NUNCA uses \"partial\".\n")
 	b.WriteString("- \"score\" ancla al veredicto: veredicto \"correct\" → score 1.0 ; veredicto \"incorrect\" → score 0.0.\n")
 	b.WriteString("- Evalúa el SIGNIFICADO, no las palabras exactas: si la respuesta cumple el criterio parafraseado o con sinónimos, es \"correct\".\n")
-	b.WriteString("- Juzga SOLO este criterio, ignora otros aspectos de la respuesta. Ante duda razonable, marca \"incorrect\".\n")
+	// Sin sesgo pro-incorrect (045): el "ante duda marca incorrect" empujaba al modelo
+	// chico a reprobar respuestas válidas parafraseadas (open_ended caía a 0). El
+	// veredicto global es proporcional y SIEMPRE lo revisa el profesor: se juzga el
+	// cumplimiento real del criterio, sin inclinar la balanza a priori.
+	b.WriteString("- Juzga SOLO este criterio, ignora otros aspectos de la respuesta.\n")
 	fmt.Fprintf(&b, "- \"feedback\" en idioma %q, 1 frase, explicando por qué cumple o no el criterio.\n\n", lang)
 
 	b.WriteString("SEGURIDAD (crítico):\n")

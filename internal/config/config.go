@@ -210,6 +210,10 @@ type LLMLocalConfig struct {
 	BaseURL string        `mapstructure:"base_url"`
 	Model   string        `mapstructure:"model"`
 	Timeout time.Duration `mapstructure:"timeout"`
+	// Temperature del muestreo local. Default 0 (greedy determinista): la
+	// corrección pide JSON estructurado, no prosa creativa, y el determinismo la
+	// hace reproducible. Env: LLM_LOCAL_TEMPERATURE.
+	Temperature float64 `mapstructure:"temperature"`
 }
 
 // LLMAPIConfig configura el provider por API (Claude/Gemini). Env:
