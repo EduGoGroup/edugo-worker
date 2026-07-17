@@ -99,6 +99,12 @@ type mockLLMProvider struct {
 	criterionCalls int
 	// lastReviewReq captura la última ReviewRequest (para verificar el enriquecimiento F4a).
 	lastReviewReq llm.ReviewRequest
+
+	// extracción de ideas (carril open_ended, F4/D-045.9). Por defecto vacía ⇒ Grade cae
+	// al juicio contra la respuesta cruda (comportamiento previo a F4).
+	extractIdeas []string
+	extractErr   error
+	extractCalls int
 }
 
 func (m *mockLLMProvider) GenerateAssessment(_ context.Context, _ llm.MaterialInput, _ llm.GenerationParams) (json.RawMessage, error) {
@@ -142,6 +148,14 @@ func (m *mockLLMProvider) CheckCriterion(_ context.Context, req llm.CriterionChe
 		score = 1.0
 	}
 	return llm.ReviewResult{Verdict: v, Score: score, Feedback: "criterio: " + string(v)}, nil
+}
+
+func (m *mockLLMProvider) ExtractIdeas(_ context.Context, _ llm.ExtractIdeasRequest) ([]string, error) {
+	m.extractCalls++
+	if m.extractErr != nil {
+		return nil, m.extractErr
+	}
+	return m.extractIdeas, nil
 }
 
 func (m *mockLLMProvider) Name() string { return "mock" }

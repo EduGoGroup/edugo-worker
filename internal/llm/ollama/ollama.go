@@ -151,6 +151,23 @@ func (p *Provider) CheckCriterion(ctx context.Context, req llm.CriterionCheckReq
 	return result, nil
 }
 
+// ExtractIdeas descompone la respuesta del alumno en ideas atómicas (plan 045 F4).
+// Mismo camino que las demás llamadas: build prompt → generar → ExtractJSON → validar
+// la forma {"ideas":[…]}. Una extracción que no parsea es fallo transitorio (el caller
+// decide el fallback a la respuesta cruda).
+func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest) ([]string, error) {
+	prompt := llm.BuildExtractIdeasPrompt(req)
+	out, err := p.generate(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+	rawJSON, err := llm.ExtractJSON(out)
+	if err != nil {
+		return nil, err
+	}
+	return llm.ParseExtractedIdeas(rawJSON)
+}
+
 // generate ejecuta POST /api/generate y devuelve el texto crudo del modelo.
 func (p *Provider) generate(ctx context.Context, prompt string) (string, error) {
 	reqBody := generateRequest{

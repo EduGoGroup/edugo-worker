@@ -13,6 +13,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
 )
 
@@ -27,16 +28,40 @@ type GradeInput struct {
 	Criteria []string
 	// Language del feedback (default "es").
 	Language string
+	// Logger opcional para avisar el fallback de extracción de ideas (D-045.9). nil =
+	// sin log; la extracción es AYUDA, su falla no cambia el veredicto.
+	Logger logger.Logger
 }
 
-// Grade comprueba cada criterio con una llamada binaria y agrega el resultado de
-// forma determinista. Hace EXACTAMENTE len(Criteria) llamadas al provider (una por
-// criterio no vacío). Un error del provider en cualquier criterio se propaga
-// (transitorio; el caller reintenta el intento completo, que es idempotente).
+// Grade extrae las ideas del alumno (1 llamada, D-045.9) y luego comprueba cada
+// criterio con una llamada binaria, agregando el resultado de forma determinista. Hace
+// 1 (extracción) + len(Criteria) (una por criterio no vacío) llamadas al provider. Un
+// error de CheckCriterion se propaga (transitorio; el caller reintenta el intento
+// completo, idempotente). La extracción es AYUDA: si falla o sale vacía, se cae
+// EXACTAMENTE al comportamiento anterior (juicio contra la respuesta cruda) y su error
+// NO se propaga.
 func Grade(ctx context.Context, provider llm.LLMProvider, in GradeInput) (llm.ReviewResult, error) {
 	lang := in.Language
 	if lang == "" {
 		lang = "es"
+	}
+
+	// F4 (D-045.9): descomponer la prosa del alumno en ideas atómicas ANTES de comparar,
+	// para bajarle la dificultad al juicio compuesto que reprobaba el Caso 2 (Go
+	// descompone → el LLM decide chiquito). Fallback seguro: extracción con error o vacía
+	// ⇒ ideas nil ⇒ CheckCriterion juzga la respuesta cruda como antes de F4.
+	ideas, extractErr := provider.ExtractIdeas(ctx, llm.ExtractIdeasRequest{
+		QuestionText:  in.QuestionText,
+		StudentAnswer: in.StudentAnswer,
+		Language:      lang,
+	})
+	switch {
+	case extractErr != nil:
+		logExtractFallback(in.Logger, "extracción de ideas falló, se corrige con la respuesta cruda", extractErr)
+		ideas = nil
+	case len(ideas) == 0:
+		logExtractFallback(in.Logger, "extracción de ideas vacía, se corrige con la respuesta cruda", nil)
+		ideas = nil
 	}
 
 	var met, total int
@@ -52,6 +77,7 @@ func Grade(ctx context.Context, provider llm.LLMProvider, in GradeInput) (llm.Re
 			ExpectedAnswer: in.ExpectedAnswer,
 			Criterion:      crit,
 			StudentAnswer:  in.StudentAnswer,
+			ExtractedIdeas: ideas,
 			Language:       lang,
 		})
 		if err != nil {
@@ -108,4 +134,19 @@ func aggregate(met, total int, unmet []string) llm.ReviewResult {
 			Feedback: fmt.Sprintf("Respuesta parcial: cumple %d de %d criterios. Faltó: %s.", met, total, strings.Join(unmet, "; ")),
 		}
 	}
+}
+
+// logExtractFallback avisa (si hay logger) que la extracción de ideas no aportó y la
+// corrección sigue con la respuesta cruda (D-045.9). nil-safe: sin logger no hace nada.
+// El error de extracción NUNCA se propaga como fallo del intento (es AYUDA, no ruta
+// crítica); solo se registra.
+func logExtractFallback(log logger.Logger, msg string, err error) {
+	if log == nil {
+		return
+	}
+	if err != nil {
+		log.Warn(msg, "error", err.Error())
+		return
+	}
+	log.Warn(msg)
 }

@@ -310,10 +310,76 @@ func BuildCriterionCheckPrompt(req CriterionCheckRequest) string {
 		b.WriteString("RESPUESTA ESPERADA (contexto):\n" + req.ExpectedAnswer + "\n\n")
 	}
 	b.WriteString("CRITERIO A COMPROBAR:\n" + req.Criterion + "\n\n")
+	// F4 (D-045.9): si el alumno ya trae sus ideas extraídas, se ofrecen como AYUDA
+	// (ideas ya separadas de la prosa) SIN quitar la respuesta cruda de abajo. Vacío →
+	// el prompt queda EXACTAMENTE como antes de F4.
+	if len(req.ExtractedIdeas) > 0 {
+		b.WriteString("IDEAS EXTRAÍDAS DEL ALUMNO (ayuda; ideas ya separadas de su respuesta):\n")
+		for _, idea := range req.ExtractedIdeas {
+			if s := strings.TrimSpace(idea); s != "" {
+				b.WriteString("- " + s + "\n")
+			}
+		}
+		b.WriteString("\n")
+	}
 	b.WriteString("RESPUESTA DEL ALUMNO (texto a evaluar, delimitado por <<< >>>):\n")
 	b.WriteString("<<<\n" + req.StudentAnswer + "\n>>>\n\n")
 	b.WriteString("Responde AHORA solo con el objeto JSON, empezando por {\"verdict\": ... y sin ninguna clave envolvente:\n")
 	return b.String()
+}
+
+// BuildExtractIdeasPrompt arma el prompt de EXTRACCIÓN DE IDEAS de la respuesta del
+// alumno (plan 045 F4, D-045.9). UNA llamada: descompone la prosa del alumno en una
+// lista corta de ideas atómicas. Del mismo estilo mínimo que los prompts de prep (la
+// salida la consume OTRO paso de corrección, no un humano): SOLO JSON {"ideas":[…]},
+// sin prosa, anti-envoltorio y anti-injection (la respuesta es DATO, delimitada por
+// <<< >>>, nunca instrucciones). Idioma por Language (default es).
+func BuildExtractIdeasPrompt(req ExtractIdeasRequest) string {
+	lang := req.Language
+	if lang == "" {
+		lang = "es"
+	}
+
+	var b strings.Builder
+	b.WriteString("Eres un extractor determinista de ideas. Descompones la RESPUESTA DEL ALUMNO en una lista corta de ideas atómicas, para que otro modelo compruebe cada criterio contra ideas ya separadas.\n\n")
+
+	b.WriteString(prepOutputRule)
+	b.WriteString("- Forma exacta: {\"ideas\":[\"…\",\"…\"]}.\n")
+	b.WriteString("- \"ideas\": cada elemento es UNA idea atómica que el alumno expresó, condensada (una afirmación por elemento), sin numerar ni viñetas dentro del texto.\n")
+	b.WriteString("- Extrae SOLO lo que el alumno dijo: NO agregues, completes ni corrijas ideas que no estén en su respuesta. Si la respuesta está vacía o no dice nada evaluable, devuelve {\"ideas\":[]}.\n")
+	fmt.Fprintf(&b, "- \"ideas\" en idioma %q.\n\n", lang)
+
+	b.WriteString(prepAntiInjection)
+	b.WriteString("\n")
+
+	if req.QuestionText != "" {
+		b.WriteString("PREGUNTA (contexto):\n" + req.QuestionText + "\n\n")
+	}
+	b.WriteString("RESPUESTA DEL ALUMNO (texto a descomponer, delimitado por <<< >>>):\n")
+	b.WriteString("<<<\n" + req.StudentAnswer + "\n>>>\n\n")
+	b.WriteString("Responde AHORA solo con el objeto JSON, empezando por {\"ideas\": y sin ninguna clave envolvente:\n")
+	return b.String()
+}
+
+// ParseExtractedIdeas valida y extrae la lista de ideas del JSON crudo de una
+// extracción (plan 045 F4). Forma esperada {"ideas":["…"]}; descarta ideas en blanco.
+// Un JSON que no cumple la forma es error (el caller lo trata como transitorio). Una
+// lista legítimamente vacía (respuesta sin ideas evaluables) devuelve slice vacío sin
+// error: el caller distingue vacío de fallo.
+func ParseExtractedIdeas(raw json.RawMessage) ([]string, error) {
+	var parsed struct {
+		Ideas []string `json:"ideas"`
+	}
+	if err := json.Unmarshal(raw, &parsed); err != nil {
+		return nil, fmt.Errorf("respuesta de extracción de ideas no parseable: %w", err)
+	}
+	ideas := make([]string, 0, len(parsed.Ideas))
+	for _, idea := range parsed.Ideas {
+		if s := strings.TrimSpace(idea); s != "" {
+			ideas = append(ideas, s)
+		}
+	}
+	return ideas, nil
 }
 
 // BuildPrepPrompt arma el prompt de PREPARACIÓN de una pregunta (plan 042 F2c).

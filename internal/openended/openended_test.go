@@ -10,11 +10,20 @@ import (
 )
 
 // mockProvider resuelve CheckCriterion consultando met por texto de criterio; ausente
-// ⇒ incorrect. Cuenta las llamadas para verificar «una por criterio».
+// ⇒ incorrect. Cuenta las llamadas para verificar «una por criterio». Para F4 también
+// simula ExtractIdeas (ideas/extractErr configurables) y captura las ExtractedIdeas que
+// recibió cada CheckCriterion.
 type mockProvider struct {
 	met       map[string]bool
 	calls     int
 	critError error
+
+	// extracción de ideas (F4/D-045.9).
+	ideas        []string
+	extractErr   error
+	extractCalls int
+	// gotIdeas guarda, por cada CheckCriterion, las ExtractedIdeas que llegaron.
+	gotIdeas [][]string
 }
 
 func (m *mockProvider) GenerateAssessment(_ context.Context, _ llm.MaterialInput, _ llm.GenerationParams) (json.RawMessage, error) {
@@ -31,6 +40,7 @@ func (m *mockProvider) JudgePairEquivalence(_ context.Context, _ llm.PairEquival
 }
 func (m *mockProvider) CheckCriterion(_ context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
 	m.calls++
+	m.gotIdeas = append(m.gotIdeas, req.ExtractedIdeas)
 	if m.critError != nil {
 		return llm.ReviewResult{}, m.critError
 	}
@@ -43,6 +53,13 @@ func (m *mockProvider) CheckCriterion(_ context.Context, req llm.CriterionCheckR
 		score = 1.0
 	}
 	return llm.ReviewResult{Verdict: v, Score: score}, nil
+}
+func (m *mockProvider) ExtractIdeas(_ context.Context, _ llm.ExtractIdeasRequest) ([]string, error) {
+	m.extractCalls++
+	if m.extractErr != nil {
+		return nil, m.extractErr
+	}
+	return m.ideas, nil
 }
 func (m *mockProvider) Name() string { return "mock" }
 
@@ -157,5 +174,100 @@ func TestGrade_ErrorProviderSePropaga(t *testing.T) {
 	_, err := Grade(context.Background(), prov, fotosintesis([]string{"c1"}))
 	if err == nil {
 		t.Fatal("esperaba que el error del provider se propagara")
+	}
+}
+
+// TestGrade_ExtraccionNoVacia_SePasaACadaCriterio verifica el camino feliz de F4: 1
+// llamada a ExtractIdeas + N a CheckCriterion, y que las ideas extraídas llegan a CADA
+// comprobación de criterio (D-045.9).
+func TestGrade_ExtraccionNoVacia_SePasaACadaCriterio(t *testing.T) {
+	criteria := []string{"menciona la luz", "menciona la energía"}
+	ideas := []string{"las plantas usan la luz del sol", "producen energía"}
+	prov := &mockProvider{
+		met:   map[string]bool{"menciona la luz": true, "menciona la energía": true},
+		ideas: ideas,
+	}
+	res, err := Grade(context.Background(), prov, fotosintesis(criteria))
+	if err != nil {
+		t.Fatalf("Grade error: %v", err)
+	}
+	if prov.extractCalls != 1 {
+		t.Fatalf("esperaba 1 llamada a ExtractIdeas, hubo %d", prov.extractCalls)
+	}
+	if prov.calls != 2 {
+		t.Fatalf("esperaba 2 llamadas a CheckCriterion (una por criterio), hubo %d", prov.calls)
+	}
+	if len(prov.gotIdeas) != 2 {
+		t.Fatalf("esperaba 2 capturas de ExtractedIdeas, hubo %d", len(prov.gotIdeas))
+	}
+	for i, got := range prov.gotIdeas {
+		if len(got) != len(ideas) {
+			t.Fatalf("criterio %d: ExtractedIdeas = %v, quería %v", i, got, ideas)
+		}
+		for j := range ideas {
+			if got[j] != ideas[j] {
+				t.Fatalf("criterio %d idea %d = %q, quería %q", i, j, got[j], ideas[j])
+			}
+		}
+	}
+	if res.Verdict != llm.VerdictCorrect {
+		t.Fatalf("esperaba correct (2/2), hubo %s", res.Verdict)
+	}
+}
+
+// TestGrade_ExtraccionVacia_CaeARaw verifica el fallback por lista vacía: CheckCriterion
+// recibe ExtractedIdeas nil (comportamiento previo a F4), sin cambiar el veredicto.
+func TestGrade_ExtraccionVacia_CaeARaw(t *testing.T) {
+	criteria := []string{"c1", "c2"}
+	prov := &mockProvider{
+		met:   map[string]bool{"c1": true, "c2": true},
+		ideas: nil, // extracción vacía
+	}
+	res, err := Grade(context.Background(), prov, fotosintesis(criteria))
+	if err != nil {
+		t.Fatalf("Grade error: %v", err)
+	}
+	if prov.extractCalls != 1 {
+		t.Fatalf("esperaba 1 llamada a ExtractIdeas, hubo %d", prov.extractCalls)
+	}
+	if prov.calls != 2 {
+		t.Fatalf("esperaba 2 llamadas a CheckCriterion, hubo %d", prov.calls)
+	}
+	for i, got := range prov.gotIdeas {
+		if got != nil {
+			t.Fatalf("criterio %d: esperaba ExtractedIdeas nil (fallback), hubo %v", i, got)
+		}
+	}
+	if res.Verdict != llm.VerdictCorrect {
+		t.Fatalf("esperaba correct (2/2), hubo %s", res.Verdict)
+	}
+}
+
+// TestGrade_ExtraccionError_NoRompeYCaeARaw verifica que un error de ExtractIdeas NO se
+// propaga como fallo del intento: se cae a la respuesta cruda (ExtractedIdeas nil) y la
+// corrección por criterios sigue normal (D-045.9, fallback seguro).
+func TestGrade_ExtraccionError_NoRompeYCaeARaw(t *testing.T) {
+	criteria := []string{"c1", "c2"}
+	prov := &mockProvider{
+		met:        map[string]bool{"c1": true, "c2": true},
+		extractErr: context.DeadlineExceeded, // la extracción falla
+	}
+	res, err := Grade(context.Background(), prov, fotosintesis(criteria))
+	if err != nil {
+		t.Fatalf("el error de extracción NO debe propagarse; Grade devolvió: %v", err)
+	}
+	if prov.extractCalls != 1 {
+		t.Fatalf("esperaba 1 llamada a ExtractIdeas, hubo %d", prov.extractCalls)
+	}
+	if prov.calls != 2 {
+		t.Fatalf("esperaba 2 llamadas a CheckCriterion (corrección siguió), hubo %d", prov.calls)
+	}
+	for i, got := range prov.gotIdeas {
+		if got != nil {
+			t.Fatalf("criterio %d: esperaba ExtractedIdeas nil tras error, hubo %v", i, got)
+		}
+	}
+	if res.Verdict != llm.VerdictCorrect {
+		t.Fatalf("esperaba correct (2/2), hubo %s", res.Verdict)
 	}
 }

@@ -40,6 +40,9 @@ func (m *mockProvider) JudgePairEquivalence(_ context.Context, _ llm.PairEquival
 func (m *mockProvider) CheckCriterion(_ context.Context, _ llm.CriterionCheckRequest) (llm.ReviewResult, error) {
 	return llm.ReviewResult{}, nil
 }
+func (m *mockProvider) ExtractIdeas(_ context.Context, _ llm.ExtractIdeasRequest) ([]string, error) {
+	return nil, nil
+}
 func (m *mockProvider) Name() string { return "mock" }
 
 // TestGrade_Caso1_TodoFuzzy_SinLlamadas es el ASSERT ESTRELLA del plan 045 F3: el Caso 1

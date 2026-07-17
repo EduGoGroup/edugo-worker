@@ -66,6 +66,9 @@ func (m *mockPrepProvider) JudgePairEquivalence(_ context.Context, _ llm.PairEqu
 func (m *mockPrepProvider) CheckCriterion(_ context.Context, _ llm.CriterionCheckRequest) (llm.ReviewResult, error) {
 	return llm.ReviewResult{}, errors.New("no usado")
 }
+func (m *mockPrepProvider) ExtractIdeas(_ context.Context, _ llm.ExtractIdeasRequest) ([]string, error) {
+	return nil, errors.New("no usado")
+}
 func (m *mockPrepProvider) Name() string { return "mock-prep" }
 
 // --- helpers ---

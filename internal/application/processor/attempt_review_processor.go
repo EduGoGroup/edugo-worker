@@ -319,6 +319,7 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 				StudentAnswer:  ans.StudentAnswer,
 				Criteria:       criteria,
 				Language:       reviewLanguage,
+				Logger:         p.logger,
 			})
 		}
 		// F4a: sin criterios reales, se enriquece el prompt global con intención/ideas/variantes.

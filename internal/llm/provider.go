@@ -146,7 +146,27 @@ type CriterionCheckRequest struct {
 	Criterion string
 	// StudentAnswer es la respuesta del alumno a evaluar contra el criterio.
 	StudentAnswer string
+	// ExtractedIdeas, si no vacío, son las ideas atómicas del alumno ya extraídas por
+	// ExtractIdeas (plan 045 F4, D-045.9). ENRIQUECEN el prompt como AYUDA (ideas ya
+	// separadas de la prosa) sin quitar la respuesta cruda. nil/vacío = comportamiento
+	// anterior (el modelo juzga solo la respuesta cruda).
+	ExtractedIdeas []string
 	// Language del feedback (default "es").
+	Language string
+}
+
+// ExtractIdeasRequest es la petición de EXTRACCIÓN DE IDEAS de la respuesta del alumno
+// (plan 045 F4, D-045.9, carril open_ended): UNA llamada que descompone la prosa del
+// alumno en una lista corta de ideas atómicas, para que la comprobación por criterio
+// (CheckCriterion) juzgue ideas ya estructuradas en vez de prosa cruda (Go descompone
+// → el LLM decide chiquito). El caller valida el JSON; una extracción que no parsea es
+// fallo transitorio.
+type ExtractIdeasRequest struct {
+	// QuestionText da contexto (opcional) para orientar qué ideas son relevantes.
+	QuestionText string
+	// StudentAnswer es la respuesta del alumno a descomponer.
+	StudentAnswer string
+	// Language del contenido (default "es").
 	Language string
 }
 
@@ -178,6 +198,12 @@ type LLMProvider interface {
 	// binario: verdict correct|incorrect, score 1.0|0.0. La agregación a verdict+score
 	// globales la hace el caller de forma determinista.
 	CheckCriterion(ctx context.Context, req CriterionCheckRequest) (ReviewResult, error)
+
+	// ExtractIdeas descompone la respuesta del alumno en una lista corta de ideas
+	// atómicas (plan 045 F4, D-045.9). Una sola llamada; el caller valida el JSON. Una
+	// extracción que no parsea es fallo transitorio. Es una AYUDA para CheckCriterion:
+	// su falla NO debe romper la corrección (el caller cae a la respuesta cruda).
+	ExtractIdeas(ctx context.Context, req ExtractIdeasRequest) ([]string, error)
 
 	// Name identifica al provider para logs/harness (ej. "ollama", "anthropic").
 	Name() string
