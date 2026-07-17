@@ -77,6 +77,37 @@ func TestGenerateAssessment_HTTPError(t *testing.T) {
 	}
 }
 
+func TestGenerate_RequestIncluyeThinkFalse(t *testing.T) {
+	// El body del request a Ollama DEBE incluir "think":false (evita el `{}` de los
+	// modelos con thinking como qwen3 bajo format:json). Se verifica que la clave
+	// exista y sea false, no solo que el campo por defecto esté ausente.
+	var captured map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		body, _ := io.ReadAll(r.Body)
+		if err := json.Unmarshal(body, &captured); err != nil {
+			t.Errorf("body no parseable: %v", err)
+		}
+		_ = json.NewEncoder(w).Encode(generateResponse{
+			Response: `{"verdict":"correct","score":1,"feedback":"ok"}`,
+			Done:     true,
+		})
+	}))
+	defer srv.Close()
+
+	p := New(Config{BaseURL: srv.URL, Model: "qwen3:1.7b"})
+	if _, err := p.ReviewAnswer(context.Background(), llm.ReviewRequest{QuestionText: "q", StudentAnswer: "a"}); err != nil {
+		t.Fatalf("error inesperado: %v", err)
+	}
+
+	think, ok := captured["think"]
+	if !ok {
+		t.Fatal("el body del request no incluye la clave \"think\"")
+	}
+	if think != false {
+		t.Fatalf("think esperado=false, hubo %v", think)
+	}
+}
+
 func TestName(t *testing.T) {
 	if got := New(Config{Model: "abc"}).Name(); got != "ollama:abc" {
 		t.Fatalf("Name inesperado: %s", got)

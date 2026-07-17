@@ -57,6 +57,13 @@ type generateRequest struct {
 	Prompt string `json:"prompt"`
 	Stream bool   `json:"stream"`
 	Format string `json:"format,omitempty"`
+	// Think desactiva el "thinking" de los modelos que lo soportan (qwen3, etc.).
+	// Con format:"json" el razonamiento se corta y deja el objeto vacío `{}`
+	// (verdict/score/feedback en cero): una review IA engañosa. Forzar think:false
+	// hace que el modelo emita directamente el JSON pedido. En modelos sin thinking
+	// Ollama ignora el campo (inocuo). Se envía siempre (sin omitempty) para que el
+	// false explícito llegue al servidor.
+	Think bool `json:"think"`
 }
 
 // generateResponse es la respuesta (con stream:false, un solo objeto).
@@ -100,6 +107,7 @@ func (p *Provider) generate(ctx context.Context, prompt string) (string, error) 
 		Prompt: prompt,
 		Stream: false,
 		Format: "json",
+		Think:  false,
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {

@@ -44,6 +44,15 @@ const reviewLanguage = "es"
 // DLQ. Ver classifyError en retry.go.
 var ErrMalformedEvent = errors.New("evento attempt.review_requested malformado")
 
+// ErrInvalidVerdict marca una respuesta del LLM cuyo verdict no es uno de los
+// válidos (p.ej. el `{}` que devuelve qwen3 con thinking + format:json, que
+// deserializa a verdict=""). Se trata como fallo del LLM (transitorio, como un
+// error del provider): NO se postea una review IA de 0 puntos «propuesta por IA»
+// —sería un juicio falso—; la answer queda sin review para que el profesor la
+// corrija a mano. classifyError no lo lista como permanente, así que reusa el
+// carril de retry existente de un fallo de provider.
+var ErrInvalidVerdict = errors.New("veredicto del LLM inválido")
+
 // SchoolSettingsReader es la porción del SettingsClient M2M que usa el processor.
 // Se define como interfaz para poder mockearla en tests. *m2m.SettingsClient la
 // satisface.
@@ -215,6 +224,22 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 			return fmt.Errorf("LLM revisando answer %s (attempt %s): %w", ans.AnswerID, attemptID, err)
 		}
 
+		// Guardia anti-basura: si el verdict no es válido para el tipo de pregunta
+		// (p.ej. "" por un `{}` de qwen3), el LLM no emitió un juicio usable. Se trata
+		// igual que un fallo del provider (mismo carril de retry) y NO se postea una
+		// review IA de 0 puntos «propuesta» — la answer queda para el profesor.
+		if err := validateVerdict(ans.QuestionType, result.Verdict); err != nil {
+			p.logger.Warn("veredicto del LLM inválido, se descarta la propuesta (no se postea review IA)",
+				"attempt_id", attemptID,
+				"answer_id", ans.AnswerID,
+				"question_type", ans.QuestionType,
+				"verdict", string(result.Verdict),
+				"score", result.Score,
+				"provider", provider.Name(),
+			)
+			return fmt.Errorf("revisando answer %s (attempt %s): %w", ans.AnswerID, attemptID, err)
+		}
+
 		points := scaledPoints(result.Score, ans.Points)
 		if _, err := p.learning.PostAnswerReview(ctx, attemptID, ans.AnswerID, m2m.AnswerReviewRequest{
 			PointsAwarded: points,
@@ -283,6 +308,25 @@ func scaledPoints(score, questionPoints float64) float64 {
 		score = 1
 	}
 	return math.Round(score*questionPoints*100) / 100
+}
+
+// validateVerdict comprueba que el veredicto del LLM sea uno de los aceptables
+// para el tipo de pregunta: short_answer es binario (equivalencia correct/
+// incorrect); open_ended (o tipo vacío por compatibilidad F3) admite además el
+// parcial de rúbrica. Un veredicto fuera de este conjunto —incluido el vacío de
+// un `{}`— es ErrInvalidVerdict.
+func validateVerdict(questionType string, v llm.Verdict) error {
+	switch questionType {
+	case llm.QuestionTypeShortAnswer:
+		if v == llm.VerdictCorrect || v == llm.VerdictIncorrect {
+			return nil
+		}
+	default: // open_ended o vacío (compatibilidad F3)
+		if v == llm.VerdictCorrect || v == llm.VerdictPartial || v == llm.VerdictIncorrect {
+			return nil
+		}
+	}
+	return fmt.Errorf("%w: %q no es válido para question_type %q", ErrInvalidVerdict, v, questionType)
 }
 
 // validateReviewEvent comprueba los campos mínimos que necesita el carril. No

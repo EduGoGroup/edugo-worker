@@ -340,8 +340,9 @@ func TestAttemptReviewProcessor_FalloLLMaMitad_ErrorSinFinalize(t *testing.T) {
 	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
 		Answers: []m2m.PendingAnswer{pendingAnswer("a1", 10), pendingAnswer("a2", 10)},
 	}}
-	// Falla en la segunda corrección.
-	provider := &mockLLMProvider{score: 0.8, failOnCall: 2, err: errors.New("ollama timeout")}
+	// Falla en la segunda corrección. La primera devuelve un verdict válido para
+	// que sí se escriba su review antes del fallo.
+	provider := &mockLLMProvider{score: 0.8, verdict: llm.VerdictCorrect, failOnCall: 2, err: errors.New("ollama timeout")}
 	p := newProcessor(reader, learning, provider)
 
 	err := p.Process(context.Background(), validEventPayload(t))
@@ -357,6 +358,57 @@ func TestAttemptReviewProcessor_FalloLLMaMitad_ErrorSinFinalize(t *testing.T) {
 	// La primera review sí se escribió (upsert idempotente); el redelivery la re-lee.
 	if len(learning.reviewCalls) != 1 {
 		t.Fatalf("esperaba 1 review escrita antes del fallo, hubo %d", len(learning.reviewCalls))
+	}
+}
+
+func TestAttemptReviewProcessor_VerdictVacio_NoProponeReview(t *testing.T) {
+	// Regresión del bug de qwen3: el LLM devuelve `{}` → verdict="" (inválido). NO
+	// se debe postear una review IA de 0 puntos «propuesta»; se cuenta como fallo
+	// del LLM (transitorio) y la answer queda sin review para el profesor.
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{pendingAnswer("a1", 10)},
+	}}
+	// Verdict vacío (default): simula el `{}` de qwen3. Score 0, feedback vacío.
+	provider := &mockLLMProvider{verdict: "", score: 0}
+	p := newProcessor(reader, learning, provider)
+
+	err := p.Process(context.Background(), validEventPayload(t))
+	if err == nil {
+		t.Fatal("esperaba error por verdict inválido del LLM")
+	}
+	if !errors.Is(err, ErrInvalidVerdict) {
+		t.Fatalf("esperaba ErrInvalidVerdict, hubo: %v", err)
+	}
+	if classifyError(err) != ErrorTypeTransient {
+		t.Fatalf("verdict inválido debe clasificar transitorio (mismo carril que fallo de provider)")
+	}
+	if len(learning.reviewCalls) != 0 {
+		t.Fatalf("NUNCA se debe postear review con verdict inválido, hubo %d", len(learning.reviewCalls))
+	}
+	if learning.finalizeCalls != 0 {
+		t.Fatalf("no debe finalizar si el verdict fue inválido, hubo %d", learning.finalizeCalls)
+	}
+}
+
+func TestAttemptReviewProcessor_ShortAnswer_VerdictPartial_NoProponeReview(t *testing.T) {
+	// "partial" es válido para open_ended pero NO para short_answer (binario). No
+	// se debe postear la propuesta.
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowTeacher)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{shortAnswerPending("a1", 5)},
+	}}
+	provider := &mockLLMProvider{verdict: llm.VerdictPartial, score: 0.5}
+	p := newProcessor(reader, learning, provider)
+
+	err := p.Process(context.Background(), shortAnswerEventPayload(t))
+	if !errors.Is(err, ErrInvalidVerdict) {
+		t.Fatalf("esperaba ErrInvalidVerdict para 'partial' en short_answer, hubo: %v", err)
+	}
+	if len(learning.reviewCalls) != 0 {
+		t.Fatalf("no debe postear review con verdict inválido para short_answer, hubo %d", len(learning.reviewCalls))
 	}
 }
 
