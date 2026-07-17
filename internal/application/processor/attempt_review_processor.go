@@ -304,20 +304,24 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 	}
 
 	if ans.QuestionType == questionprep.QuestionTypeOpenEnded && prep != nil {
-		// F4b: con criterios (≥1), el juicio global se reemplaza por una llamada binaria
-		// por criterio + agregación determinista en Go.
-		if len(prep.Criteria) > 0 {
+		// F4b: con criterios reales (≥1 no vacío), el juicio global se reemplaza por una
+		// llamada binaria por criterio + agregación determinista en Go. Filtramos criterios
+		// en blanco por defensa: un prep con solo criterios vacíos NO debe entrar aquí (daría
+		// incorrect/0.0 silencioso); cae al fallback F4a de rúbrica global. El validador ya
+		// rechaza esos preps, pero no lo asumimos en el carril de corrección.
+		criteria := nonBlankCriteria(prep.Criteria)
+		if len(criteria) > 0 {
 			p.logger.Info("open_ended con prep criteria: carril por criterios (una llamada por criterio)",
-				"answer_id", ans.AnswerID, "criteria", len(prep.Criteria))
+				"answer_id", ans.AnswerID, "criteria", len(criteria))
 			return openended.Grade(ctx, provider, openended.GradeInput{
 				QuestionText:   ans.QuestionText,
 				ExpectedAnswer: ans.ExpectedAnswer,
 				StudentAnswer:  ans.StudentAnswer,
-				Criteria:       prep.Criteria,
+				Criteria:       criteria,
 				Language:       reviewLanguage,
 			})
 		}
-		// F4a: sin criterios, se enriquece el prompt global con intención/ideas/variantes.
+		// F4a: sin criterios reales, se enriquece el prompt global con intención/ideas/variantes.
 		req.Prep = &llm.ReviewPrep{
 			QuestionIntent: prep.QuestionIntent,
 			MainIdeas:      prep.MainIdeas,
@@ -358,6 +362,19 @@ func enrichExpectedWithPrep(expected string, prep *questionprep.Prep) string {
 		return norm
 	}
 	return expected + "\nRespuesta esperada (normalizada): " + norm
+}
+
+// nonBlankCriteria devuelve los criterios no vacíos (tras TrimSpace) conservando el
+// orden. Es la frontera del carril F4b: si queda ≥1 se corrige por criterios; si queda 0
+// el carril cae al fallback de rúbrica global (F4a), nunca a un incorrect/0.0 silencioso.
+func nonBlankCriteria(criteria []string) []string {
+	var out []string
+	for _, c := range criteria {
+		if strings.TrimSpace(c) != "" {
+			out = append(out, c)
+		}
+	}
+	return out
 }
 
 // releaseClaim libera el candado de mejor esfuerzo: un fallo NO es fatal (el

@@ -89,6 +89,25 @@ func TestValidate_OpenEndedNoMainIdeas(t *testing.T) {
 	}
 }
 
+func TestValidate_OpenEndedBlankCriteria(t *testing.T) {
+	// criteria con elementos pero todos en blanco: debe rechazarse. Si pasara, el carril
+	// por criterios contaría 0 reales y devolvería incorrect/0.0 sin consultar al LLM.
+	raw := []byte(`{"version":1,"question_type":"open_ended","question_intent":"medir X",
+		"main_ideas":["idea"],"criteria":["","  "]}`)
+	if _, err := Validate(raw, QuestionTypeOpenEnded); err == nil {
+		t.Fatal("esperaba error: criteria con elementos en blanco no puede pasar")
+	}
+}
+
+func TestValidate_OpenEndedEmptyCriteria_OK(t *testing.T) {
+	// criteria de 0 elementos SÍ es válido (carril F4a: enriquecimiento del prompt global).
+	raw := []byte(`{"version":1,"question_type":"open_ended","question_intent":"medir X",
+		"main_ideas":["idea"],"criteria":[]}`)
+	if _, err := Validate(raw, QuestionTypeOpenEnded); err != nil {
+		t.Fatalf("esperaba válido (criteria vacío es legítimo), got: %v", err)
+	}
+}
+
 func TestValidate_NotJSON(t *testing.T) {
 	_, err := Validate([]byte(`no soy json`), QuestionTypeShortAnswer)
 	var ve *ValidationError

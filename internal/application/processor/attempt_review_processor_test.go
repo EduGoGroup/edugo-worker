@@ -819,6 +819,60 @@ func TestAttemptReviewProcessor_OpenEnded_SinCriterios_EnriquecePrompt(t *testin
 	}
 }
 
+func TestAttemptReviewProcessor_OpenEnded_CriteriosEnBlanco_NoCeroSilencioso(t *testing.T) {
+	// Prep estructuralmente parecido pero con criteria=["","  "]: el validador lo rechaza
+	// (prep se ignora) y el carril degrada al flujo global, NUNCA a un incorrect/0.0 sin
+	// consultar al LLM. Verificamos que se consulta ReviewAnswer y no hay 0 silencioso.
+	blankCriteriaPrep := `{"version":1,"question_type":"open_ended",` +
+		`"question_intent":"medir si explica la fotosíntesis",` +
+		`"main_ideas":["convierte luz en energía"],` +
+		`"criteria":["","  "]}`
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowTeacher)}
+	learning := &mockLearningClient{pending: m2m.PendingAnswersResponse{
+		Answers: []m2m.PendingAnswer{openEndedPending("a1", 10, blankCriteriaPrep)},
+	}}
+	provider := &mockLLMProvider{score: 0.8, verdict: llm.VerdictCorrect}
+	p := newProcessor(reader, learning, provider)
+
+	if err := p.Process(context.Background(), openEndedEventPayload(t)); err != nil {
+		t.Fatalf("criterios en blanco no debe fallar el proceso: %v", err)
+	}
+	if provider.criterionCalls != 0 {
+		t.Fatalf("no debe entrar al carril por criterios (0 llamadas), hubo %d", provider.criterionCalls)
+	}
+	if provider.calls != 1 {
+		t.Fatalf("debe caer al flujo global (1 ReviewAnswer), hubo %d", provider.calls)
+	}
+	if len(learning.reviewCalls) != 1 {
+		t.Fatalf("esperaba 1 review posteada, hubo %d", len(learning.reviewCalls))
+	}
+	// El puntaje NO es 0 silencioso: viene del juicio global (0.8 → 8 de 10).
+	if got := learning.reviewCalls[0].PointsAwarded; got < 7.99 || got > 8.01 {
+		t.Fatalf("esperaba ~8.0 puntos del flujo global, hubo %.2f (¿0 silencioso?)", got)
+	}
+}
+
+func TestNonBlankCriteria(t *testing.T) {
+	cases := []struct {
+		name string
+		in   []string
+		want int
+	}{
+		{"todos válidos", []string{"c1", "c2"}, 2},
+		{"mezcla con vacío", []string{"c1", "  ", "c2"}, 2},
+		{"todos en blanco", []string{"", "  ", "\t"}, 0},
+		{"nil", nil, 0},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := len(nonBlankCriteria(tc.in)); got != tc.want {
+				t.Fatalf("nonBlankCriteria(%v) = %d elementos, quería %d", tc.in, got, tc.want)
+			}
+		})
+	}
+}
+
 func TestAttemptReviewProcessor_OpenEnded_SinPrep_FlujoGlobal(t *testing.T) {
 	// Sin prep: flujo global intacto, req.Prep nil (fallback F4a).
 	reader := &mockSettingsReader{settings: settingsWith(

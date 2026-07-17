@@ -106,7 +106,10 @@ func validateShortAnswer(p Prep) []Issue {
 }
 
 // validateOpenEnded aplica las reglas de intención + ideas (D-042.2 open_ended).
-// secondary_ideas/valid_variants/criteria pueden venir vacíos.
+// secondary_ideas/valid_variants/criteria pueden venir vacíos (lista de 0 elementos),
+// pero si criteria trae elementos NINGUNO puede estar en blanco: un criterio vacío haría
+// que el carril por criterios cuente 0 reales y devuelva incorrect/0.0 sin consultar al
+// LLM (simetría con items no vacíos de short_answer).
 func validateOpenEnded(p Prep) []Issue {
 	var issues []Issue
 
@@ -119,6 +122,11 @@ func validateOpenEnded(p Prep) []Issue {
 	for i, idea := range p.MainIdeas {
 		if strings.TrimSpace(idea) == "" {
 			issues = append(issues, Issue{fmt.Sprintf("main_ideas[%d]", i), "no puede estar vacío"})
+		}
+	}
+	for i, c := range p.Criteria {
+		if strings.TrimSpace(c) == "" {
+			issues = append(issues, Issue{fmt.Sprintf("criteria[%d]", i), "no puede estar vacío"})
 		}
 	}
 
