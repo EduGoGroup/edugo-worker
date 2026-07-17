@@ -53,8 +53,10 @@ func grandColombiaInput(student string) shortanswer.GradeInput {
 	}
 }
 
-// saPrepCases cubre los tres escenarios de F3d: todo determinista (sin par), rescate
-// por un par (typo), y falta un ítem sin candidato (sin par, sin adivinar).
+// saPrepCases cubre los cuatro escenarios del carril triturado tras la migración a
+// textmatch (plan 045 F3): todo determinista (sin par), typo cercano rescatado por el
+// fuzzy determinista (sin par), typo fuerte que escala a un par LLM, y falta un ítem
+// sin candidato (sin par, sin adivinar).
 var saPrepCases = []saPrepCase{
 	{
 		name:          "todo-determinista-sin-comas",
@@ -64,12 +66,19 @@ var saPrepCases = []saPrepCase{
 		note:          "los 3 ítems casan por palabra; ni una llamada al modelo",
 	},
 	{
-		name:          "typo-rescatado-por-un-par",
+		name:          "typo-rescatado-por-fuzzy",
 		in:            grandColombiaInput("ecuador, benezuela y colombia"),
+		wantVerdict:   llm.VerdictCorrect,
+		wantPairCalls: 0,
+		note:          "benezuela dista 1 de venezuela (sim 0.888 ≥ 0.85): lo rescata el fuzzy determinista, SIN llamada al modelo (plan 045)",
+	},
+	{
+		name:          "typo-fuerte-escala-a-par",
+		in:            grandColombiaInput("ecuador, benezuola y colombia"),
 		wantVerdict:   llm.VerdictCorrect,
 		wantPairCalls: 1,
 		verdictFlaky:  true,
-		note:          "benezuela≡venezuela: 1 par binario; correct SOLO si el modelo lo rescata",
+		note:          "benezuola dista 2 de venezuela (sim 0.778 < 0.85): el fuzzy no alcanza, escala a 1 par binario; correct SOLO si el modelo lo rescata",
 	},
 	{
 		name:          "falta-item-sin-candidato",
