@@ -52,7 +52,7 @@ service_jwt:
 llm:
   local:
     base_url: "http://localhost:11434"
-    model: "llama3.1"
+    model: "qwen3:1.7b"
     timeout: "120s"
   api:
     provider: "anthropic"
