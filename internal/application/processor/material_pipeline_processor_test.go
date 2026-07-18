@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"testing"
 
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
@@ -39,6 +40,10 @@ type mockMaterialPipeline struct {
 	saveCalls        int
 	savedSummaries   []string
 	savedCandidates  [][]m2m.CandidatePayload
+
+	markFailedErr     error
+	markFailedChunks  []string
+	markFailedReasons []string
 
 	updateErr   error
 	updateCalls []updateRecord
@@ -90,24 +95,65 @@ func (m *mockMaterialPipeline) SaveChunkArtifacts(_ context.Context, _ string, s
 	return m.saveArtifactsErr
 }
 
+func (m *mockMaterialPipeline) MarkChunkFailed(_ context.Context, chunkID, reason string) error {
+	m.record("MarkChunkFailed")
+	m.markFailedChunks = append(m.markFailedChunks, chunkID)
+	m.markFailedReasons = append(m.markFailedReasons, reason)
+	return m.markFailedErr
+}
+
 func (m *mockMaterialPipeline) UpdateJobStatus(_ context.Context, _, status string, phase int16, lastError *string) error {
 	m.record("UpdateJobStatus:" + status)
 	m.updateCalls = append(m.updateCalls, updateRecord{status: status, phase: phase, lastError: lastError})
 	return m.updateErr
 }
 
-// mockMaterialProvider implementa MaterialLLMProvider con salidas fijas.
-type mockMaterialProvider struct {
-	log        *[]string
-	digest     *llm.DigestChunkResult
-	digestErr  error
-	candidates []materialpipeline.CandidatePayloadV1
-	proposeErr error
+// digestOutcome es la salida de UNA llamada a DigestChunk (para probar el reintento por
+// calidad: distinta respuesta por número de llamada).
+type digestOutcome struct {
+	result *llm.DigestChunkResult
+	err    error
 }
 
-func (m *mockMaterialProvider) DigestChunk(_ context.Context, _ llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
+// proposeOutcome es la salida de UNA llamada a ProposeCandidates (para probar el reintento
+// por calidad de la fase B).
+type proposeOutcome struct {
+	candidates []materialpipeline.CandidatePayloadV1
+	err        error
+}
+
+// mockMaterialProvider implementa MaterialLLMProvider con salidas fijas. Si
+// digestOutcomes no está vacío, define la salida por número de llamada (tiene prioridad
+// sobre digest/digestErr); si se agotan, repite la última. Registra la temperatura
+// recibida en cada llamada (digestTemps) para verificar el jitter del reintento.
+type mockMaterialProvider struct {
+	log            *[]string
+	digest         *llm.DigestChunkResult
+	digestErr      error
+	digestOutcomes []digestOutcome
+	digestCalls    int
+	digestTemps    []*float64
+
+	candidates      []materialpipeline.CandidatePayloadV1
+	proposeErr      error
+	proposeOutcomes []proposeOutcome
+	proposeCalls    int
+	proposeTemps    []*float64
+}
+
+func (m *mockMaterialProvider) DigestChunk(_ context.Context, in llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
 	if m.log != nil {
 		*m.log = append(*m.log, "DigestChunk")
+	}
+	m.digestTemps = append(m.digestTemps, in.Temperature)
+	idx := m.digestCalls
+	m.digestCalls++
+	if len(m.digestOutcomes) > 0 {
+		if idx >= len(m.digestOutcomes) {
+			idx = len(m.digestOutcomes) - 1
+		}
+		o := m.digestOutcomes[idx]
+		return o.result, o.err
 	}
 	if m.digestErr != nil {
 		return nil, m.digestErr
@@ -115,9 +161,19 @@ func (m *mockMaterialProvider) DigestChunk(_ context.Context, _ llm.DigestChunkI
 	return m.digest, nil
 }
 
-func (m *mockMaterialProvider) ProposeCandidates(_ context.Context, _ llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
+func (m *mockMaterialProvider) ProposeCandidates(_ context.Context, in llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
 	if m.log != nil {
 		*m.log = append(*m.log, "ProposeCandidates")
+	}
+	m.proposeTemps = append(m.proposeTemps, in.Temperature)
+	idx := m.proposeCalls
+	m.proposeCalls++
+	if len(m.proposeOutcomes) > 0 {
+		if idx >= len(m.proposeOutcomes) {
+			idx = len(m.proposeOutcomes) - 1
+		}
+		o := m.proposeOutcomes[idx]
+		return o.candidates, o.err
 	}
 	if m.proposeErr != nil {
 		return nil, m.proposeErr
@@ -281,7 +337,7 @@ func TestMaterialProcess_FullFlow_Order(t *testing.T) {
 	}
 }
 
-func TestMaterialProcess_ArtifactsNotValidable_Transient(t *testing.T) {
+func TestMaterialProcess_ArtifactsNotValidable_IsolatesChunk(t *testing.T) {
 	var seq []string
 	badDigest := &llm.DigestChunkResult{
 		Artifacts: materialpipeline.ChunkArtifactsV1{Version: 1, MainIdeas: nil, ChunkTopic: ""}, // sin ideas ni tema
@@ -290,12 +346,16 @@ func TestMaterialProcess_ArtifactsNotValidable_Transient(t *testing.T) {
 	pipe := &mockMaterialPipeline{log: &seq, job: processingJob(), pending: []*m2m.NextChunk{pendingChunk("c1")}}
 	prov := &mockMaterialProvider{log: &seq, digest: badDigest, candidates: []materialpipeline.CandidatePayloadV1{validCandidate()}}
 
-	err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1"))
-	if err == nil || !errors.Is(err, ErrInvalidChunkArtifacts) {
-		t.Fatalf("artefactos inválidos deberían fallar con ErrInvalidChunkArtifacts, got %v", err)
+	// Artefactos inválidos en ambos intentos → reintento por calidad, luego aislamiento
+	// del chunk y cierre del job. NO propaga error (no tumba el evento).
+	if err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("un chunk que no valida debe aislarse y continuar sin error, got %v", err)
 	}
-	if classifyError(err) != ErrorTypeTransient {
-		t.Fatalf("artefactos inválidos deben ser transitorios (nunca DLQ), got permanente")
+	if prov.digestCalls != 1+llmQualityRetries {
+		t.Fatalf("se esperaban %d intentos de digest (1 + reintentos), got %d", 1+llmQualityRetries, prov.digestCalls)
+	}
+	if len(pipe.markFailedChunks) != 1 || pipe.markFailedChunks[0] != "c1" {
+		t.Fatalf("el chunk envenenado debía aislarse (MarkChunkFailed c1), got %v", pipe.markFailedChunks)
 	}
 	if pipe.saveCalls != 0 {
 		t.Fatalf("no debe persistirse nada con artefactos inválidos")
@@ -305,12 +365,16 @@ func TestMaterialProcess_ArtifactsNotValidable_Transient(t *testing.T) {
 			t.Fatalf("B no debe llamarse si A no valida; seq=%v", seq)
 		}
 		if c == "UpdateJobStatus:failed" {
-			t.Fatalf("un transitorio NO debe marcar el job failed")
+			t.Fatalf("aislar un chunk NO debe marcar el JOB failed; seq=%v", seq)
 		}
+	}
+	last := pipe.updateCalls[len(pipe.updateCalls)-1]
+	if last.status != jobStatusDone {
+		t.Fatalf("tras aislar el chunk el job debe cerrar done, got %+v", last)
 	}
 }
 
-func TestMaterialProcess_SummaryTooLong_Transient(t *testing.T) {
+func TestMaterialProcess_SummaryTooLong_IsolatesChunk(t *testing.T) {
 	long := ""
 	for i := 0; i < 130; i++ {
 		long += "palabra "
@@ -322,12 +386,146 @@ func TestMaterialProcess_SummaryTooLong_Transient(t *testing.T) {
 	pipe := &mockMaterialPipeline{job: processingJob(), pending: []*m2m.NextChunk{pendingChunk("c1")}}
 	prov := &mockMaterialProvider{digest: digest, candidates: []materialpipeline.CandidatePayloadV1{validCandidate()}}
 
-	err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1"))
-	if err == nil || !errors.Is(err, ErrInvalidChunkArtifacts) || classifyError(err) != ErrorTypeTransient {
-		t.Fatalf("summary >120 palabras debería ser transitorio ErrInvalidChunkArtifacts, got %v", err)
+	// Summary inválido (>120 palabras) es fallo de CALIDAD: reintenta y aísla, sin error.
+	if err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("summary inválido debe aislar el chunk y continuar sin error, got %v", err)
+	}
+	if len(pipe.markFailedChunks) != 1 {
+		t.Fatalf("summary inválido en ambos intentos debía aislar el chunk, got %v", pipe.markFailedChunks)
 	}
 	if pipe.saveCalls != 0 {
 		t.Fatalf("no debe persistirse con summary inválido")
+	}
+}
+
+func TestMaterialProcess_DigestQualityRetry_Succeeds(t *testing.T) {
+	var seq []string
+	// Primer intento: fallo de CALIDAD (llm.ErrLLMQuality). Segundo intento: digest válido.
+	qualityErr := fmt.Errorf("%w: JSON sin cierre", llm.ErrLLMQuality)
+	prov := &mockMaterialProvider{
+		log: &seq,
+		digestOutcomes: []digestOutcome{
+			{result: nil, err: qualityErr},
+			{result: validDigest(), err: nil},
+		},
+		candidates: []materialpipeline.CandidatePayloadV1{validCandidate()},
+	}
+	pipe := &mockMaterialPipeline{log: &seq, job: processingJob(), pending: []*m2m.NextChunk{pendingChunk("c1")}}
+
+	if err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("el reintento por calidad debía rescatar el chunk, got %v", err)
+	}
+	if prov.digestCalls != 2 {
+		t.Fatalf("se esperaban 2 llamadas a DigestChunk (1 + 1 reintento), got %d", prov.digestCalls)
+	}
+	// El primer intento va con la temperatura por defecto (nil); el reintento con jitter.
+	if prov.digestTemps[0] != nil {
+		t.Fatalf("el primer intento no debe forzar temperatura, got %v", *prov.digestTemps[0])
+	}
+	if prov.digestTemps[1] == nil || *prov.digestTemps[1] != llmRetryTemperature {
+		t.Fatalf("el reintento debe usar temperatura %v (jitter), got %v", llmRetryTemperature, prov.digestTemps[1])
+	}
+	if len(pipe.markFailedChunks) != 0 {
+		t.Fatalf("un reintento exitoso NO debe aislar el chunk, got %v", pipe.markFailedChunks)
+	}
+	if pipe.saveCalls != 1 {
+		t.Fatalf("tras el reintento exitoso debe persistirse el chunk, got saveCalls=%d", pipe.saveCalls)
+	}
+}
+
+func TestMaterialProcess_DigestInfraError_PropagatesNoRetry(t *testing.T) {
+	// Un fallo de INFRA (sin sentinel de calidad) NO se reintenta ni aísla: sube como
+	// transitorio para que el reintento del evento / DLQ operen igual que hoy.
+	pipe := &mockMaterialPipeline{job: processingJob(), pending: []*m2m.NextChunk{pendingChunk("c1")}}
+	prov := &mockMaterialProvider{digestErr: errors.New("ollama request failed: connection refused")}
+
+	err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1"))
+	if err == nil || classifyError(err) != ErrorTypeTransient {
+		t.Fatalf("un fallo de infra del digest debe ser transitorio, got %v", err)
+	}
+	if prov.digestCalls != 1 {
+		t.Fatalf("un fallo de infra NO debe reintentarse in-processor, got %d llamadas", prov.digestCalls)
+	}
+	if len(pipe.markFailedChunks) != 0 {
+		t.Fatalf("un fallo de infra NO debe aislar el chunk, got %v", pipe.markFailedChunks)
+	}
+}
+
+func TestMaterialProcess_PoisonedChunk_IsolatesAndContinuesNext(t *testing.T) {
+	// Dos chunks: el primero se envenena por calidad en ambos intentos; el segundo es
+	// válido. El primero se aísla y el segundo se procesa; el job cierra done.
+	badDigest := &llm.DigestChunkResult{
+		Artifacts: materialpipeline.ChunkArtifactsV1{Version: 1, MainIdeas: nil, ChunkTopic: ""},
+		Summary:   "resumen",
+	}
+	prov := &mockMaterialProvider{
+		digestOutcomes: []digestOutcome{
+			{result: badDigest, err: nil},     // c1 intento 1
+			{result: badDigest, err: nil},     // c1 intento 2 (reintento)
+			{result: validDigest(), err: nil}, // c2 intento 1
+		},
+		candidates: []materialpipeline.CandidatePayloadV1{validCandidate()},
+	}
+	pipe := &mockMaterialPipeline{
+		job:     processingJob(),
+		pending: []*m2m.NextChunk{pendingChunk("c1"), {ChunkID: "c2", JobID: "job-1", Seq: 1, ChunkText: "otro trozo", Status: "pending"}},
+	}
+
+	if err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("el chunk envenenado debe aislarse y el siguiente procesarse, got %v", err)
+	}
+	if len(pipe.markFailedChunks) != 1 || pipe.markFailedChunks[0] != "c1" {
+		t.Fatalf("solo c1 debía aislarse, got %v", pipe.markFailedChunks)
+	}
+	if pipe.saveCalls != 1 {
+		t.Fatalf("c2 debía persistirse (1 PUT), got saveCalls=%d", pipe.saveCalls)
+	}
+	last := pipe.updateCalls[len(pipe.updateCalls)-1]
+	if last.status != jobStatusDone {
+		t.Fatalf("el job debe cerrar done tras aislar c1 y procesar c2, got %+v", last)
+	}
+}
+
+func TestMaterialProcess_IsolateInfraFails_Propagates(t *testing.T) {
+	// Si el propio MarkChunkFailed falla por INFRA, se propaga como transitorio (no se
+	// traga un error de infraestructura al aislar).
+	badDigest := &llm.DigestChunkResult{
+		Artifacts: materialpipeline.ChunkArtifactsV1{Version: 1, MainIdeas: nil, ChunkTopic: ""},
+		Summary:   "resumen",
+	}
+	pipe := &mockMaterialPipeline{
+		job:           processingJob(),
+		pending:       []*m2m.NextChunk{pendingChunk("c1")},
+		markFailedErr: errors.New("learning 503"),
+	}
+	prov := &mockMaterialProvider{digest: badDigest}
+
+	err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1"))
+	if err == nil || classifyError(err) != ErrorTypeTransient {
+		t.Fatalf("un fallo de infra al aislar debe subir como transitorio, got %v", err)
+	}
+}
+
+func TestMaterialProcess_IsolateConflict_Continues(t *testing.T) {
+	// Si al aislar el chunk ya estaba done (409), es una carrera benigna: se continúa y
+	// el job cierra sin error.
+	badDigest := &llm.DigestChunkResult{
+		Artifacts: materialpipeline.ChunkArtifactsV1{Version: 1, MainIdeas: nil, ChunkTopic: ""},
+		Summary:   "resumen",
+	}
+	pipe := &mockMaterialPipeline{
+		job:           processingJob(),
+		pending:       []*m2m.NextChunk{pendingChunk("c1")},
+		markFailedErr: m2m.ErrPipelineConflict,
+	}
+	prov := &mockMaterialProvider{digest: badDigest}
+
+	if err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("un 409 al aislar es benigno: debe continuar sin error, got %v", err)
+	}
+	last := pipe.updateCalls[len(pipe.updateCalls)-1]
+	if last.status != jobStatusDone {
+		t.Fatalf("tras el 409 al aislar el job debe cerrar done, got %+v", last)
 	}
 }
 
@@ -346,19 +544,119 @@ func TestMaterialProcess_CandidateFiltering(t *testing.T) {
 	}
 }
 
-func TestMaterialProcess_ZeroValidCandidates_Transient(t *testing.T) {
+func TestMaterialProcess_ZeroValidCandidates_PersistsAndContinues(t *testing.T) {
 	pipe := &mockMaterialPipeline{job: processingJob(), pending: []*m2m.NextChunk{pendingChunk("c1")}}
 	prov := &mockMaterialProvider{
 		digest:     validDigest(),
 		candidates: []materialpipeline.CandidatePayloadV1{invalidCandidate(), invalidCandidate()},
 	}
 
+	// Cero candidatas válidas NO es fatal: los artefactos SÍ valen, se persisten sin
+	// candidatas (el chunk queda done, la cadena de summary no se rompe) y el job cierra.
+	if err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("cero candidatas válidas no debe tumbar el evento, got %v", err)
+	}
+	if pipe.saveCalls != 1 || len(pipe.savedCandidates[0]) != 0 {
+		t.Fatalf("se esperaba 1 PUT con 0 candidatas (artefactos igual persistidos), got saveCalls=%d cand=%v", pipe.saveCalls, pipe.savedCandidates)
+	}
+	if len(pipe.markFailedChunks) != 0 {
+		t.Fatalf("cero candidatas NO debe marcar el chunk failed (sus artefactos son válidos), got %v", pipe.markFailedChunks)
+	}
+	if pipe.savedSummaries[0] != validDigest().Summary {
+		t.Fatalf("el summary debe persistirse para encadenar, got %q", pipe.savedSummaries[0])
+	}
+	last := pipe.updateCalls[len(pipe.updateCalls)-1]
+	if last.status != jobStatusDone {
+		t.Fatalf("el job debe cerrar done, got %+v", last)
+	}
+}
+
+func TestMaterialProcess_ProposeQualityRetry_Succeeds(t *testing.T) {
+	// Fase B: primer intento falla por CALIDAD (JSON sin cierre → llm.ErrLLMQuality); el
+	// reintento con jitter de temperatura devuelve una candidata válida.
+	qualityErr := fmt.Errorf("%w: objeto JSON sin cierre balanceado", llm.ErrLLMQuality)
+	prov := &mockMaterialProvider{
+		digest: validDigest(),
+		proposeOutcomes: []proposeOutcome{
+			{candidates: nil, err: qualityErr},
+			{candidates: []materialpipeline.CandidatePayloadV1{validCandidate()}, err: nil},
+		},
+	}
+	pipe := &mockMaterialPipeline{job: processingJob(), pending: []*m2m.NextChunk{pendingChunk("c1")}}
+
+	if err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("el reintento por calidad de la fase B debía rescatar el chunk, got %v", err)
+	}
+	if prov.proposeCalls != 2 {
+		t.Fatalf("se esperaban 2 llamadas a ProposeCandidates (1 + 1 reintento), got %d", prov.proposeCalls)
+	}
+	if prov.proposeTemps[0] != nil {
+		t.Fatalf("el primer intento no debe forzar temperatura, got %v", *prov.proposeTemps[0])
+	}
+	if prov.proposeTemps[1] == nil || *prov.proposeTemps[1] != llmRetryTemperature {
+		t.Fatalf("el reintento debe usar temperatura %v (jitter), got %v", llmRetryTemperature, prov.proposeTemps[1])
+	}
+	if pipe.saveCalls != 1 || len(pipe.savedCandidates[0]) != 1 {
+		t.Fatalf("tras el reintento exitoso debe persistirse 1 candidata, got saveCalls=%d cand=%v", pipe.saveCalls, pipe.savedCandidates)
+	}
+	if len(pipe.markFailedChunks) != 0 {
+		t.Fatalf("un reintento exitoso NO debe aislar el chunk, got %v", pipe.markFailedChunks)
+	}
+}
+
+func TestMaterialProcess_ProposeQualityPersistent_PersistsEmptyAndContinues(t *testing.T) {
+	// Fase B: la propuesta muere por CALIDAD en ambos intentos. El digest ES válido, así
+	// que se persisten artefactos sin candidatas (chunk done, cadena de summary intacta),
+	// NO se marca failed y el job cierra. Sin error (no tumba el evento → no DLQ).
+	qualityErr := fmt.Errorf("%w: objeto JSON sin cierre balanceado", llm.ErrLLMQuality)
+	prov := &mockMaterialProvider{
+		digest:          validDigest(),
+		proposeOutcomes: []proposeOutcome{{candidates: nil, err: qualityErr}}, // se repite en el retry
+	}
+	pipe := &mockMaterialPipeline{job: processingJob(), pending: []*m2m.NextChunk{pendingChunk("c1")}}
+
+	if err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("una propuesta sin calidad persistente NO debe tumbar el evento, got %v", err)
+	}
+	if prov.proposeCalls != 1+llmQualityRetries {
+		t.Fatalf("se esperaban %d intentos de propuesta, got %d", 1+llmQualityRetries, prov.proposeCalls)
+	}
+	if pipe.saveCalls != 1 || len(pipe.savedCandidates[0]) != 0 {
+		t.Fatalf("se esperaba 1 PUT con 0 candidatas (artefactos igual persistidos), got saveCalls=%d cand=%v", pipe.saveCalls, pipe.savedCandidates)
+	}
+	if pipe.savedSummaries[0] != validDigest().Summary {
+		t.Fatalf("el summary debe persistirse para encadenar, got %q", pipe.savedSummaries[0])
+	}
+	if len(pipe.markFailedChunks) != 0 {
+		t.Fatalf("una propuesta sin calidad NO debe marcar el chunk failed (los artefactos valen), got %v", pipe.markFailedChunks)
+	}
+	last := pipe.updateCalls[len(pipe.updateCalls)-1]
+	if last.status != jobStatusDone {
+		t.Fatalf("el job debe cerrar done, got %+v", last)
+	}
+}
+
+func TestMaterialProcess_ProposeInfraError_PropagatesNoRetry(t *testing.T) {
+	// Un fallo de INFRA en la fase B (sin sentinel de calidad) NO se reintenta ni persiste
+	// vacío: sube como transitorio para que el reintento del evento / DLQ operen igual.
+	prov := &mockMaterialProvider{
+		digest:     validDigest(),
+		proposeErr: errors.New("ollama request failed: connection refused"),
+	}
+	pipe := &mockMaterialPipeline{job: processingJob(), pending: []*m2m.NextChunk{pendingChunk("c1")}}
+
 	err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1"))
-	if err == nil || !errors.Is(err, ErrNoValidCandidates) || classifyError(err) != ErrorTypeTransient {
-		t.Fatalf("cero candidatas válidas debería ser transitorio ErrNoValidCandidates, got %v", err)
+	if err == nil || classifyError(err) != ErrorTypeTransient {
+		t.Fatalf("un fallo de infra de la fase B debe ser transitorio, got %v", err)
+	}
+	if prov.proposeCalls != 1 {
+		t.Fatalf("un fallo de infra NO debe reintentarse in-processor, got %d llamadas", prov.proposeCalls)
 	}
 	if pipe.saveCalls != 0 {
-		t.Fatalf("no debe persistirse sin candidatas válidas")
+		t.Fatalf("un fallo de infra NO debe persistir nada, got saveCalls=%d", pipe.saveCalls)
+	}
+	if len(pipe.markFailedChunks) != 0 {
+		t.Fatalf("un fallo de infra NO debe aislar el chunk, got %v", pipe.markFailedChunks)
 	}
 }
 

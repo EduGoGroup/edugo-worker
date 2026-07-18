@@ -378,24 +378,26 @@ func (c *Config) GetAPILearningConfigWithDefaults() APILearningConfig {
 }
 
 // GetMaterialPipelineConfigWithDefaults retorna la config del carril de materiales
-// con defaults (descarga 100MB; porcionado objetivo 650 / max 800 / min 500 palabras,
-// umbral de fusión 150). Los defaults de chunking encarnan D-043.6.
+// con defaults (descarga 100MB; porcionado objetivo 300 / max 400 / min 200 palabras,
+// umbral de fusión 80). Los defaults de chunking encarnan D-043.6, recalibrados por la
+// evidencia H2 (2026-07-18): con gemma4:e4b los trozos ~650 degeneran el digest (52% de
+// éxito por trozo) y ~300 sube a 71%; con modelos más grandes se sube por env.
 func (c *Config) GetMaterialPipelineConfigWithDefaults() MaterialPipelineConfig {
 	cfg := c.MaterialPipeline
 	if cfg.DownloadMaxBytes == 0 {
 		cfg.DownloadMaxBytes = 100 * 1024 * 1024
 	}
 	if cfg.ChunkTargetWords == 0 {
-		cfg.ChunkTargetWords = 650
+		cfg.ChunkTargetWords = 300
 	}
 	if cfg.ChunkMaxWords == 0 {
-		cfg.ChunkMaxWords = 800
+		cfg.ChunkMaxWords = 400
 	}
 	if cfg.ChunkMinWords == 0 {
-		cfg.ChunkMinWords = 500
+		cfg.ChunkMinWords = 200
 	}
 	if cfg.ChunkMergeThresholdWords == 0 {
-		cfg.ChunkMergeThresholdWords = 150
+		cfg.ChunkMergeThresholdWords = 80
 	}
 	return cfg
 }

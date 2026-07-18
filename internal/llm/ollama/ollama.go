@@ -192,17 +192,26 @@ func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest
 // ParseDigestResult. El caller valida los artefactos contra ChunkArtifactsV1.
 func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
 	prompt := llm.BuildDigestChunkPrompt(in)
-	out, err := p.generate(ctx, prompt)
+	// Override opcional de temperatura (jitter del reintento por calidad, plan 043);
+	// nil = temperatura por instancia (determinista).
+	temperature := p.temperature
+	if in.Temperature != nil {
+		temperature = *in.Temperature
+	}
+	out, err := p.generateWithTemperature(ctx, prompt, temperature)
 	if err != nil {
+		// Fallo de transporte/HTTP: es INFRA, sube SIN el sentinel de calidad.
 		return nil, err
 	}
 	rawJSON, err := llm.ExtractJSON(out)
 	if err != nil {
-		return nil, err
+		// El modelo respondió, pero su salida no trae un objeto JSON usable: CALIDAD.
+		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
 	}
 	artifacts, summary, err := llm.ParseDigestResult(rawJSON)
 	if err != nil {
-		return nil, err
+		// El JSON no cumple el contrato del digest: CALIDAD.
+		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
 	}
 	return &llm.DigestChunkResult{Artifacts: artifacts, Summary: summary}, nil
 }
@@ -212,26 +221,43 @@ func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*l
 // cada candidata contra CandidatePayloadV1.
 func (p *Provider) ProposeCandidates(ctx context.Context, in llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
 	prompt := llm.BuildProposeCandidatesPrompt(in)
-	out, err := p.generate(ctx, prompt)
+	// Override opcional de temperatura (jitter del reintento por calidad de la fase B).
+	temperature := p.temperature
+	if in.Temperature != nil {
+		temperature = *in.Temperature
+	}
+	out, err := p.generateWithTemperature(ctx, prompt, temperature)
 	if err != nil {
+		// Fallo de transporte/HTTP: INFRA, sube SIN el sentinel de calidad.
 		return nil, err
 	}
 	rawJSON, err := llm.ExtractJSON(out)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
 	}
-	return llm.ParseCandidates(rawJSON)
+	candidates, err := llm.ParseCandidates(rawJSON)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
+	}
+	return candidates, nil
 }
 
-// generate ejecuta POST /api/generate y devuelve el texto crudo del modelo.
+// generate ejecuta POST /api/generate con la temperatura por instancia del provider.
 func (p *Provider) generate(ctx context.Context, prompt string) (string, error) {
+	return p.generateWithTemperature(ctx, prompt, p.temperature)
+}
+
+// generateWithTemperature ejecuta POST /api/generate con una temperatura explícita y
+// devuelve el texto crudo del modelo. La usa DigestChunk para aplicar el jitter del
+// reintento por calidad sin cambiar el default determinista del resto de llamadas.
+func (p *Provider) generateWithTemperature(ctx context.Context, prompt string, temperature float64) (string, error) {
 	reqBody := generateRequest{
 		Model:   p.model,
 		Prompt:  prompt,
 		Stream:  false,
 		Format:  "json",
 		Think:   false,
-		Options: &generateOptions{Temperature: p.temperature},
+		Options: &generateOptions{Temperature: temperature},
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {

@@ -187,15 +187,16 @@ func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*l
 	prompt := llm.BuildDigestChunkPrompt(in)
 	out, err := p.complete(ctx, prompt)
 	if err != nil {
+		// Fallo de transporte/HTTP: INFRA, sube SIN el sentinel de calidad.
 		return nil, err
 	}
 	rawJSON, err := llm.ExtractJSON(out)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
 	}
 	artifacts, summary, err := llm.ParseDigestResult(rawJSON)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
 	}
 	return &llm.DigestChunkResult{Artifacts: artifacts, Summary: summary}, nil
 }
@@ -206,13 +207,18 @@ func (p *Provider) ProposeCandidates(ctx context.Context, in llm.ProposeCandidat
 	prompt := llm.BuildProposeCandidatesPrompt(in)
 	out, err := p.complete(ctx, prompt)
 	if err != nil {
+		// Fallo de transporte/HTTP: INFRA, sube SIN el sentinel de calidad.
 		return nil, err
 	}
 	rawJSON, err := llm.ExtractJSON(out)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
 	}
-	return llm.ParseCandidates(rawJSON)
+	candidates, err := llm.ParseCandidates(rawJSON)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
+	}
+	return candidates, nil
 }
 
 // complete enruta al backend concreto.

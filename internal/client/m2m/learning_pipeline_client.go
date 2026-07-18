@@ -28,6 +28,7 @@ const (
 	pipelinePendingChunkPathFmt = "/api/v1/internal/pipeline/jobs/%s/chunks/pending"
 	pipelineJobStatusPathFmt    = "/api/v1/internal/pipeline/jobs/%s/status"
 	pipelineArtifactsPathFmt    = "/api/v1/internal/pipeline/chunks/%s/artifacts"
+	pipelineChunkStatusPathFmt  = "/api/v1/internal/pipeline/chunks/%s/status"
 )
 
 // PipelineJob es el estado de un job del carril material→evaluación (GET job).
@@ -105,6 +106,14 @@ type updateJobStatusRequest struct {
 	Status    string  `json:"status"`
 	Phase     int16   `json:"phase"`
 	LastError *string `json:"last_error"`
+}
+
+// markChunkStatusRequest es el body de PUT chunks/{id}/status. Hoy solo se usa para
+// aislar un chunk envenenado (status="failed" + motivo corto), plan 043 resiliencia
+// fase A.
+type markChunkStatusRequest struct {
+	Status string `json:"status"`
+	Reason string `json:"reason"`
 }
 
 // LearningPipelineClient es el cliente M2M hacia edugo-api-learning para el carril
@@ -214,6 +223,27 @@ func (c *LearningPipelineClient) SaveChunkArtifacts(ctx context.Context, chunkID
 		Summary:    summary,
 		Artifacts:  artifacts,
 		Candidates: candidates,
+	}, nil)
+}
+
+// MarkChunkFailed marca un chunk como `failed` en learning para AISLARLO (resiliencia
+// fase A del pipeline, plan 043): un trozo que el LLM no logra digerir con calidad ni al
+// reintentar se saca de la cola de pendientes sin tumbar el job entero. Semántica de
+// estado (idéntica a la de las demás rutas del carril):
+//   - 2xx → marcado; nil.
+//   - 409 → ErrPipelineConflict: el chunk ya está `done` (una carrera lo cerró antes);
+//     el caller lo trata como benigno y continúa.
+//   - 404 y otros 4xx → ErrLearningPermanent.
+//   - 5xx / red / timeout → transitorio (el caller lo propaga: no se traga un fallo de
+//     infraestructura al aislar).
+func (c *LearningPipelineClient) MarkChunkFailed(ctx context.Context, chunkID, reason string) error {
+	if chunkID == "" {
+		return fmt.Errorf("chunk_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelineChunkStatusPathFmt, chunkID)
+	return c.do(ctx, http.MethodPut, url, markChunkStatusRequest{
+		Status: "failed",
+		Reason: reason,
 	}, nil)
 }
 

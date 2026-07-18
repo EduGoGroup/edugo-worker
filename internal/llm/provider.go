@@ -12,9 +12,20 @@ package llm
 import (
 	"context"
 	"encoding/json"
+	"errors"
 
 	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
+
+// ErrLLMQuality marca una salida del LLM que no se pudo interpretar por su CALIDAD (no
+// por infraestructura): respuesta sin objeto JSON, JSON sin cierre balanceado, o un
+// cuerpo que no parsea contra el contrato esperado. Es DISTINTO de un fallo de transporte
+// (servidor caído, timeout, HTTP 5xx), que sube SIN este sentinel. El caller del pipeline
+// material→evaluación lo usa para separar CALIDAD —que activa reintento con jitter de
+// temperatura y aislamiento del chunk— de INFRA —que sigue tratándose como transitorio
+// (reintento del evento / DLQ)—. Las implementaciones envuelven con él SOLO los errores de
+// parseo/extracción, nunca los de transporte.
+var ErrLLMQuality = errors.New("salida del LLM no interpretable por su calidad")
 
 // MaterialInput es el material de origen a partir del cual generar una
 // evaluación. En v1 es texto plano ya extraído (el worker no vuelve a extraer);
@@ -187,6 +198,12 @@ type DigestChunkInput struct {
 	PrevSummary *string
 	// Language del contenido (default "es").
 	Language string
+	// Temperature, si != nil, fuerza la temperatura del muestreo SOLO en esta llamada,
+	// por encima del default por instancia del provider. La usa el reintento por CALIDAD
+	// del pipeline como jitter: una temperatura >0 desatasca salidas degeneradas que a
+	// temp 0 (greedy) se repiten idénticas. nil = el provider usa su temperatura
+	// configurada (el caso normal, determinista).
+	Temperature *float64
 }
 
 // DigestChunkResult es la salida de la llamada A: los artefactos del trozo (ideas +
@@ -209,6 +226,10 @@ type ProposeCandidatesInput struct {
 	Artifacts materialpipeline.ChunkArtifactsV1
 	// Language del contenido (default "es").
 	Language string
+	// Temperature, si != nil, fuerza la temperatura del muestreo SOLO en esta llamada
+	// (mismo jitter del reintento por CALIDAD que DigestChunkInput.Temperature). nil = el
+	// provider usa su temperatura configurada.
+	Temperature *float64
 }
 
 // LLMProvider es el puerto que abstrae al modelo (local vía Ollama o remoto vía
