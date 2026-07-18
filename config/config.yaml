@@ -90,7 +90,7 @@ service_jwt:
 llm:
   local: # provider Ollama (modo "local")
     base_url: "${LLM_LOCAL_BASE_URL}" # ej. http://localhost:11434
-    model: "${LLM_LOCAL_MODEL}" # ej. gemma3:4b, qwen3:1.7b
+    model: "${LLM_LOCAL_MODEL}" # ej. gemma4:e4b (único modelo de los 3 rieles, deuda 037)
     timeout: "120s"
     temperature: 0 # greedy determinista: la corrección es JSON estructurado, no prosa creativa (045)
   api: # provider por API (modo "api": Claude/Gemini)

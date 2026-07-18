@@ -52,10 +52,10 @@ service_jwt:
 llm:
   local:
     base_url: "http://localhost:11434"
-    # gemma3:4b (045): un 1.7b es demasiado débil para el juicio semántico de
-    # open_ended (reprobaba respuestas válidas); el 4b discrimina bien y sigue
-    # siendo local/gratis. temperature 0 = greedy determinista (viene de config.yaml).
-    model: "gemma3:4b"
+    # gemma4:e4b (deuda 037, medido 2026-07-18): iguala o mejora a qwen3:1.7b (042)
+    # y gemma3:4b (045) en las baterías prep/review/review-prep del harness — único
+    # modelo para los tres rieles. temperature 0 = greedy determinista (viene de config.yaml).
+    model: "gemma4:e4b"
     timeout: "120s"
   api:
     provider: "anthropic"

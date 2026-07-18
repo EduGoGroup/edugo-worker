@@ -172,7 +172,7 @@ API_LEARNING_BASE_URL=http://localhost:8065  # stub, lo consume el plan 040
 # LLM local (modo "local" = Ollama). Credenciales/URL/modelo son de EduGo, NO por
 # escuela (D-039.3): lo por-escuela es solo la política (se lee vía M2M).
 LLM_LOCAL_BASE_URL=http://localhost:11434
-LLM_LOCAL_MODEL=llama3.1                    # o qwen2.5:7b, gemma2:9b, etc.
+LLM_LOCAL_MODEL=gemma4:e4b                  # único modelo de los 3 rieles (deuda 037, medido 2026-07-18)
 
 # LLM por API (modo "api" = Claude/Gemini). La API key en cloud va en Secret Manager.
 LLM_API_PROVIDER=anthropic                  # anthropic (completo) | gemini (stub)
