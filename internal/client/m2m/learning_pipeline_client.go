@@ -1,0 +1,290 @@
+package m2m
+
+import (
+	"bytes"
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"io"
+	"net/http"
+	"strings"
+	"time"
+)
+
+// ErrPipelineConflict marca un 409 de cualquier ruta del carril de materiales
+// (plan 043 F1): el recurso ya cambió de estado y la operación no aplica —chunks
+// ya cerrados, job en otra fase, o un redelivery pisando un update ya hecho—. NO
+// es un fallo transitorio ni permanente genérico: es un guard de estado/idempotencia
+// y el CALLER decide qué hacer (abstenerse, releer el job, ACKear). Por eso NO se
+// envuelve con ErrLearningPermanent: el clasificador de retry no debe verlo.
+var ErrPipelineConflict = errors.New("conflicto de estado en el carril de materiales (409; el caller decide)")
+
+// Rutas M2M del carril de materiales en learning (plan 043 F1). Base = api_learning.base_url.
+const (
+	pipelineJobPathFmt          = "/api/v1/internal/pipeline/jobs/%s"
+	pipelineFileURLPathFmt      = "/api/v1/internal/pipeline/jobs/%s/file-url"
+	pipelineChunksPathFmt       = "/api/v1/internal/pipeline/jobs/%s/chunks"
+	pipelinePendingChunkPathFmt = "/api/v1/internal/pipeline/jobs/%s/chunks/pending"
+	pipelineJobStatusPathFmt    = "/api/v1/internal/pipeline/jobs/%s/status"
+	pipelineArtifactsPathFmt    = "/api/v1/internal/pipeline/chunks/%s/artifacts"
+)
+
+// PipelineJob es el estado de un job del carril material→evaluación (GET job).
+// Espeja el DTO de learning F1. AssessmentID/LastError/CompletedAt vienen nil
+// mientras el pipeline no los produce. ChunkCounts agrega por status ("pending",
+// "done", …). Los timestamps se transportan como string ISO-8601 (UTC 'Z').
+type PipelineJob struct {
+	JobID         string         `json:"job_id"`
+	MaterialID    string         `json:"material_id"`
+	MaterialTitle string         `json:"material_title"`
+	Status        string         `json:"status"`
+	Phase         int16          `json:"phase"`
+	AssessmentID  *string        `json:"assessment_id,omitempty"`
+	LastError     *string        `json:"last_error,omitempty"`
+	ChunkCounts   map[string]int `json:"chunk_counts"`
+	CreatedAt     string         `json:"created_at"`
+	UpdatedAt     string         `json:"updated_at"`
+	CompletedAt   *string        `json:"completed_at,omitempty"`
+}
+
+// PresignedFile es la URL firmada (GET presignado) del PDF del material y su
+// vencimiento (GET file-url). La URL ya lleva la firma: se descarga SIN Authorization.
+type PresignedFile struct {
+	URL       string `json:"url"`
+	ExpiresAt string `json:"expires_at"`
+}
+
+// ChunkInput es un porción a persistir (POST chunks). Seq es el orden 0-based dentro
+// del material; ChunkText es el texto plano del trozo.
+type ChunkInput struct {
+	Seq       int    `json:"seq"`
+	ChunkText string `json:"chunk_text"`
+}
+
+// NextChunk es el siguiente chunk pendiente de procesar por el LLM (GET
+// chunks/pending). PrevSummary NO es parte del objeto chunk en el JSON: viene al
+// lado en el sobre; se adjunta aquí por conveniencia del caller (F3) y por eso NO
+// tiene tag de serialización.
+type NextChunk struct {
+	ChunkID     string  `json:"chunk_id"`
+	JobID       string  `json:"job_id"`
+	Seq         int     `json:"seq"`
+	ChunkText   string  `json:"chunk_text"`
+	Status      string  `json:"status"`
+	PrevSummary *string `json:"-"`
+}
+
+// CandidatePayload envuelve un candidato de ítem generado por el LLM como JSON
+// crudo (PUT artifacts). El shape del payload lo valida learning contra su contrato.
+type CandidatePayload struct {
+	Payload json.RawMessage `json:"payload"`
+}
+
+// nextChunkEnvelope es el sobre real de GET chunks/pending: chunk puede ser null
+// (nada pendiente) y prev_summary viaja al lado del chunk.
+type nextChunkEnvelope struct {
+	Chunk       *NextChunk `json:"chunk"`
+	PrevSummary *string    `json:"prev_summary"`
+}
+
+// saveChunksRequest es el body de POST chunks.
+type saveChunksRequest struct {
+	Chunks []ChunkInput `json:"chunks"`
+}
+
+// saveChunkArtifactsRequest es el body de PUT chunks/{id}/artifacts.
+type saveChunkArtifactsRequest struct {
+	Summary    *string            `json:"summary"`
+	Artifacts  json.RawMessage    `json:"artifacts"`
+	Candidates []CandidatePayload `json:"candidates"`
+}
+
+// updateJobStatusRequest es el body de PATCH jobs/{id}/status.
+type updateJobStatusRequest struct {
+	Status    string  `json:"status"`
+	Phase     int16   `json:"phase"`
+	LastError *string `json:"last_error"`
+}
+
+// LearningPipelineClient es el cliente M2M hacia edugo-api-learning para el carril
+// de materiales (plan 043 F1/F2): descarga fuente, porción y artefactos LLM.
+// Autentica con un service JWT propio (audience edugo-api-learning, scope
+// materials.pipeline — un scope por riel, SOLID). Seguro para uso concurrente.
+type LearningPipelineClient struct {
+	baseURL       string
+	httpClient    *http.Client
+	tokenProvider TokenProvider
+}
+
+// LearningPipelineClientConfig configura el cliente.
+type LearningPipelineClientConfig struct {
+	// BaseURL de learning (ej. http://localhost:8065).
+	BaseURL string
+	// Timeout de la request HTTP (default 5s).
+	Timeout time.Duration
+	// TokenProvider firma/obtiene el service JWT (audience edugo-api-learning, scope
+	// materials.pipeline).
+	TokenProvider TokenProvider
+}
+
+// NewLearningPipelineClient construye el cliente.
+func NewLearningPipelineClient(cfg LearningPipelineClientConfig) *LearningPipelineClient {
+	timeout := cfg.Timeout
+	if timeout <= 0 {
+		timeout = 5 * time.Second
+	}
+	return &LearningPipelineClient{
+		baseURL:       strings.TrimRight(cfg.BaseURL, "/"),
+		httpClient:    &http.Client{Timeout: timeout},
+		tokenProvider: cfg.TokenProvider,
+	}
+}
+
+// GetJob lee el estado de un job del pipeline. 404 (job inexistente) → ErrLearningPermanent.
+func (c *LearningPipelineClient) GetJob(ctx context.Context, jobID string) (*PipelineJob, error) {
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelineJobPathFmt, jobID)
+
+	var out PipelineJob
+	if err := c.do(ctx, http.MethodGet, url, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// GetFileURL obtiene la URL firmada (presignada) del PDF del material del job.
+func (c *LearningPipelineClient) GetFileURL(ctx context.Context, jobID string) (*PresignedFile, error) {
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelineFileURLPathFmt, jobID)
+
+	var out PresignedFile
+	if err := c.do(ctx, http.MethodGet, url, nil, &out); err != nil {
+		return nil, err
+	}
+	return &out, nil
+}
+
+// SaveChunks persiste las porciones del material (fase 0). Semántica de estado:
+//   - 2xx → persistido; nil.
+//   - 409 → ErrPipelineConflict: los chunks ya están cerrados (un redelivery pisando
+//     el porcionado ya hecho); el caller decide (típicamente ACK/abstención).
+//   - 404 y otros 4xx (salvo 408/429) → ErrLearningPermanent.
+//   - 5xx / red / timeout / 408 / 429 → transitorio.
+func (c *LearningPipelineClient) SaveChunks(ctx context.Context, jobID string, chunks []ChunkInput) error {
+	if jobID == "" {
+		return fmt.Errorf("job_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelineChunksPathFmt, jobID)
+	return c.do(ctx, http.MethodPost, url, saveChunksRequest{Chunks: chunks}, nil)
+}
+
+// GetNextPendingChunk devuelve el siguiente chunk pendiente de procesar. Si no hay
+// ninguno ({"chunk":null}), devuelve (nil, nil) sin error. prev_summary (el resumen
+// del chunk anterior) se adjunta en NextChunk.PrevSummary.
+func (c *LearningPipelineClient) GetNextPendingChunk(ctx context.Context, jobID string) (*NextChunk, error) {
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelinePendingChunkPathFmt, jobID)
+
+	var env nextChunkEnvelope
+	if err := c.do(ctx, http.MethodGet, url, nil, &env); err != nil {
+		return nil, err
+	}
+	if env.Chunk == nil {
+		return nil, nil
+	}
+	env.Chunk.PrevSummary = env.PrevSummary
+	return env.Chunk, nil
+}
+
+// SaveChunkArtifacts persiste el resumen, los artefactos y los candidatos de ítems
+// producidos por el LLM para un chunk (lo usa F3). 409 → ErrPipelineConflict.
+func (c *LearningPipelineClient) SaveChunkArtifacts(ctx context.Context, chunkID string, summary *string, artifacts json.RawMessage, candidates []CandidatePayload) error {
+	if chunkID == "" {
+		return fmt.Errorf("chunk_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelineArtifactsPathFmt, chunkID)
+	return c.do(ctx, http.MethodPut, url, saveChunkArtifactsRequest{
+		Summary:    summary,
+		Artifacts:  artifacts,
+		Candidates: candidates,
+	}, nil)
+}
+
+// UpdateJobStatus avanza el estado/fase del job (p.ej. a "processing" tras porcionar).
+// 409 → ErrPipelineConflict (transición no válida desde el estado actual).
+func (c *LearningPipelineClient) UpdateJobStatus(ctx context.Context, jobID, status string, phase int16, lastError *string) error {
+	if jobID == "" {
+		return fmt.Errorf("job_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelineJobStatusPathFmt, jobID)
+	return c.do(ctx, http.MethodPatch, url, updateJobStatusRequest{
+		Status:    status,
+		Phase:     phase,
+		LastError: lastError,
+	}, nil)
+}
+
+// do ejecuta una request M2M autenticada y (si out != nil) decodifica la respuesta.
+// Clasifica el estado: 2xx OK; 409 → ErrPipelineConflict (guard de estado, el caller
+// decide); 4xx salvo 408/429 → ErrLearningPermanent (permanente, lo trata retry.go);
+// resto (5xx, 408, 429, red, timeout) → transitorio sin sentinel. NUNCA loguea el token.
+func (c *LearningPipelineClient) do(ctx context.Context, method, url string, body any, out any) error {
+	token, err := c.tokenProvider.Token()
+	if err != nil {
+		return fmt.Errorf("obtaining service token: %w", err)
+	}
+
+	var reader io.Reader
+	if body != nil {
+		bodyBytes, err := json.Marshal(body)
+		if err != nil {
+			return fmt.Errorf("marshaling learning request: %w", err)
+		}
+		reader = bytes.NewReader(bodyBytes)
+	}
+
+	httpReq, err := http.NewRequestWithContext(ctx, method, url, reader)
+	if err != nil {
+		return fmt.Errorf("creating learning request: %w", err)
+	}
+	httpReq.Header.Set("Authorization", "Bearer "+token)
+	httpReq.Header.Set("Accept", "application/json")
+	if body != nil {
+		httpReq.Header.Set("Content-Type", "application/json")
+	}
+
+	resp, err := c.httpClient.Do(httpReq)
+	if err != nil {
+		return fmt.Errorf("learning request failed: %w", err)
+	}
+	defer func() { _ = resp.Body.Close() }()
+
+	respBody, err := io.ReadAll(resp.Body)
+	if err != nil {
+		return fmt.Errorf("reading learning response: %w", err)
+	}
+
+	switch {
+	case resp.StatusCode >= 200 && resp.StatusCode < 300:
+		if out != nil {
+			if err := json.Unmarshal(respBody, out); err != nil {
+				return fmt.Errorf("parsing learning response: %w", err)
+			}
+		}
+		return nil
+	case resp.StatusCode == http.StatusConflict:
+		return fmt.Errorf("%w: %s", ErrPipelineConflict, strings.TrimSpace(string(respBody)))
+	case resp.StatusCode >= 400 && resp.StatusCode < 500 &&
+		resp.StatusCode != http.StatusRequestTimeout && resp.StatusCode != http.StatusTooManyRequests:
+		return fmt.Errorf("%w: pipeline status %d: %s", ErrLearningPermanent, resp.StatusCode, strings.TrimSpace(string(respBody)))
+	default:
+		return fmt.Errorf("pipeline returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(respBody)))
+	}
+}

@@ -26,19 +26,20 @@ import (
 
 // Resources contiene todos los recursos inicializados para el worker
 type Resources struct {
-	Logger             logger.Logger
-	RabbitMQConn       *rabbit.Connection
-	RabbitMQChannel    *amqp.Channel
-	AuthClient         *client.AuthClient
-	SettingsClient     *m2m.SettingsClient
-	LearningClient     *m2m.LearningClient
-	LearningPrepClient *m2m.LearningPrepClient
-	LLMProvider        llm.LLMProvider
-	LifecycleManager   *lifecycle.Manager
-	ProcessorRegistry  *processor.Registry
-	MetricsServer      *httpInfra.MetricsServer
-	HealthChecker      *health.Checker
-	SharedMetrics      *sharedMetrics.Metrics
+	Logger                 logger.Logger
+	RabbitMQConn           *rabbit.Connection
+	RabbitMQChannel        *amqp.Channel
+	AuthClient             *client.AuthClient
+	SettingsClient         *m2m.SettingsClient
+	LearningClient         *m2m.LearningClient
+	LearningPrepClient     *m2m.LearningPrepClient
+	LearningPipelineClient *m2m.LearningPipelineClient
+	LLMProvider            llm.LLMProvider
+	LifecycleManager       *lifecycle.Manager
+	ProcessorRegistry      *processor.Registry
+	MetricsServer          *httpInfra.MetricsServer
+	HealthChecker          *health.Checker
+	SharedMetrics          *sharedMetrics.Metrics
 }
 
 // ResourceBuilder construye Resources de forma incremental usando el patrón Builder
@@ -57,16 +58,17 @@ type ResourceBuilder struct {
 	nlpClient    nlp.Client
 
 	// Recursos de aplicación
-	authClient         *client.AuthClient
-	settingsClient     *m2m.SettingsClient
-	learningClient     *m2m.LearningClient
-	learningPrepClient *m2m.LearningPrepClient
-	llmProvider        llm.LLMProvider
-	llmProviders       map[string]llm.LLMProvider
-	processorRegistry  *processor.Registry
-	metricsServer      *httpInfra.MetricsServer
-	healthChecker      *health.Checker
-	sharedMetrics      *sharedMetrics.Metrics
+	authClient             *client.AuthClient
+	settingsClient         *m2m.SettingsClient
+	learningClient         *m2m.LearningClient
+	learningPrepClient     *m2m.LearningPrepClient
+	learningPipelineClient *m2m.LearningPipelineClient
+	llmProvider            llm.LLMProvider
+	llmProviders           map[string]llm.LLMProvider
+	processorRegistry      *processor.Registry
+	metricsServer          *httpInfra.MetricsServer
+	healthChecker          *health.Checker
+	sharedMetrics          *sharedMetrics.Metrics
 
 	// Lifecycle
 	lifecycleManager *lifecycle.Manager
@@ -274,6 +276,29 @@ func (b *ResourceBuilder) WithM2MClients() *ResourceBuilder {
 		TokenProvider: prepToken,
 	})
 
+	// Token provider del carril de MATERIALES (plan 043 F2): misma audience
+	// (edugo-api-learning), scope propio (materials.pipeline). El handler del pipeline
+	// en learning valida este scope, distinto de revisión/preparación; por eso su
+	// propia instancia de token.
+	pipelineToken, err := m2m.NewServiceTokenProvider(m2m.ServiceTokenConfig{
+		Secret:   jwtCfg.Secret,
+		Issuer:   jwtCfg.Issuer,
+		Audience: audienceLearning,
+		ClientID: jwtCfg.ClientID,
+		Scopes:   []string{scopeMaterialsPipeline},
+		TTL:      jwtCfg.TTL,
+	})
+	if err != nil {
+		b.err = fmt.Errorf("failed to create learning pipeline service token provider: %w", err)
+		return b
+	}
+
+	b.learningPipelineClient = m2m.NewLearningPipelineClient(m2m.LearningPipelineClientConfig{
+		BaseURL:       learningCfg.BaseURL,
+		Timeout:       learningCfg.Timeout,
+		TokenProvider: pipelineToken,
+	})
+
 	b.logger.Info("✅ M2M clients initialized",
 		"academic_base_url", academicCfg.BaseURL,
 		"academic_audience", jwtCfg.Audience,
@@ -287,9 +312,10 @@ func (b *ResourceBuilder) WithM2MClients() *ResourceBuilder {
 // Contrato M2M hacia learning: la audience es común, pero cada riel mintea su token
 // con su propio scope (revisión: plan 040 F2; preparación: plan 042 F2).
 const (
-	audienceLearning    = "edugo-api-learning"
-	scopeAttemptsReview = "attempts.review"
-	scopeQuestionsPrep  = "questions.prep"
+	audienceLearning       = "edugo-api-learning"
+	scopeAttemptsReview    = "attempts.review"
+	scopeQuestionsPrep     = "questions.prep"
+	scopeMaterialsPipeline = "materials.pipeline"
 )
 
 // WithLLMProvider construye el provider LLM según la política de plataforma
@@ -553,19 +579,20 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 
 	// Construir Resources
 	resources := &Resources{
-		Logger:             b.logger,
-		RabbitMQConn:       b.rabbitSharedConn,
-		RabbitMQChannel:    b.rabbitChannel,
-		AuthClient:         b.authClient,
-		SettingsClient:     b.settingsClient,
-		LearningClient:     b.learningClient,
-		LearningPrepClient: b.learningPrepClient,
-		LLMProvider:        b.llmProvider,
-		LifecycleManager:   b.lifecycleManager,
-		ProcessorRegistry:  b.processorRegistry,
-		MetricsServer:      b.metricsServer,
-		HealthChecker:      b.healthChecker,
-		SharedMetrics:      b.sharedMetrics,
+		Logger:                 b.logger,
+		RabbitMQConn:           b.rabbitSharedConn,
+		RabbitMQChannel:        b.rabbitChannel,
+		AuthClient:             b.authClient,
+		SettingsClient:         b.settingsClient,
+		LearningClient:         b.learningClient,
+		LearningPrepClient:     b.learningPrepClient,
+		LearningPipelineClient: b.learningPipelineClient,
+		LLMProvider:            b.llmProvider,
+		LifecycleManager:       b.lifecycleManager,
+		ProcessorRegistry:      b.processorRegistry,
+		MetricsServer:          b.metricsServer,
+		HealthChecker:          b.healthChecker,
+		SharedMetrics:          b.sharedMetrics,
 	}
 
 	// Crear función de cleanup

@@ -8,20 +8,21 @@ import (
 )
 
 type Config struct {
-	Messaging       MessagingConfig       `mapstructure:"messaging"`
-	NLP             NLPConfig             `mapstructure:"nlp"`
-	PDF             PDFConfig             `mapstructure:"pdf"`
-	Logging         LoggingConfig         `mapstructure:"logging"`
-	APIIdentity     APIIdentityConfig     `mapstructure:"api_identity"`
-	APIAcademic     APIAcademicConfig     `mapstructure:"api_academic"`
-	APILearning     APILearningConfig     `mapstructure:"api_learning"`
-	ServiceJWT      ServiceJWTConfig      `mapstructure:"service_jwt"`
-	LLM             LLMConfig             `mapstructure:"llm"`
-	Metrics         MetricsConfig         `mapstructure:"metrics"`
-	Health          HealthConfig          `mapstructure:"health"`
-	CircuitBreakers CircuitBreakersConfig `mapstructure:"circuit_breakers"`
-	RateLimiter     RateLimiterConfig     `mapstructure:"rate_limiter"`
-	Shutdown        ShutdownConfig        `mapstructure:"shutdown"`
+	Messaging        MessagingConfig        `mapstructure:"messaging"`
+	NLP              NLPConfig              `mapstructure:"nlp"`
+	PDF              PDFConfig              `mapstructure:"pdf"`
+	Logging          LoggingConfig          `mapstructure:"logging"`
+	APIIdentity      APIIdentityConfig      `mapstructure:"api_identity"`
+	APIAcademic      APIAcademicConfig      `mapstructure:"api_academic"`
+	APILearning      APILearningConfig      `mapstructure:"api_learning"`
+	MaterialPipeline MaterialPipelineConfig `mapstructure:"material_pipeline"`
+	ServiceJWT       ServiceJWTConfig       `mapstructure:"service_jwt"`
+	LLM              LLMConfig              `mapstructure:"llm"`
+	Metrics          MetricsConfig          `mapstructure:"metrics"`
+	Health           HealthConfig           `mapstructure:"health"`
+	CircuitBreakers  CircuitBreakersConfig  `mapstructure:"circuit_breakers"`
+	RateLimiter      RateLimiterConfig      `mapstructure:"rate_limiter"`
+	Shutdown         ShutdownConfig         `mapstructure:"shutdown"`
 }
 
 type MessagingConfig struct {
@@ -181,6 +182,26 @@ type APIAcademicConfig struct {
 type APILearningConfig struct {
 	BaseURL string        `mapstructure:"base_url"`
 	Timeout time.Duration `mapstructure:"timeout"`
+}
+
+// MaterialPipelineConfig configura el carril material→evaluación (plan 043 F2):
+// el límite de descarga del PDF y los parámetros del porcionado determinista
+// (D-043.6). El chunking (F2d) los consume para armar trozos por conteo de palabras:
+// apunta a ChunkTargetWords, corta antes de ChunkMaxWords, no baja de ChunkMinWords,
+// y un resto por debajo de ChunkMergeThresholdWords se fusiona con el trozo anterior.
+type MaterialPipelineConfig struct {
+	// DownloadMaxBytes es el techo de bytes de la descarga del PDF (coherente con el
+	// límite del extractor). Un archivo mayor se rechaza como permanente (no reintenta).
+	DownloadMaxBytes int64 `mapstructure:"download_max_bytes"`
+	// ChunkTargetWords es el tamaño objetivo (en palabras) de cada porción.
+	ChunkTargetWords int `mapstructure:"chunk_target_words"`
+	// ChunkMaxWords es el techo duro de palabras por porción (corte forzado).
+	ChunkMaxWords int `mapstructure:"chunk_max_words"`
+	// ChunkMinWords es el piso de palabras por porción antes de intentar cortar.
+	ChunkMinWords int `mapstructure:"chunk_min_words"`
+	// ChunkMergeThresholdWords: un resto final por debajo de este umbral se fusiona
+	// con la porción anterior en lugar de quedar como un trozo diminuto.
+	ChunkMergeThresholdWords int `mapstructure:"chunk_merge_threshold_words"`
 }
 
 // ServiceJWTConfig configura la firma del service JWT M2M (HS256) que el worker
@@ -347,6 +368,29 @@ func (c *Config) GetAPILearningConfigWithDefaults() APILearningConfig {
 	}
 	if cfg.Timeout == 0 {
 		cfg.Timeout = 5 * time.Second
+	}
+	return cfg
+}
+
+// GetMaterialPipelineConfigWithDefaults retorna la config del carril de materiales
+// con defaults (descarga 100MB; porcionado objetivo 650 / max 800 / min 500 palabras,
+// umbral de fusión 150). Los defaults de chunking encarnan D-043.6.
+func (c *Config) GetMaterialPipelineConfigWithDefaults() MaterialPipelineConfig {
+	cfg := c.MaterialPipeline
+	if cfg.DownloadMaxBytes == 0 {
+		cfg.DownloadMaxBytes = 100 * 1024 * 1024
+	}
+	if cfg.ChunkTargetWords == 0 {
+		cfg.ChunkTargetWords = 650
+	}
+	if cfg.ChunkMaxWords == 0 {
+		cfg.ChunkMaxWords = 800
+	}
+	if cfg.ChunkMinWords == 0 {
+		cfg.ChunkMinWords = 500
+	}
+	if cfg.ChunkMergeThresholdWords == 0 {
+		cfg.ChunkMergeThresholdWords = 150
 	}
 	return cfg
 }

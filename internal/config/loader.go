@@ -30,6 +30,12 @@ func Load() (*Config, error) {
 			"service_jwt.secret":    "SERVICE_JWT_SECRET",
 			"api_academic.base_url": "API_ACADEMIC_BASE_URL",
 			"api_learning.base_url": "API_LEARNING_BASE_URL",
+			// Carril de materiales (plan 043 F2): descarga + porcionado determinista.
+			"material_pipeline.download_max_bytes":          "MATERIAL_PIPELINE_DOWNLOAD_MAX_BYTES",
+			"material_pipeline.chunk_target_words":          "MATERIAL_PIPELINE_CHUNK_TARGET_WORDS",
+			"material_pipeline.chunk_max_words":             "MATERIAL_PIPELINE_CHUNK_MAX_WORDS",
+			"material_pipeline.chunk_min_words":             "MATERIAL_PIPELINE_CHUNK_MIN_WORDS",
+			"material_pipeline.chunk_merge_threshold_words": "MATERIAL_PIPELINE_CHUNK_MERGE_THRESHOLD_WORDS",
 			// LLM (plan 039 D-039.3): credenciales/URL/modelo de EduGo, no por escuela.
 			"llm.local.base_url": "LLM_LOCAL_BASE_URL",
 			"llm.local.model":    "LLM_LOCAL_MODEL",
