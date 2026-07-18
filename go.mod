@@ -18,7 +18,7 @@ require (
 	github.com/EduGoGroup/edugo-shared/resilience/retry v0.1.0
 	github.com/EduGoGroup/edugo-shared/testing v0.1.0
 	github.com/EduGoGroup/edugo-shared/textmatch v0.900.0
-	github.com/pdfcpu/pdfcpu v0.11.1
+	github.com/ledongthuc/pdf v0.0.0-20250511090121-5959a4027728
 	github.com/prometheus/client_golang v1.23.2
 	github.com/prometheus/client_model v0.6.2
 	github.com/rabbitmq/amqp091-go v1.10.0
@@ -123,8 +123,3 @@ require (
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	gopkg.in/yaml.v3 v3.0.1 // indirect
 )
-
-// pdfcpu v0.11.1 is incompatible with pkcs7 >= v0.2.1 (NewSignedData signature changed)
-exclude github.com/hhrutter/pkcs7 v0.2.1
-
-exclude github.com/hhrutter/pkcs7 v0.2.2

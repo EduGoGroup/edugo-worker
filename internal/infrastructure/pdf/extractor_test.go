@@ -155,7 +155,7 @@ func TestPDFExtractor_Extract(t *testing.T) {
 
 		// Assert
 		require.NoError(t, err)
-		// Nota: pdfcpu puede no extraer texto de PDFs simples de manera confiable
+		// Nota: el extractor puede no sacar texto de PDFs sintéticos mínimos
 		// Lo importante es que no haya error
 		assert.NotNil(t, text, "el texto extraído no debería ser nil")
 	})
@@ -223,7 +223,7 @@ func TestPDFExtractor_ExtractWithMetadata(t *testing.T) {
 		assert.NotNil(t, result.Metadata, "metadata no debería ser nil")
 
 		// La detección de escaneo depende del contenido real extraído
-		// No hacemos asserts específicos ya que pdfcpu puede no extraer texto del PDF de prueba
+		// No hacemos asserts específicos ya que el extractor puede no sacar texto del PDF sintético de prueba
 	})
 
 	t.Run("detección de PDF escaneado", func(t *testing.T) {

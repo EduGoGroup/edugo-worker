@@ -1,4 +1,4 @@
-# testdata del harness modo material (plan 043 F3b)
+# testdata del harness modo material (plan 043 F3b · deuda 038)
 
 Entradas para medir las llamadas A (digest) y B (candidatas) del pipeline
 material→evaluación.
@@ -6,27 +6,41 @@ material→evaluación.
 ## Contenido
 
 - `*.txt` — contenido educativo real en español, escrito a mano para esta prueba
-  (ciclo del agua, sistema solar, fotosíntesis). No provienen de terceros. Son la
-  **entrada por defecto** del modo material (`-material-inputs` vacío toma todos los
-  `.txt` de esta carpeta). `fotosintesis.txt` está dimensionado para partir en 2 trozos
-  con `chunking.DefaultConfig`, y así ejercita el **encadenado de summaries** (A del
-  trozo N alimenta el `PrevSummary` del trozo N+1).
-- `*.pdf` — generados desde los `.txt` hermanos con `gen_pdf.go` (pdfcpu `api.Create`,
-  la misma librería vendorizada que usa el extractor del worker). Su única función es
-  ejercitar el camino `pdf.Extractor` del harness.
-- `gen_pdf.go` (`//go:build ignore`) — regenera los `.pdf`. Uso desde `edugo-worker/`:
-  `go run ./cmd/llm-harness/testdata/material/gen_pdf.go`.
+  (ciclo del agua, sistema solar, fotosíntesis, la célula, los ecosistemas, la energía).
+  No provienen de terceros. Son la **entrada por defecto** del modo material
+  (`-material-inputs` vacío toma todos los `.txt` de esta carpeta). `fotosintesis.txt`
+  está dimensionado para partir en 2 trozos con `chunking.DefaultConfig`, y así ejercita
+  el **encadenado de summaries** (A del trozo N alimenta el `PrevSummary` del trozo N+1).
+- `*.pdf` — dos familias de fuente, para ejercitar el camino `pdf.Extractor` del harness
+  con los dos casos que importan:
+  - **WinAnsi** (`ciclo_del_agua`, `fotosintesis`, `sistema_solar`): un byte por glifo.
+    Generados originalmente con pdfcpu; **committeados, no se regeneran** (pdfcpu ya no es
+    dependencia del worker tras la deuda 038).
+  - **Type0/CID Identity-H** (`la_celula`, `los_ecosistemas`, `la_energia`): dos bytes por
+    glifo vía CMap, el caso típico de exportar a PDF desde navegador/procesador moderno.
+    Era el caso que el extractor no sabía leer (deuda 038); ahora sí. Generados con Chrome
+    headless a partir de los `.html` hermanos (ver «Regeneración» abajo).
+- `*.html` — fuente de los PDF CID. Se conservan para poder regenerar el `.pdf` si hiciera
+  falta.
 
-## Hallazgo abierto: el extractor de PDF rechaza estos PDFs
+## Regeneración de los PDF CID (con Chrome headless)
 
-El extractor (`internal/infrastructure/pdf`) hoy **no puede leer** estos PDFs de una
-sola página: `ExtractWithMetadata` lee `pdfCtx.PageCount` justo después de
-`api.ReadContext`, pero `ReadContext` deja `PageCount` en 0 hasta que se invoca
-`EnsurePageCount()` (o `ReadValidateAndOptimize`). Resultado: todo PDF recién creado se
-rechaza como `ErrPDFEmpty` ("PDF vacío o corrupto"). Además, cuando el conteo funciona,
-`PageContent` devuelve el **content-stream crudo** (operadores `BT/Tf/Tj/ET` con el
-texto legible entre paréntesis), no texto limpio.
+Los `.pdf` CID se generan desde su `.html` hermano con Chrome en modo headless, que embebe
+las fuentes como **Type0/CID con codificación Identity-H** (verificable con `pdffonts`):
 
-Ese paquete está **fuera del alcance de escritura de F3a/F3b** (solo `internal/llm/**` y
-`cmd/llm-harness/**`); el arreglo corresponde a su dueño. Por eso la medición usa los
-`.txt` como entrada, y el harness enruta `.pdf` → `pdf.Extractor` y `.txt` → texto plano.
+```sh
+CHROME="/Applications/Google Chrome.app/Contents/MacOS/Google Chrome"
+for n in la_celula los_ecosistemas la_energia; do
+  "$CHROME" --headless --disable-gpu --no-pdf-header-footer \
+    --print-to-pdf="$PWD/$n.pdf" "file://$PWD/$n.html"
+  pdffonts "$n.pdf"   # debe mostrar «CID TrueType / Identity-H» en todas las fuentes
+done
+```
+
+> Los `.pdf` ya committeados **no se regeneran** salvo necesidad: al reexportar, Chrome
+> puede reordenar el layout (saltos de línea, subsetting de fuentes) y desalinear los
+> asserts de contenido de `internal/infrastructure/pdf/extractor_integration_test.go`.
+> Si se regeneran, revisar esos asserts.
+
+> Nota de procedencia: el generador anterior `gen_pdf.go` (pdfcpu `api.Create`, solo
+> WinAnsi) se retiró junto con la dependencia pdfcpu en la deuda 038.

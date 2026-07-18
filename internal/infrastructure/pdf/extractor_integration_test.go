@@ -12,9 +12,12 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-// Fixtures reales en testdata/: PDFs de una página generados con pdfcpu
-// (api.Create) desde los .txt hermanos, copiados de cmd/llm-harness/testdata/material.
-// Ejercitan el camino completo ReadContext -> EnsurePageCount -> extracción de texto.
+// Fixtures reales en testdata/, dos familias de fuente que ejercitan el extractor
+// ledongthuc/pdf de punta a punta (NewReader -> NumPage -> Page.GetPlainText):
+//   - WinAnsi (ciclo_del_agua, fotosintesis, sistema_solar): un byte por glifo.
+//   - Type0/CID Identity-H (la_celula, los_ecosistemas, la_energia): dos bytes por
+//     glifo vía CMap, generados con Chrome headless (ver testdata/../material/README).
+//     Este era el caso que el parser propio anterior no sabía leer (deuda 038).
 func TestExtractWithMetadata_RealPDFs(t *testing.T) {
 	cases := []struct {
 		file     string
@@ -31,6 +34,18 @@ func TestExtractWithMetadata_RealPDFs(t *testing.T) {
 		{
 			file:     "sistema_solar.pdf",
 			keywords: []string{"sistema solar", "Sol", "planetas", "gravedad"},
+		},
+		{
+			file:     "la_celula.pdf",
+			keywords: []string{"célula", "núcleo", "mitocondrias", "membrana"},
+		},
+		{
+			file:     "los_ecosistemas.pdf",
+			keywords: []string{"ecosistema", "cadenas alimentarias", "biodiversidad", "hábitat"},
+		},
+		{
+			file:     "la_energia.pdf",
+			keywords: []string{"energía", "eléctrica", "hidroeléctricas", "eólica"},
 		},
 	}
 
@@ -69,7 +84,10 @@ func TestExtractWithMetadata_RealPDFs(t *testing.T) {
 func TestExtractWithMetadata_MatchesSourceText(t *testing.T) {
 	ex := NewExtractor(newTestLogger())
 
-	for _, name := range []string{"ciclo_del_agua", "fotosintesis", "sistema_solar"} {
+	for _, name := range []string{
+		"ciclo_del_agua", "fotosintesis", "sistema_solar",
+		"la_celula", "los_ecosistemas", "la_energia",
+	} {
 		t.Run(name, func(t *testing.T) {
 			pdfData, err := os.ReadFile(filepath.Join("testdata", name+".pdf"))
 			require.NoError(t, err)
@@ -95,9 +113,75 @@ func TestExtractWithMetadata_MatchesSourceText(t *testing.T) {
 	}
 }
 
+// TestExtractWithMetadata_CIDContent es la prueba de regresión de la deuda 038: los
+// PDFs Type0/CID (Identity-H) generados por navegadores/procesadores modernos deben
+// entregar texto español legible. Comprueba frases exactas con acentos, eñes, signos
+// de apertura (¿ ¡) y símbolos (€, ½) que el parser WinAnsi propio anterior no leía.
+func TestExtractWithMetadata_CIDContent(t *testing.T) {
+	cases := []struct {
+		file    string
+		phrases []string
+	}{
+		{
+			file: "la_celula.pdf",
+			phrases: []string{
+				"La célula es la unidad más pequeña",
+				"¿Qué hay dentro de una célula?",
+				"¡Es como una pequeña ciudad amurallada!",
+				"un niño en",
+				"dañados", // eñe
+				"300 €",
+				"½ milímetro",
+			},
+		},
+		{
+			file: "los_ecosistemas.pdf",
+			phrases: []string{
+				"Un ecosistema es el conjunto formado",
+				"¿Cómo se relacionan los seres vivos?",
+				"¡Cada especie cumple",
+				"su hábitat",
+				"el océano",
+				"cientos de €",
+				"½ de las especies",
+			},
+		},
+		{
+			file: "la_energia.pdf",
+			phrases: []string{
+				"La energía es la capacidad",
+				"¿De qué formas se presenta la energía?",
+				"¡Una caída de agua se convierte en electricidad",
+				"mañana", // eñe
+				"la solar y la eólica",
+				"200 €",
+				"½ del consumo",
+			},
+		},
+	}
+
+	ex := NewExtractor(newTestLogger())
+
+	for _, tc := range cases {
+		t.Run(tc.file, func(t *testing.T) {
+			data, err := os.ReadFile(filepath.Join("testdata", tc.file))
+			require.NoError(t, err)
+
+			res, err := ex.ExtractWithMetadata(context.Background(), bytes.NewReader(data))
+			require.NoError(t, err, "un PDF CID/Identity-H debe extraerse, no rechazarse")
+			require.NotNil(t, res)
+
+			for _, p := range tc.phrases {
+				assert.Containsf(t, res.Text, p,
+					"el texto extraído del PDF CID debe contener %q", p)
+			}
+		})
+	}
+}
+
 func uniqueWords(s string) map[string]bool {
 	out := make(map[string]bool)
-	for _, w := range strings.Fields(strings.ToLower(s)) {
+	for w := range strings.FieldsSeq(strings.ToLower(s)) {
 		w = strings.Trim(w, ".,;:¿?¡!()\"'—–-")
 		if len(w) >= 4 { // ignorar palabras muy cortas (artículos, etc.)
 			out[w] = true

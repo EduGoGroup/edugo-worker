@@ -9,9 +9,7 @@ import (
 	"strings"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
-	"github.com/pdfcpu/pdfcpu/pkg/api"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu"
-	"github.com/pdfcpu/pdfcpu/pkg/pdfcpu/model"
+	"github.com/ledongthuc/pdf"
 )
 
 const (
@@ -31,6 +29,11 @@ var (
 	// ErrPDFCorrupt indica que el PDF está corrupto
 	ErrPDFCorrupt = errors.New("PDF corrupto o inválido")
 )
+
+// metadataKeys son las entradas del diccionario Info que se copian a Metadata.
+// Se emiten en minúscula (title, author, …) como equivalente disponible en
+// ledongthuc/pdf del antiguo mapa vacío.
+var metadataKeys = []string{"Title", "Author", "Subject", "Keywords", "Creator", "Producer"}
 
 type PDFExtractor struct {
 	logger  logger.Logger
@@ -79,89 +82,30 @@ func (e *PDFExtractor) ExtractWithMetadata(ctx context.Context, reader io.Reader
 
 	e.logger.Debug("PDF leído", "size_bytes", len(data))
 
-	rs := bytes.NewReader(data)
-
-	// Intentar leer contexto PDF
-	pdfCtx, err := api.ReadContext(rs, model.NewDefaultConfiguration())
+	// Extraer texto y metadatos con ledongthuc/pdf (soporta Type0/CID Identity-H).
+	extracted, err := e.extract(ctx, bytes.NewReader(data), int64(len(data)))
 	if err != nil {
-		e.logger.Error("error leyendo contexto PDF", "error", err)
-		// Distinguir entre PDF corrupto y otros errores
-		if strings.Contains(err.Error(), "not a PDF file") ||
-			strings.Contains(err.Error(), "malformed") ||
-			strings.Contains(err.Error(), "invalid") {
-			return nil, fmt.Errorf("%w: %v", ErrPDFCorrupt, err)
-		}
-		return nil, fmt.Errorf("error procesando PDF: %w", err)
+		return nil, err
 	}
 
-	// pdfcpu deja PageCount en 0 tras ReadContext: hay que forzar el conteo
-	// recorriendo el árbol de páginas antes de leerlo.
-	if err := pdfCtx.EnsurePageCount(); err != nil {
-		e.logger.Error("error contando páginas del PDF", "error", err)
-		return nil, fmt.Errorf("%w: %v", ErrPDFCorrupt, err)
-	}
-
-	pageCount := pdfCtx.PageCount
-
-	if pageCount == 0 {
+	if extracted.pageCount == 0 {
 		e.logger.Warn("PDF sin páginas")
 		return nil, ErrPDFEmpty
 	}
 
-	e.logger.Debug("extrayendo texto de páginas", "total_pages", pageCount)
-
-	var textBuilder strings.Builder
-	pageWordCounts := make([]int, pageCount)
-	pagesWithText := 0
-
-	for i := 1; i <= pageCount; i++ {
-		// Verificar contexto de cancelación
-		select {
-		case <-ctx.Done():
-			return nil, ctx.Err()
-		default:
-		}
-
-		// Extraer contenido de cada página
-		contentReader, err := pdfcpu.ExtractPageContent(pdfCtx, i)
-		if err != nil {
-			e.logger.Warn("error extrayendo página", "page", i, "error", err.Error())
-			continue
-		}
-
-		// Leer el content-stream crudo (operadores + operandos, ya descomprimido)
-		raw, err := io.ReadAll(contentReader)
-		if err != nil {
-			e.logger.Warn("error leyendo contenido de página", "page", i, "error", err.Error())
-			continue
-		}
-
-		// Extraer el texto visible real de los operadores de texto del stream.
-		pageText := extractTextFromContent(raw)
-		pageWords := len(strings.Fields(pageText))
-		pageWordCounts[i-1] = pageWords
-
-		if pageWords >= minWordsPerPage {
-			pagesWithText++
-		}
-
-		textBuilder.WriteString(pageText)
-		textBuilder.WriteString("\n")
-	}
-
-	rawText := textBuilder.String()
+	rawText := extracted.rawText
 	cleanText := e.cleaner.Clean(rawText)
 	totalWords := len(strings.Fields(cleanText))
 
 	// Detección mejorada de PDFs escaneados
-	avgWordsPerPage := float64(totalWords) / float64(pageCount)
-	isScanned := e.detectScannedPDF(totalWords, pageCount, pagesWithText, avgWordsPerPage)
+	avgWordsPerPage := float64(totalWords) / float64(extracted.pageCount)
+	isScanned := e.detectScannedPDF(totalWords, extracted.pageCount, extracted.pagesWithText, avgWordsPerPage)
 
 	if isScanned {
 		e.logger.Warn("PDF escaneado detectado",
 			"total_words", totalWords,
-			"pages", pageCount,
-			"pages_with_text", pagesWithText,
+			"pages", extracted.pageCount,
+			"pages_with_text", extracted.pagesWithText,
 			"avg_words_per_page", avgWordsPerPage,
 		)
 		return nil, ErrPDFScanned
@@ -169,26 +113,127 @@ func (e *PDFExtractor) ExtractWithMetadata(ctx context.Context, reader io.Reader
 
 	// Validar que haya contenido mínimo útil
 	if totalWords < minWordsPerPage {
-		e.logger.Warn("PDF con muy poco texto", "words", totalWords, "pages", pageCount)
+		e.logger.Warn("PDF con muy poco texto", "words", totalWords, "pages", extracted.pageCount)
 		return nil, ErrPDFScanned
 	}
 
 	e.logger.Info("extracción completada",
-		"pages", pageCount,
+		"pages", extracted.pageCount,
 		"words", totalWords,
-		"pages_with_text", pagesWithText,
+		"pages_with_text", extracted.pagesWithText,
 		"avg_words_per_page", avgWordsPerPage,
 	)
 
 	return &ExtractionResult{
 		Text:      cleanText,
 		RawText:   rawText,
-		PageCount: pageCount,
+		PageCount: extracted.pageCount,
 		WordCount: totalWords,
-		Metadata:  make(map[string]string),
+		Metadata:  extracted.metadata,
+		// HasImages: ledongthuc/pdf no expone la presencia de XObjects imagen sin
+		// recorrer los recursos de cada página; se conserva el valor neutro previo.
 		HasImages: false,
 		IsScanned: false,
 	}, nil
+}
+
+// extraction agrupa lo que produce el recorrido del PDF antes de limpiar/validar.
+type extraction struct {
+	rawText       string
+	pageCount     int
+	pagesWithText int
+	metadata      map[string]string
+}
+
+// extract recorre el PDF con ledongthuc/pdf y devuelve el texto crudo, el conteo
+// de páginas y los metadatos. El linaje rsc.io/pdf entra en panic ante xrefs o
+// estructuras rotas, por eso todo el recorrido va envuelto en un recover()
+// defensivo que se traduce a ErrPDFCorrupt.
+func (e *PDFExtractor) extract(ctx context.Context, rs io.ReaderAt, size int64) (result extraction, err error) {
+	defer func() {
+		if r := recover(); r != nil {
+			e.logger.Error("panic extrayendo PDF (estructura/xref corrupta)", "panic", r)
+			result = extraction{}
+			err = fmt.Errorf("%w: %v", ErrPDFCorrupt, r)
+		}
+	}()
+
+	r, rerr := pdf.NewReader(rs, size)
+	if rerr != nil {
+		e.logger.Error("error abriendo PDF", "error", rerr)
+		return extraction{}, fmt.Errorf("%w: %v", ErrPDFCorrupt, rerr)
+	}
+
+	pageCount := r.NumPage()
+	if pageCount <= 0 {
+		// Sin páginas: el llamador lo mapea a ErrPDFEmpty.
+		return extraction{pageCount: 0, metadata: map[string]string{}}, nil
+	}
+
+	e.logger.Debug("extrayendo texto de páginas", "total_pages", pageCount)
+
+	var textBuilder strings.Builder
+	pagesWithText := 0
+	fonts := make(map[string]*pdf.Font)
+
+	for i := 1; i <= pageCount; i++ {
+		// Verificar contexto de cancelación
+		select {
+		case <-ctx.Done():
+			return extraction{}, ctx.Err()
+		default:
+		}
+
+		p := r.Page(i)
+		// Cachear las fuentes por nombre para no re-parsear el charmap en cada texto.
+		for _, name := range p.Fonts() {
+			if _, ok := fonts[name]; !ok {
+				f := p.Font(name)
+				fonts[name] = &f
+			}
+		}
+
+		pageText, perr := p.GetPlainText(fonts)
+		if perr != nil {
+			e.logger.Warn("error extrayendo texto de página", "page", i, "error", perr.Error())
+			continue
+		}
+
+		if len(strings.Fields(pageText)) >= minWordsPerPage {
+			pagesWithText++
+		}
+
+		textBuilder.WriteString(pageText)
+		textBuilder.WriteString("\n")
+	}
+
+	return extraction{
+		rawText:       textBuilder.String(),
+		pageCount:     pageCount,
+		pagesWithText: pagesWithText,
+		metadata:      extractMetadata(r),
+	}, nil
+}
+
+// extractMetadata copia el diccionario Info del PDF (si existe) al mapa de
+// metadatos. Claves en minúscula; los valores usan Value.Text() para decodificar
+// correctamente los strings PDF (incluido UTF-16).
+func extractMetadata(r *pdf.Reader) map[string]string {
+	m := make(map[string]string)
+	info := r.Trailer().Key("Info")
+	if info.IsNull() {
+		return m
+	}
+	for _, key := range metadataKeys {
+		v := info.Key(key)
+		if v.IsNull() {
+			continue
+		}
+		if s := strings.TrimSpace(v.Text()); s != "" {
+			m[strings.ToLower(key)] = s
+		}
+	}
+	return m
 }
 
 // detectScannedPDF detecta si un PDF probablemente está escaneado usando múltiples heurísticas
