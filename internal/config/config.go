@@ -228,6 +228,17 @@ type ServiceJWTConfig struct {
 type LLMConfig struct {
 	Local LLMLocalConfig `mapstructure:"local"`
 	API   LLMAPIConfig   `mapstructure:"api"`
+	Embed LLMEmbedConfig `mapstructure:"embed"`
+}
+
+// LLMEmbedConfig configura el cliente de embeddings local (Ollama, plan 044 D-044.1).
+// Pieza SEPARADA del provider LLM: modelo de embeddings chico y dedicado, endpoint
+// distinto (/api/embed). Sin temperatura (embeder es determinista). Env:
+// LLM_EMBED_BASE_URL, LLM_EMBED_MODEL, LLM_EMBED_TIMEOUT.
+type LLMEmbedConfig struct {
+	BaseURL string        `mapstructure:"base_url"`
+	Model   string        `mapstructure:"model"`
+	Timeout time.Duration `mapstructure:"timeout"`
 }
 
 // LLMLocalConfig configura el provider local (Ollama). Env: LLM_LOCAL_BASE_URL,
@@ -439,6 +450,17 @@ func (c *Config) GetLLMConfigWithDefaults() LLMConfig {
 	}
 	if cfg.API.MaxTokens == 0 {
 		cfg.API.MaxTokens = 4096
+	}
+	// Embeddings local (plan 044 D-044.1): mismo host de Ollama por defecto; el modelo
+	// de embeddings arranca en nomic-embed-text (el harness F1b puede cambiarlo por env).
+	if cfg.Embed.BaseURL == "" {
+		cfg.Embed.BaseURL = "http://localhost:11434"
+	}
+	if cfg.Embed.Model == "" {
+		cfg.Embed.Model = "nomic-embed-text"
+	}
+	if cfg.Embed.Timeout == 0 {
+		cfg.Embed.Timeout = 60 * time.Second
 	}
 	return cfg
 }

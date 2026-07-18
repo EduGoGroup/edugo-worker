@@ -36,6 +36,7 @@ type Resources struct {
 	LearningPrepClient     *m2m.LearningPrepClient
 	LearningPipelineClient *m2m.LearningPipelineClient
 	LLMProvider            llm.LLMProvider
+	Embedder               llm.Embedder
 	LifecycleManager       *lifecycle.Manager
 	ProcessorRegistry      *processor.Registry
 	MetricsServer          *httpInfra.MetricsServer
@@ -66,6 +67,7 @@ type ResourceBuilder struct {
 	learningPipelineClient *m2m.LearningPipelineClient
 	llmProvider            llm.LLMProvider
 	llmProviders           map[string]llm.LLMProvider
+	embedder               llm.Embedder
 	processorRegistry      *processor.Registry
 	metricsServer          *httpInfra.MetricsServer
 	healthChecker          *health.Checker
@@ -358,11 +360,22 @@ func (b *ResourceBuilder) WithLLMProvider() *ResourceBuilder {
 		b.llmProviders["api"] = apiProvider
 	}
 
+	// Cliente de embeddings local (plan 044 D-044.1). Pieza separada del provider LLM:
+	// el reduce (F1c) lo consumirá para medir significado antes de gastar LLM. Aquí solo
+	// se construye y se expone en Resources; el cableado a un processor es de F1c.
+	b.embedder = ollama.NewEmbedder(ollama.EmbedConfig{
+		BaseURL: llmCfg.Embed.BaseURL,
+		Model:   llmCfg.Embed.Model,
+		Timeout: llmCfg.Embed.Timeout,
+	})
+
 	b.logger.Info("✅ LLM providers initialized (selección por mode de escuela: local|api)",
 		"local_provider", localProvider.Name(),
 		"local_base_url", llmCfg.Local.BaseURL,
 		"api_provider", llmCfg.API.Provider,
 		"api_available", b.llmProviders["api"] != nil,
+		"embed_model", llmCfg.Embed.Model,
+		"embed_base_url", llmCfg.Embed.BaseURL,
 	)
 	return b
 }
@@ -626,6 +639,7 @@ func (b *ResourceBuilder) Build() (*Resources, func() error, error) {
 		LearningPrepClient:     b.learningPrepClient,
 		LearningPipelineClient: b.learningPipelineClient,
 		LLMProvider:            b.llmProvider,
+		Embedder:               b.embedder,
 		LifecycleManager:       b.lifecycleManager,
 		ProcessorRegistry:      b.processorRegistry,
 		MetricsServer:          b.metricsServer,

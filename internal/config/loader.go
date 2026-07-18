@@ -46,6 +46,11 @@ func Load() (*Config, error) {
 			"llm.api.provider":   "LLM_API_PROVIDER",
 			"llm.api.api_key":    "LLM_API_KEY",
 			"llm.api.model":      "LLM_API_MODEL",
+			// Embeddings local (plan 044 D-044.1): host/modelo/timeout del cliente Ollama
+			// de embeddings, separado del provider LLM.
+			"llm.embed.base_url": "LLM_EMBED_BASE_URL",
+			"llm.embed.model":    "LLM_EMBED_MODEL",
+			"llm.embed.timeout":  "LLM_EMBED_TIMEOUT",
 		}),
 	)
 
