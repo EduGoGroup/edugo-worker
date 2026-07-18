@@ -6,6 +6,7 @@ import (
 	"testing"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
 // mockProvider implementa llm.LLMProvider; solo JudgePairEquivalence hace algo. Cuenta
@@ -43,6 +44,14 @@ func (m *mockProvider) CheckCriterion(_ context.Context, _ llm.CriterionCheckReq
 func (m *mockProvider) ExtractIdeas(_ context.Context, _ llm.ExtractIdeasRequest) ([]string, error) {
 	return nil, nil
 }
+func (m *mockProvider) DigestChunk(_ context.Context, _ llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
+	return nil, nil
+}
+
+func (m *mockProvider) ProposeCandidates(_ context.Context, _ llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
+	return nil, nil
+}
+
 func (m *mockProvider) Name() string { return "mock" }
 
 // TestGrade_Caso1_TodoFuzzy_SinLlamadas es el ASSERT ESTRELLA del plan 045 F3: el Caso 1

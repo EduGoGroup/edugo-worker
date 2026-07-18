@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
 // Config configura el provider Ollama. Se inyecta desde bootstrap/config; el
@@ -184,6 +185,42 @@ func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest
 		return nil, err
 	}
 	return llm.ParseExtractedIdeas(rawJSON)
+}
+
+// DigestChunk ejecuta la llamada A ("leer") del pipeline material→evaluación (plan 043
+// F3). Mismo camino que las demás llamadas: build prompt → generar → ExtractJSON →
+// ParseDigestResult. El caller valida los artefactos contra ChunkArtifactsV1.
+func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
+	prompt := llm.BuildDigestChunkPrompt(in)
+	out, err := p.generate(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+	rawJSON, err := llm.ExtractJSON(out)
+	if err != nil {
+		return nil, err
+	}
+	artifacts, summary, err := llm.ParseDigestResult(rawJSON)
+	if err != nil {
+		return nil, err
+	}
+	return &llm.DigestChunkResult{Artifacts: artifacts, Summary: summary}, nil
+}
+
+// ProposeCandidates ejecuta la llamada B ("preguntar") del pipeline (plan 043 F3).
+// Mismo camino: build prompt → generar → ExtractJSON → ParseCandidates. El caller valida
+// cada candidata contra CandidatePayloadV1.
+func (p *Provider) ProposeCandidates(ctx context.Context, in llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
+	prompt := llm.BuildProposeCandidatesPrompt(in)
+	out, err := p.generate(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+	rawJSON, err := llm.ExtractJSON(out)
+	if err != nil {
+		return nil, err
+	}
+	return llm.ParseCandidates(rawJSON)
 }
 
 // generate ejecuta POST /api/generate y devuelve el texto crudo del modelo.

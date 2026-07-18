@@ -10,6 +10,7 @@ import (
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
 // mockSettingsReader implementa SchoolSettingsReader para los tests.
@@ -156,6 +157,14 @@ func (m *mockLLMProvider) ExtractIdeas(_ context.Context, _ llm.ExtractIdeasRequ
 		return nil, m.extractErr
 	}
 	return m.extractIdeas, nil
+}
+
+func (m *mockLLMProvider) DigestChunk(_ context.Context, _ llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
+	return nil, nil
+}
+
+func (m *mockLLMProvider) ProposeCandidates(_ context.Context, _ llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
+	return nil, nil
 }
 
 func (m *mockLLMProvider) Name() string { return "mock" }

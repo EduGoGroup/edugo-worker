@@ -94,6 +94,13 @@ func (e *PDFExtractor) ExtractWithMetadata(ctx context.Context, reader io.Reader
 		return nil, fmt.Errorf("error procesando PDF: %w", err)
 	}
 
+	// pdfcpu deja PageCount en 0 tras ReadContext: hay que forzar el conteo
+	// recorriendo el árbol de páginas antes de leerlo.
+	if err := pdfCtx.EnsurePageCount(); err != nil {
+		e.logger.Error("error contando páginas del PDF", "error", err)
+		return nil, fmt.Errorf("%w: %v", ErrPDFCorrupt, err)
+	}
+
 	pageCount := pdfCtx.PageCount
 
 	if pageCount == 0 {
@@ -122,14 +129,15 @@ func (e *PDFExtractor) ExtractWithMetadata(ctx context.Context, reader io.Reader
 			continue
 		}
 
-		// Leer el contenido
-		content, err := io.ReadAll(contentReader)
+		// Leer el content-stream crudo (operadores + operandos, ya descomprimido)
+		raw, err := io.ReadAll(contentReader)
 		if err != nil {
 			e.logger.Warn("error leyendo contenido de página", "page", i, "error", err.Error())
 			continue
 		}
 
-		pageText := string(content)
+		// Extraer el texto visible real de los operadores de texto del stream.
+		pageText := extractTextFromContent(raw)
 		pageWords := len(strings.Fields(pageText))
 		pageWordCounts[i-1] = pageWords
 
@@ -137,7 +145,7 @@ func (e *PDFExtractor) ExtractWithMetadata(ctx context.Context, reader io.Reader
 			pagesWithText++
 		}
 
-		textBuilder.Write(content)
+		textBuilder.WriteString(pageText)
 		textBuilder.WriteString("\n")
 	}
 

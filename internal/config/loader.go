@@ -30,6 +30,10 @@ func Load() (*Config, error) {
 			"service_jwt.secret":    "SERVICE_JWT_SECRET",
 			"api_academic.base_url": "API_ACADEMIC_BASE_URL",
 			"api_learning.base_url": "API_LEARNING_BASE_URL",
+			// Carril de materiales (plan 043 F3c): cola del riel material→evaluación. El
+			// broker real es CloudAMQP (staging); este override permite fijar el nombre por
+			// entorno sin tocar el YAML.
+			"messaging.rabbitmq.queues.material_assessment_requested": "MATERIAL_ASSESSMENT_REQUESTED_QUEUE",
 			// Carril de materiales (plan 043 F2): descarga + porcionado determinista.
 			"material_pipeline.download_max_bytes":          "MATERIAL_PIPELINE_DOWNLOAD_MAX_BYTES",
 			"material_pipeline.chunk_target_words":          "MATERIAL_PIPELINE_CHUNK_TARGET_WORDS",

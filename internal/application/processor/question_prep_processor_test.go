@@ -9,6 +9,7 @@ import (
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
 // --- mocks del carril de preparación ---
@@ -69,6 +70,14 @@ func (m *mockPrepProvider) CheckCriterion(_ context.Context, _ llm.CriterionChec
 func (m *mockPrepProvider) ExtractIdeas(_ context.Context, _ llm.ExtractIdeasRequest) ([]string, error) {
 	return nil, errors.New("no usado")
 }
+func (m *mockPrepProvider) DigestChunk(_ context.Context, _ llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
+	return nil, nil
+}
+
+func (m *mockPrepProvider) ProposeCandidates(_ context.Context, _ llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
+	return nil, nil
+}
+
 func (m *mockPrepProvider) Name() string { return "mock-prep" }
 
 // --- helpers ---

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
 // Proveedores soportados por el campo Config.Provider.
@@ -176,6 +177,42 @@ func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest
 		return nil, err
 	}
 	return llm.ParseExtractedIdeas(rawJSON)
+}
+
+// DigestChunk ejecuta la llamada A ("leer") del pipeline material→evaluación (plan 043
+// F3). Mismo camino que las demás llamadas: build prompt → completar → ExtractJSON →
+// ParseDigestResult. La impl api existe para que la fase 2 del 044 reuse B por API con
+// los MISMOS prompts (D-043.7); la fase 1 del processor solo usa el local.
+func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
+	prompt := llm.BuildDigestChunkPrompt(in)
+	out, err := p.complete(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+	rawJSON, err := llm.ExtractJSON(out)
+	if err != nil {
+		return nil, err
+	}
+	artifacts, summary, err := llm.ParseDigestResult(rawJSON)
+	if err != nil {
+		return nil, err
+	}
+	return &llm.DigestChunkResult{Artifacts: artifacts, Summary: summary}, nil
+}
+
+// ProposeCandidates ejecuta la llamada B ("preguntar") del pipeline (plan 043 F3).
+// Mismo camino: build prompt → completar → ExtractJSON → ParseCandidates.
+func (p *Provider) ProposeCandidates(ctx context.Context, in llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
+	prompt := llm.BuildProposeCandidatesPrompt(in)
+	out, err := p.complete(ctx, prompt)
+	if err != nil {
+		return nil, err
+	}
+	rawJSON, err := llm.ExtractJSON(out)
+	if err != nil {
+		return nil, err
+	}
+	return llm.ParseCandidates(rawJSON)
 }
 
 // complete enruta al backend concreto.

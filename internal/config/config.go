@@ -76,6 +76,11 @@ type QueuesConfig struct {
 	// una pregunta short_answer/open_ended. Canal propio por riel (D-042.3): NO comparte
 	// cola con el carril de revisión.
 	QuestionPrepRequested string `mapstructure:"question_prep_requested"`
+	// MaterialAssessmentRequested es la cola del carril material→evaluación (plan 043 F3c):
+	// recibe los eventos material.assessment_requested que publica learning al pedir la
+	// generación de una evaluación desde un material. Canal propio por riel (D-043): NO
+	// comparte cola con revisión ni preparación.
+	MaterialAssessmentRequested string `mapstructure:"material_assessment_requested"`
 }
 
 type ExchangeConfig struct {
@@ -507,6 +512,9 @@ func (c *Config) GetQueuesConfigWithDefaults() QueuesConfig {
 	if cfg.QuestionPrepRequested == "" {
 		cfg.QuestionPrepRequested = "edugo.question.prep_requested"
 	}
+	if cfg.MaterialAssessmentRequested == "" {
+		cfg.MaterialAssessmentRequested = "edugo.material.assessment.requested"
+	}
 	return cfg
 }
 
@@ -516,6 +524,17 @@ func (c QueuesConfig) PrepDLQName() string {
 	q := c.QuestionPrepRequested
 	if q == "" {
 		q = "edugo.question.prep_requested"
+	}
+	return q + ".dlq"
+}
+
+// MaterialAssessmentDLQName es el nombre de la cola muerta del carril material→
+// evaluación (plan 043 F3c). Sigue la convención de los otros rieles (cola + ".dlq"):
+// dead-letters propios por riel.
+func (c QueuesConfig) MaterialAssessmentDLQName() string {
+	q := c.MaterialAssessmentRequested
+	if q == "" {
+		q = "edugo.material.assessment.requested"
 	}
 	return q + ".dlq"
 }

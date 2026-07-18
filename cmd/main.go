@@ -123,6 +123,22 @@ func main() {
 		log.Fatal("failed to create RabbitMQ prep consumer: unexpected type")
 	}
 
+	// Consumer del carril MATERIAL→EVALUACIÓN (plan 043 F3c): instancia PROPIA por la
+	// misma razón que el de prep (guard `running` + DLQ propia). Comparte el mismo
+	// ProcessorRegistry (enruta por event_type).
+	materialDLQCfg := dlqCfg
+	materialDLQCfg.DLXRoutingKey = cfg.GetQueuesConfigWithDefaults().MaterialAssessmentDLQName()
+	materialConsumerCfg := rabbit.ConsumerConfig{
+		Name:          "edugo-worker-material",
+		AutoAck:       false,
+		PrefetchCount: prefetchCount,
+		DLQ:           materialDLQCfg,
+	}
+	materialConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, materialConsumerCfg).(*rabbit.RabbitMQConsumer)
+	if !ok {
+		log.Fatal("failed to create RabbitMQ material consumer: unexpected type")
+	}
+
 	// 6. Crear handler con rate limiting integrado
 	handler := func(ctx context.Context, body []byte) error {
 		if rateLimiter != nil {
@@ -159,6 +175,7 @@ func main() {
 	queuesCfg := cfg.GetQueuesConfigWithDefaults()
 	reviewQueue := queuesCfg.AttemptReviewRequested
 	prepQueue := queuesCfg.QuestionPrepRequested
+	materialQueue := queuesCfg.MaterialAssessmentRequested
 	consumerCtx, cancelConsumer := context.WithCancel(ctx)
 	if err := consumer.ConsumeWithDLQ(consumerCtx, reviewQueue, handler); err != nil {
 		resources.Logger.Error("Error iniciando consumer de revisión", "error", err.Error())
@@ -168,10 +185,15 @@ func main() {
 		resources.Logger.Error("Error iniciando consumer de preparación", "error", err.Error())
 		log.Fatal(err)
 	}
+	if err := materialConsumer.ConsumeWithDLQ(consumerCtx, materialQueue, handler); err != nil {
+		resources.Logger.Error("Error iniciando consumer de materiales", "error", err.Error())
+		log.Fatal(err)
+	}
 
 	resources.Logger.Info("Worker escuchando eventos",
 		"review_queue", reviewQueue,
 		"prep_queue", prepQueue,
+		"material_queue", materialQueue,
 		"prefetch_count", prefetchCount,
 		"dlq_enabled", dlqCfg.Enabled,
 		"max_retries", dlqCfg.MaxRetries)
@@ -189,6 +211,7 @@ func main() {
 		cancelConsumer()
 		consumer.Stop()
 		prepConsumer.Stop()
+		materialConsumer.Stop()
 
 		if shutdownCfg.WaitForMessages {
 			resources.Logger.Info("Esperando que terminen los mensajes en proceso...")
@@ -197,6 +220,9 @@ func main() {
 			}
 			if err := prepConsumer.Wait(); err != nil {
 				resources.Logger.Warn("Consumer de preparación detenido con error", "error", err.Error())
+			}
+			if err := materialConsumer.Wait(); err != nil {
+				resources.Logger.Warn("Consumer de materiales detenido con error", "error", err.Error())
 			}
 			resources.Logger.Info("Todos los mensajes fueron procesados")
 		}
@@ -330,6 +356,36 @@ func setupRabbitMQ(ch *amqp.Channel, cfg *config.Config) error {
 		nil,
 	); err != nil {
 		return fmt.Errorf("error binding cola de preparación: %w", err)
+	}
+
+	// Cola del carril MATERIAL→EVALUACIÓN (plan 043 F3c): canal propio por riel. A
+	// diferencia de revisión/preparación, se bindea al exchange edugo.materials (donde
+	// learning publica material.assessment_requested), con routing key y DLQ propias.
+	if _, err := ch.QueueDeclare(
+		queues.MaterialAssessmentRequested,
+		true,  // durable
+		false, // delete when unused
+		false, // exclusive
+		false, // no-wait
+		amqp.Table{
+			"x-max-priority":            10,
+			"x-dead-letter-exchange":    dlq.DLXExchange,
+			"x-dead-letter-routing-key": queues.MaterialAssessmentDLQName(),
+		},
+	); err != nil {
+		return fmt.Errorf("error declarando cola de materiales: %w", err)
+	}
+
+	// Bind cola de materiales al routing key material.assessment_requested sobre el
+	// exchange edugo.materials.
+	if err := ch.QueueBind(
+		queues.MaterialAssessmentRequested,
+		events.EventTypeMaterialAssessmentRequested,
+		exchanges.Materials,
+		false,
+		nil,
+	); err != nil {
+		return fmt.Errorf("error binding cola de materiales: %w", err)
 	}
 
 	return nil

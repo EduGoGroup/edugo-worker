@@ -12,6 +12,8 @@ package llm
 import (
 	"context"
 	"encoding/json"
+
+	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
 // MaterialInput es el material de origen a partir del cual generar una
@@ -170,6 +172,45 @@ type ExtractIdeasRequest struct {
 	Language string
 }
 
+// DigestChunkInput es la entrada de la llamada A ("leer") del pipeline material→
+// evaluación (plan 043 F3, D-043.7): UN trozo del material más —encadenado— el
+// resumen del/los trozo(s) anterior(es), para que el modelo mantenga continuidad
+// sin volver a ver los trozos ya leídos. La salida (DigestChunkResult) alimenta a
+// ProposeCandidates: A "lee", B "pregunta".
+type DigestChunkInput struct {
+	// ChunkText es el trozo de material a leer (texto ya extraído y porcionado por
+	// internal/chunking; el worker no vuelve a extraer aquí).
+	ChunkText string
+	// PrevSummary es el resumen del trozo anterior (nil en el PRIMER trozo). Se inyecta
+	// como contexto de continuidad; el modelo NO lo re-extrae ni lo repregunta como
+	// ideas de este trozo.
+	PrevSummary *string
+	// Language del contenido (default "es").
+	Language string
+}
+
+// DigestChunkResult es la salida de la llamada A: los artefactos del trozo (ideas +
+// tema, validables contra materialpipeline.ChunkArtifactsV1) y un resumen NUEVO para
+// encadenar al trozo siguiente. El summary va APARTE de los artefactos (columna
+// propia, ≤120 palabras, escrito para otro LLM) y por eso NO forma parte de
+// ChunkArtifactsV1 (D-043.7).
+type DigestChunkResult struct {
+	Artifacts materialpipeline.ChunkArtifactsV1
+	Summary   string
+}
+
+// ProposeCandidatesInput es la entrada de la llamada B ("preguntar"): SOLO las ideas
+// y el tema del trozo (jamás el texto crudo, D-043.7). A partir de ellas el modelo
+// sobregenera preguntas candidatas; el filtrado fino es del plan 044, así que aquí
+// conviene sobregenerar variedad.
+type ProposeCandidatesInput struct {
+	// Artifacts son los artefactos que produjo la llamada A (main/secondary ideas +
+	// chunk_topic). B trabaja SOLO con esto, nunca con el ChunkText original.
+	Artifacts materialpipeline.ChunkArtifactsV1
+	// Language del contenido (default "es").
+	Language string
+}
+
 // LLMProvider es el puerto que abstrae al modelo (local vía Ollama o remoto vía
 // API). Una operación por carril (D-039.4): generación (038), corrección (040) y
 // preparación (042).
@@ -204,6 +245,21 @@ type LLMProvider interface {
 	// extracción que no parsea es fallo transitorio. Es una AYUDA para CheckCriterion:
 	// su falla NO debe romper la corrección (el caller cae a la respuesta cruda).
 	ExtractIdeas(ctx context.Context, req ExtractIdeasRequest) ([]string, error)
+
+	// DigestChunk ejecuta la llamada A ("leer") del pipeline material→evaluación (plan
+	// 043 F3, D-043.7): lee un trozo —con el resumen anterior como contexto de
+	// continuidad— y devuelve sus artefactos (ideas + tema) más un resumen nuevo para
+	// encadenar al trozo siguiente. El caller valida los artefactos contra
+	// materialpipeline.ChunkArtifactsV1 antes de persistirlos; un artefacto que no
+	// valida es fallo transitorio (nunca se persiste).
+	DigestChunk(ctx context.Context, in DigestChunkInput) (*DigestChunkResult, error)
+
+	// ProposeCandidates ejecuta la llamada B ("preguntar") del pipeline (plan 043 F3,
+	// D-043.7): a partir SOLO de las ideas y el tema del trozo (nunca el texto crudo)
+	// propone 2–4 preguntas candidatas. El caller valida cada candidata contra
+	// materialpipeline.CandidatePayloadV1; sobregenerar está bien (el filtrado fino es
+	// del plan 044).
+	ProposeCandidates(ctx context.Context, in ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error)
 
 	// Name identifica al provider para logs/harness (ej. "ollama", "anthropic").
 	Name() string

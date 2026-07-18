@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
 // mockProvider resuelve CheckCriterion consultando met por texto de criterio; ausente
@@ -61,6 +62,14 @@ func (m *mockProvider) ExtractIdeas(_ context.Context, _ llm.ExtractIdeasRequest
 	}
 	return m.ideas, nil
 }
+func (m *mockProvider) DigestChunk(_ context.Context, _ llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
+	return nil, nil
+}
+
+func (m *mockProvider) ProposeCandidates(_ context.Context, _ llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
+	return nil, nil
+}
+
 func (m *mockProvider) Name() string { return "mock" }
 
 func TestAggregate(t *testing.T) {

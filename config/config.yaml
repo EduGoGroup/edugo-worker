@@ -7,6 +7,10 @@ messaging:
       material_uploaded: "edugo.material.uploaded"
       # Carril revisión asistida (plan 040): cola que consume el worker hoy.
       attempt_review_requested: "edugo.attempt.review_requested"
+      # Carril preparación (plan 042 F2a).
+      question_prep_requested: "edugo.question.prep_requested"
+      # Carril material→evaluación (plan 043 F3c).
+      material_assessment_requested: "edugo.material.assessment.requested"
     exchanges:
       materials: "edugo.materials"
       assessments: "edugo.assessments"

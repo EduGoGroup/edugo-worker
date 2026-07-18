@@ -10,6 +10,7 @@ import (
 	rabbit "github.com/EduGoGroup/edugo-shared/messaging/rabbit"
 	sharedMetrics "github.com/EduGoGroup/edugo-shared/metrics"
 	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
+	"github.com/EduGoGroup/edugo-worker/internal/chunking"
 	"github.com/EduGoGroup/edugo-worker/internal/client"
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
@@ -453,6 +454,22 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		b.err = fmt.Errorf("LLM providers required before processors (call WithLLMProvider first)")
 		return b
 	}
+	// Carril de materiales (plan 043 F3c): deps propias del riel.
+	if b.learningPipelineClient == nil {
+		b.err = fmt.Errorf("learning pipeline client required before processors (call WithM2MClients first)")
+		return b
+	}
+	if b.pdfExtractor == nil {
+		b.err = fmt.Errorf("PDF extractor required before processors (call WithInfrastructure first)")
+		return b
+	}
+	// Candado ADR 0036 §4: el carril de materiales usa SOLO el provider LOCAL, cableado
+	// por código; jamás elige provider por settings.
+	localProvider := b.llmProviders["local"]
+	if localProvider == nil {
+		b.err = fmt.Errorf("local LLM provider required before processors (call WithLLMProvider first)")
+		return b
+	}
 
 	b.processorRegistry = processor.NewRegistry(b.logger)
 	b.processorRegistry.Register(processor.NewAttemptReviewProcessor(
@@ -462,7 +479,28 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 	b.processorRegistry.Register(processor.NewQuestionPrepProcessor(
 		b.settingsClient, b.learningPrepClient, b.llmProviders, b.logger))
 
-	b.logger.Info("✅ Processor registry initialized (carriles revisión 040 + preparación 042)",
+	// Carril material→evaluación (plan 043 F3c): compone la fase 0 determinista + el loop
+	// de fase 1 (LLM local). Los parámetros de descarga/porcionado vienen de la config del
+	// riel (F2); la descarga es m2m.DownloadFile (sin estado).
+	mpCfg := b.config.GetMaterialPipelineConfigWithDefaults()
+	chunkCfg := chunking.Config{
+		TargetWords:         mpCfg.ChunkTargetWords,
+		MaxWords:            mpCfg.ChunkMaxWords,
+		MinWords:            mpCfg.ChunkMinWords,
+		MergeThresholdWords: mpCfg.ChunkMergeThresholdWords,
+	}
+	b.processorRegistry.Register(processor.NewMaterialPipelineProcessor(
+		b.settingsClient,
+		b.learningPipelineClient,
+		localProvider,
+		b.pdfExtractor,
+		m2m.DownloadFile,
+		chunkCfg,
+		mpCfg.DownloadMaxBytes,
+		b.logger,
+	))
+
+	b.logger.Info("✅ Processor registry initialized (carriles revisión 040 + preparación 042 + materiales 043)",
 		"count", b.processorRegistry.Count())
 	return b
 }
