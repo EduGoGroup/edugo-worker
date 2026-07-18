@@ -1,0 +1,821 @@
+{
+  "model": "embeddinggemma",
+  "pairs": 99,
+  "embed_ms": 4028,
+  "dim": 768,
+  "raw_stats": [
+    {
+      "group": "dup/easy",
+      "n": 32,
+      "min": 0.54658870874766,
+      "p25": 0.8604674261512828,
+      "median": 0.9109763272993388,
+      "p75": 0.9429457785971931,
+      "max": 0.9752107682497151
+    },
+    {
+      "group": "dup/hard",
+      "n": 8,
+      "min": 0.7528372104657125,
+      "p25": 0.8495375631556127,
+      "median": 0.8614905437247121,
+      "p75": 0.91298534247068,
+      "max": 0.9547868378524477
+    },
+    {
+      "group": "no_dup/easy",
+      "n": 30,
+      "min": 0.08108660580445046,
+      "p25": 0.21889779156770606,
+      "median": 0.2649589740175829,
+      "p75": 0.34645779429466306,
+      "max": 0.549161412077835
+    },
+    {
+      "group": "no_dup/hard",
+      "n": 29,
+      "min": 0.23792231951428597,
+      "p25": 0.5616525036076103,
+      "median": 0.6868700063908248,
+      "p75": 0.7554378597888645,
+      "max": 0.9063431590315644
+    }
+  ],
+  "norm_stats": [
+    {
+      "group": "dup/easy",
+      "n": 32,
+      "min": 0.5718628342909706,
+      "p25": 0.8523790432323457,
+      "median": 0.9060967841053338,
+      "p75": 0.9404784249158942,
+      "max": 0.9746954614546695
+    },
+    {
+      "group": "dup/hard",
+      "n": 8,
+      "min": 0.7604417141402519,
+      "p25": 0.8262367934063641,
+      "median": 0.8709535500223007,
+      "p75": 0.9038290407748848,
+      "max": 0.9501011533460102
+    },
+    {
+      "group": "no_dup/easy",
+      "n": 30,
+      "min": 0.09417564721590026,
+      "p25": 0.22673626266586894,
+      "median": 0.26973911593173583,
+      "p75": 0.3445914338151348,
+      "max": 0.579863183075804
+    },
+    {
+      "group": "no_dup/hard",
+      "n": 29,
+      "min": 0.2689963291316906,
+      "p25": 0.5671744669981733,
+      "median": 0.6959089949448902,
+      "p75": 0.7617258092568419,
+      "max": 0.9079563192093195
+    }
+  ],
+  "raw_thresholds": {
+    "variant": "raw",
+    "dup_high": 0.9063431590315644,
+    "dups_captured_hi": 20,
+    "dup_low": 0.54658870874766,
+    "no_dup_dropped_lo": 36,
+    "gray_count": 42,
+    "gray_dup": 20,
+    "gray_no_dup": 22,
+    "gray_pct": 42.42424242424242,
+    "overlap": true,
+    "separates": false,
+    "worst_dup": 0.54658870874766,
+    "best_no_dup": 0.9063431590315644
+  },
+  "norm_thresholds": {
+    "variant": "normalized",
+    "dup_high": 0.9079563192093195,
+    "dups_captured_hi": 17,
+    "dup_low": 0.5718628342909706,
+    "no_dup_dropped_lo": 37,
+    "gray_count": 44,
+    "gray_dup": 23,
+    "gray_no_dup": 21,
+    "gray_pct": 44.44444444444444,
+    "overlap": true,
+    "separates": false,
+    "worst_dup": 0.5718628342909706,
+    "best_no_dup": 0.9079563192093195
+  },
+  "answer_distinct_ids": [
+    "p073",
+    "p074",
+    "p076",
+    "p082",
+    "p096",
+    "p098"
+  ],
+  "cosines": [
+    {
+      "id": "p001",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9290456970678691,
+      "cos_normalized": 0.9067803524206718
+    },
+    {
+      "id": "p002",
+      "label": "dup",
+      "difficulty": "hard",
+      "cos_raw": 0.9117222192853018,
+      "cos_normalized": 0.8995947569210958
+    },
+    {
+      "id": "p003",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9350305251192467,
+      "cos_normalized": 0.8962489733293043
+    },
+    {
+      "id": "p004",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8651066235314644,
+      "cos_normalized": 0.8674406699586595
+    },
+    {
+      "id": "p005",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9332748465753978,
+      "cos_normalized": 0.918816890336114
+    },
+    {
+      "id": "p006",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9473016328365991,
+      "cos_normalized": 0.939964087221275
+    },
+    {
+      "id": "p007",
+      "label": "dup",
+      "difficulty": "hard",
+      "cos_raw": 0.8570635170080015,
+      "cos_normalized": 0.8561208992162048
+    },
+    {
+      "id": "p008",
+      "label": "dup",
+      "difficulty": "hard",
+      "cos_raw": 0.8457149861221556,
+      "cos_normalized": 0.8262402531297269
+    },
+    {
+      "id": "p009",
+      "label": "dup",
+      "difficulty": "hard",
+      "cos_raw": 0.7528372104657125,
+      "cos_normalized": 0.7604417141402519
+    },
+    {
+      "id": "p010",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8173278382585466,
+      "cos_normalized": 0.8050140133650228
+    },
+    {
+      "id": "p011",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.7491706682267653,
+      "cos_normalized": 0.756653481116037
+    },
+    {
+      "id": "p012",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8525406352203744,
+      "cos_normalized": 0.8363019351912755
+    },
+    {
+      "id": "p013",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8631096897949189,
+      "cos_normalized": 0.8719459087522973
+    },
+    {
+      "id": "p014",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8974467093834785,
+      "cos_normalized": 0.9054132157899957
+    },
+    {
+      "id": "p015",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9600876818918201,
+      "cos_normalized": 0.9097326481025514
+    },
+    {
+      "id": "p016",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8344206851905891,
+      "cos_normalized": 0.8094457001505561
+    },
+    {
+      "id": "p017",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9234440613945932,
+      "cos_normalized": 0.921358042540863
+    },
+    {
+      "id": "p018",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9752107682497151,
+      "cos_normalized": 0.9732095058255703
+    },
+    {
+      "id": "p019",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9156554789618536,
+      "cos_normalized": 0.9177932369706426
+    },
+    {
+      "id": "p020",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8846834185800446,
+      "cos_normalized": 0.8905806703966987
+    },
+    {
+      "id": "p021",
+      "label": "dup",
+      "difficulty": "hard",
+      "cos_raw": 0.8508117555000984,
+      "cos_normalized": 0.8262264142362755
+    },
+    {
+      "id": "p022",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8659567249768477,
+      "cos_normalized": 0.8546921535083617
+    },
+    {
+      "id": "p023",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9457934140439106,
+      "cos_normalized": 0.9420214379997517
+    },
+    {
+      "id": "p024",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9539462476799212,
+      "cos_normalized": 0.9513286042784805
+    },
+    {
+      "id": "p025",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.942086922346212,
+      "cos_normalized": 0.9389992740395754
+    },
+    {
+      "id": "p026",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9646988042833908,
+      "cos_normalized": 0.9638561011726164
+    },
+    {
+      "id": "p027",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9411307565559955,
+      "cos_normalized": 0.9603094814226862
+    },
+    {
+      "id": "p028",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8025599676200426,
+      "cos_normalized": 0.8363638762567882
+    },
+    {
+      "id": "p029",
+      "label": "dup",
+      "difficulty": "hard",
+      "cos_raw": 0.9547868378524477,
+      "cos_normalized": 0.9501011533460102
+    },
+    {
+      "id": "p030",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.54658870874766,
+      "cos_normalized": 0.5718628342909706
+    },
+    {
+      "id": "p031",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9719311978917667,
+      "cos_normalized": 0.9746954614546695
+    },
+    {
+      "id": "p032",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9112734895820525,
+      "cos_normalized": 0.8454397124042977
+    },
+    {
+      "id": "p033",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8477510797119063,
+      "cos_normalized": 0.9241050621152104
+    },
+    {
+      "id": "p034",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8978923407123667,
+      "cos_normalized": 0.9022685014199825
+    },
+    {
+      "id": "p035",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.910679165016625,
+      "cos_normalized": 0.9466985516994171
+    },
+    {
+      "id": "p036",
+      "label": "dup",
+      "difficulty": "hard",
+      "cos_raw": 0.8659175704414227,
+      "cos_normalized": 0.8857862008283964
+    },
+    {
+      "id": "p037",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8647242736143372,
+      "cos_normalized": 0.862396754720858
+    },
+    {
+      "id": "p038",
+      "label": "dup",
+      "difficulty": "hard",
+      "cos_raw": 0.9167747120268145,
+      "cos_normalized": 0.9165318923362518
+    },
+    {
+      "id": "p039",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.8390049972654716,
+      "cos_normalized": 0.7868430028394463
+    },
+    {
+      "id": "p040",
+      "label": "dup",
+      "difficulty": "easy",
+      "cos_raw": 0.9455223473501364,
+      "cos_normalized": 0.9506478670719966
+    },
+    {
+      "id": "p041",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.28475578509913435,
+      "cos_normalized": 0.2825704508821569
+    },
+    {
+      "id": "p042",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.28036687161133794,
+      "cos_normalized": 0.2999448667059986
+    },
+    {
+      "id": "p043",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.16190759574070054,
+      "cos_normalized": 0.16901776397732798
+    },
+    {
+      "id": "p044",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.2869927691672915,
+      "cos_normalized": 0.259688983276135
+    },
+    {
+      "id": "p045",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.16311435392194068,
+      "cos_normalized": 0.1741801784824335
+    },
+    {
+      "id": "p046",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.172585064000798,
+      "cos_normalized": 0.16705457834017998
+    },
+    {
+      "id": "p047",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.549161412077835,
+      "cos_normalized": 0.579863183075804
+    },
+    {
+      "id": "p048",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.39227416096233625,
+      "cos_normalized": 0.3991062351722767
+    },
+    {
+      "id": "p049",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.22800528513668247,
+      "cos_normalized": 0.23219151228831694
+    },
+    {
+      "id": "p050",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.24187134339172692,
+      "cos_normalized": 0.21637588869513322
+    },
+    {
+      "id": "p051",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.21586196037804725,
+      "cos_normalized": 0.26898057207207865
+    },
+    {
+      "id": "p052",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.252648989353432,
+      "cos_normalized": 0.26469659055531186
+    },
+    {
+      "id": "p053",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.36245572958437255,
+      "cos_normalized": 0.32230989265283144
+    },
+    {
+      "id": "p054",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.14821747977460897,
+      "cos_normalized": 0.1644731522546584
+    },
+    {
+      "id": "p055",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.29885468346723115,
+      "cos_normalized": 0.3365871110339191
+    },
+    {
+      "id": "p056",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.2672192897397683,
+      "cos_normalized": 0.270497659791393
+    },
+    {
+      "id": "p057",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.3595275397455794,
+      "cos_normalized": 0.34978893743892464
+    },
+    {
+      "id": "p058",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.42942646753833913,
+      "cos_normalized": 0.4246413931830562
+    },
+    {
+      "id": "p059",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.24991611353002466,
+      "cos_normalized": 0.2794747937026138
+    },
+    {
+      "id": "p060",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.24579437166661638,
+      "cos_normalized": 0.246957443701344
+    },
+    {
+      "id": "p061",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.15967925903532218,
+      "cos_normalized": 0.2506474864509179
+    },
+    {
+      "id": "p062",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.17270235264814862,
+      "cos_normalized": 0.19724306326043325
+    },
+    {
+      "id": "p063",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.25410558857759086,
+      "cos_normalized": 0.28202644629527823
+    },
+    {
+      "id": "p064",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.38510741867612763,
+      "cos_normalized": 0.3927806628845819
+    },
+    {
+      "id": "p065",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.307248557941914,
+      "cos_normalized": 0.3472595414088734
+    },
+    {
+      "id": "p066",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.3774359959994425,
+      "cos_normalized": 0.40272525948442833
+    },
+    {
+      "id": "p067",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.2800466105018958,
+      "cos_normalized": 0.26864680658000345
+    },
+    {
+      "id": "p068",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.08108660580445046,
+      "cos_normalized": 0.09417564721590026
+    },
+    {
+      "id": "p069",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.3757668889761196,
+      "cos_normalized": 0.40390425329323665
+    },
+    {
+      "id": "p070",
+      "label": "no_dup",
+      "difficulty": "easy",
+      "cos_raw": 0.2626986582953975,
+      "cos_normalized": 0.22491784612505294
+    },
+    {
+      "id": "p071",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.6486424466280737,
+      "cos_normalized": 0.611852979242807
+    },
+    {
+      "id": "p072",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.8020307732261114,
+      "cos_normalized": 0.7951172537280262
+    },
+    {
+      "id": "p073",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.9063431590315644,
+      "cos_normalized": 0.9079563192093195,
+      "answer_distinct": true
+    },
+    {
+      "id": "p074",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.7764488691901766,
+      "cos_normalized": 0.7757332903977967,
+      "answer_distinct": true
+    },
+    {
+      "id": "p075",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.8247945336052276,
+      "cos_normalized": 0.8337480378409771
+    },
+    {
+      "id": "p076",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.8090632654473303,
+      "cos_normalized": 0.8345410191629542,
+      "answer_distinct": true
+    },
+    {
+      "id": "p077",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.4242883602055334,
+      "cos_normalized": 0.4413554769599388
+    },
+    {
+      "id": "p078",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.5882221762039345,
+      "cos_normalized": 0.6309459795275919
+    },
+    {
+      "id": "p079",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.7155558673105514,
+      "cos_normalized": 0.7101084031666366
+    },
+    {
+      "id": "p080",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.7407887489672498,
+      "cos_normalized": 0.7490855475819908
+    },
+    {
+      "id": "p081",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.7226098690095941,
+      "cos_normalized": 0.7184234848396869
+    },
+    {
+      "id": "p082",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.7804757560070645,
+      "cos_normalized": 0.7932876923115554,
+      "answer_distinct": true
+    },
+    {
+      "id": "p083",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.5135839048480272,
+      "cos_normalized": 0.5210175913497035
+    },
+    {
+      "id": "p084",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.6709832265708605,
+      "cos_normalized": 0.675324830307045
+    },
+    {
+      "id": "p085",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.6461332094532546,
+      "cos_normalized": 0.634690729616212
+    },
+    {
+      "id": "p086",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.42763394006162614,
+      "cos_normalized": 0.4387165934893878
+    },
+    {
+      "id": "p087",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.6868700063908248,
+      "cos_normalized": 0.6774313813005015
+    },
+    {
+      "id": "p088",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.5380738795555231,
+      "cos_normalized": 0.5671744669981733
+    },
+    {
+      "id": "p089",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.5315824888938373,
+      "cos_normalized": 0.5792904252817584
+    },
+    {
+      "id": "p090",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.7428987843623055,
+      "cos_normalized": 0.7489163766622028
+    },
+    {
+      "id": "p091",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.7227820985951121,
+      "cos_normalized": 0.7273073317767046
+    },
+    {
+      "id": "p092",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.5616525036076103,
+      "cos_normalized": 0.5649282680861386
+    },
+    {
+      "id": "p093",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.5687454431421067,
+      "cos_normalized": 0.5606378251253238
+    },
+    {
+      "id": "p094",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.7372177771321758,
+      "cos_normalized": 0.6993133652310347
+    },
+    {
+      "id": "p095",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.6614725066044614,
+      "cos_normalized": 0.6959089949448902
+    },
+    {
+      "id": "p096",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.8301627109421723,
+      "cos_normalized": 0.8404068759870228,
+      "answer_distinct": true
+    },
+    {
+      "id": "p097",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.23792231951428597,
+      "cos_normalized": 0.2689963291316906
+    },
+    {
+      "id": "p098",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.7554378597888645,
+      "cos_normalized": 0.7617258092568419,
+      "answer_distinct": true
+    },
+    {
+      "id": "p099",
+      "label": "no_dup",
+      "difficulty": "hard",
+      "cos_raw": 0.5181214707705191,
+      "cos_normalized": 0.5156906427615426
+    }
+  ]
+}

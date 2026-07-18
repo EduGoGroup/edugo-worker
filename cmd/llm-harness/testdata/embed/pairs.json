@@ -1,0 +1,893 @@
+[
+  {
+    "id": "p001",
+    "a": "La reproducción del material educativo sobre seguridad vial puede realizarse sin obtener autorización previa de CONASET.",
+    "b": "Para reproducir el material educativo sobre seguridad vial no hace falta obtener permiso previo de CONASET.",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#0: true_false negada->afirmada, misma proposición"
+  },
+  {
+    "id": "p002",
+    "a": "Es cierto que los peatones tienen una alta probabilidad de supervivencia en impactos a velocidades superiores a 45 km/h.",
+    "b": "Los peatones tienen buenas chances de sobrevivir cuando son atropellados a más de 45 km/h.",
+    "label": "dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "src#6: reformulación coloquial de la afirmación"
+  },
+  {
+    "id": "p003",
+    "a": "¿Qué porcentaje aproximado de conductores fallecidos en tránsito corresponde al grupo etario de 18 a 29 años?",
+    "b": "Aproximadamente, ¿qué proporción de los conductores fallecidos en el tránsito tenía entre 18 y 29 años?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#8: sinónimos y reordenamiento"
+  },
+  {
+    "id": "p004",
+    "a": "¿Cuál es la función principal del mantenimiento preventivo en un vehículo?",
+    "b": "¿Para qué sirve principalmente hacerle mantenimiento preventivo a un vehículo?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#11: reformulación directa"
+  },
+  {
+    "id": "p005",
+    "a": "¿Cuál es la función principal del sistema de refrigeración en un motor?",
+    "b": "¿Qué función cumple básicamente el sistema de refrigeración de un motor?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#16: sinónimos"
+  },
+  {
+    "id": "p006",
+    "a": "¿Qué sustancia se debe añadir al refrigerante para prevenir daños por congelación en bajas temperaturas?",
+    "b": "Para evitar que el refrigerante se dañe por congelación con el frío, ¿qué sustancia hay que agregarle?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#19: reordenamiento del short_answer"
+  },
+  {
+    "id": "p007",
+    "a": "¿Cuál es la profundidad mínima aconsejable en los surcos de las bandas de rodamiento para asegurar un buen rendimiento general del neumático?",
+    "b": "¿Cuánta profundidad de dibujo conviene tener como mínimo en los surcos del neumático para un buen rendimiento?",
+    "label": "dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "src#35: reformulación técnica"
+  },
+  {
+    "id": "p008",
+    "a": "¿Cómo se denomina al espacio invisible detrás del vehículo que es importante conocer para evitar colisiones?",
+    "b": "¿Qué nombre recibe la zona que no se alcanza a ver detrás del vehículo y que hay que conocer para no chocar?",
+    "label": "dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "src#48: paráfrasis larga del short_answer"
+  },
+  {
+    "id": "p009",
+    "a": "Respecto a la física aplicada a la conducción, ¿qué sucede con la energía del movimiento si se duplica la velocidad?",
+    "b": "Si un vehículo va al doble de velocidad, ¿qué ocurre con su energía de movimiento?",
+    "label": "dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "src#51: misma pregunta física, otras palabras"
+  },
+  {
+    "id": "p010",
+    "a": "¿Cuál es la función principal del airbag tras un impacto vehicular?",
+    "b": "Después de un choque, ¿cuál es el rol principal de la bolsa de aire (airbag)?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#69: sinónimo airbag/bolsa de aire"
+  },
+  {
+    "id": "p011",
+    "a": "¿Cuál es el rango de edad que se identifica como óptimo para la reacción compleja al conducir?",
+    "b": "¿En qué franja etaria la reacción compleja al conducir alcanza su mejor nivel?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#99: sinónimos"
+  },
+  {
+    "id": "p012",
+    "a": "¿Cuál es el rango de concentración que define legalmente el 'estado de ebriedad'?",
+    "b": "Legalmente, ¿entre qué valores de alcohol en sangre se define el 'estado de ebriedad'?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#104: reformulación"
+  },
+  {
+    "id": "p013",
+    "a": "El tiempo es el único factor que permite recuperar la sobriedad después del consumo de alcohol.",
+    "b": "Solo con el paso del tiempo se recupera la sobriedad luego de consumir alcohol.",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#141: reordenamiento del true_false"
+  },
+  {
+    "id": "p014",
+    "a": "¿Qué distancia aproximada se recorre si ocurre un estornudo mientras se circula a 90 km/h?",
+    "b": "Circulando a 90 km/h, ¿cuántos metros avanza el vehículo durante un estornudo?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#155: reordenamiento del short_answer"
+  },
+  {
+    "id": "p015",
+    "a": "¿Qué grupos son considerados usuarios de vías públicas vulnerables en el tránsito?",
+    "b": "En el tránsito, ¿a qué grupos se los considera usuarios vulnerables de la vía pública?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#190: reordenamiento"
+  },
+  {
+    "id": "p016",
+    "a": "¿Cuál es la distancia lateral mínima recomendada al adelantar a un ciclista?",
+    "b": "Al sobrepasar a un ciclista, ¿qué separación lateral mínima se recomienda dejar?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#205: sinónimo adelantar/sobrepasar"
+  },
+  {
+    "id": "p017",
+    "a": "¿Qué forma geométrica suelen tener las señales reglamentarias, considerando sus excepciones?",
+    "b": "Por lo general, ¿qué forma geométrica tienen las señales reglamentarias?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#218: reformulación"
+  },
+  {
+    "id": "p018",
+    "a": "¿Cuál es el color predominante de las señales transitorias que advierten de riesgos no permanentes en la vía?",
+    "b": "¿De qué color son mayormente las señales transitorias que avisan riesgos no permanentes en la vía?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#222: sinónimos"
+  },
+  {
+    "id": "p019",
+    "a": "En zonas urbanas, la velocidad máxima permitida para vehículos livianos es de 60 km/h.",
+    "b": "El límite máximo de velocidad para vehículos livianos dentro de la ciudad es de 60 km/h.",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#250: reformulación del true_false"
+  },
+  {
+    "id": "p020",
+    "a": "En vías no urbanas, ¿cuál es el límite de velocidad permitido para vehículos livianos si solo hay una pista por sentido?",
+    "b": "En caminos rurales con una sola pista por sentido, ¿cuál es la velocidad máxima para vehículos livianos?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#253: reordenamiento"
+  },
+  {
+    "id": "p021",
+    "a": "¿Qué término describe el acto de situarse delante de otros vehículos desde el costado izquierdo del eje de la calzada?",
+    "b": "¿Cómo se llama la maniobra de ubicarse delante de otro vehículo pasando por la izquierda del eje de la calzada?",
+    "label": "dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "src#256: paráfrasis de la definición"
+  },
+  {
+    "id": "p022",
+    "a": "¿Cuál es la separación mínima recomendada entre un vehículo estacionado y otro vehículo estacionado adyacente?",
+    "b": "Al estacionar, ¿qué distancia mínima conviene dejar respecto al vehículo ya estacionado contiguo?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#274: sinónimos adyacente/contiguo"
+  },
+  {
+    "id": "p023",
+    "a": "Ante una detención del tráfico ('taco') dentro de un túnel, ¿qué medidas deben tomar los conductores?",
+    "b": "Si se produce un taco (detención del tráfico) dentro de un túnel, ¿qué medidas debe tomar el conductor?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#307: reordenamiento"
+  },
+  {
+    "id": "p024",
+    "a": "¿Por qué son particularmente peligrosas las primeras gotas de lluvia al conducir?",
+    "b": "¿Por qué las primeras gotas de una lluvia resultan especialmente peligrosas para conducir?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#310: sinónimos"
+  },
+  {
+    "id": "p025",
+    "a": "Según AChEE, ¿qué porcentaje aproximado puede reducirse el consumo de combustible aplicando técnicas de Conducción Eficiente?",
+    "b": "Según AChEE, ¿en qué porcentaje aproximado se reduce el consumo de combustible con la Conducción Eficiente?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#337: reordenamiento"
+  },
+  {
+    "id": "p026",
+    "a": "¿Qué cubre específicamente el Seguro Obligatorio de Accidentes Personales (SOAP)?",
+    "b": "¿Qué cubre puntualmente el Seguro Obligatorio de Accidentes Personales (SOAP)?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#359: sinónimo específicamente/puntualmente"
+  },
+  {
+    "id": "p027",
+    "a": "Los síntomas de intoxicación por monóxido de carbono (CO) incluyen vómitos y dolor de cabeza.",
+    "b": "Vomitar y tener dolor de cabeza son síntomas de intoxicación por monóxido de carbono (CO).",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#381: voz pasiva->activa"
+  },
+  {
+    "id": "p028",
+    "a": "¿Qué distintivo individualiza a un vehículo en las vías públicas?",
+    "b": "¿Qué elemento sirve para identificar de forma única a un vehículo en las vías públicas?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#398: paráfrasis del short_answer"
+  },
+  {
+    "id": "p029",
+    "a": "¿En qué rango de distancia la percepción humana es más fiable para estimar distancias en el contexto del tránsito vehicular?",
+    "b": "¿Para qué rango de distancias la percepción humana es más confiable al estimar distancias en el tránsito?",
+    "label": "dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "src#93: sinónimos fiable/confiable"
+  },
+  {
+    "id": "p030",
+    "a": "Mantener una distancia muy corta solo aumenta riesgos sin afectar la maniobrabilidad o economía del combustible.",
+    "b": "¿Qué método se sugiere para comprobar si dejamos suficiente distancia con el vehículo de adelante?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "conaset-paraphrase",
+    "note": "src#240: sinónimos verificar/comprobar"
+  },
+  {
+    "id": "p031",
+    "a": "¿Cuánto es el área de un triángulo de base 6 cm y altura 4 cm?",
+    "b": "Si un triángulo tiene 6 cm de base y 4 cm de altura, ¿cuál es su área?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "synthetic",
+    "note": "matemática: mismo problema reordenado"
+  },
+  {
+    "id": "p032",
+    "a": "¿En qué año llegó Cristóbal Colón a América?",
+    "b": "¿Cuál fue el año en que Colón arribó al continente americano?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "synthetic",
+    "note": "historia: sinónimos"
+  },
+  {
+    "id": "p033",
+    "a": "Resuelve la ecuación 2x + 6 = 10. ¿Cuánto vale x?",
+    "b": "Halla el valor de x en la ecuación 2x + 6 = 10.",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "synthetic",
+    "note": "matemática: misma ecuación"
+  },
+  {
+    "id": "p034",
+    "a": "¿Quién fue el primer presidente de Chile?",
+    "b": "¿Qué persona ocupó por primera vez la presidencia de Chile?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "synthetic",
+    "note": "historia: reformulación"
+  },
+  {
+    "id": "p035",
+    "a": "¿Cuánto suman los ángulos interiores de un triángulo?",
+    "b": "¿A cuánto equivale la suma de los ángulos internos de cualquier triángulo?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "synthetic",
+    "note": "matemática: sinónimos"
+  },
+  {
+    "id": "p036",
+    "a": "¿Qué fracción representa la mitad de tres cuartos?",
+    "b": "¿Cuál es la mitad de 3/4 expresada como fracción?",
+    "label": "dup",
+    "difficulty": "hard",
+    "source": "synthetic",
+    "note": "matemática: notación mixta"
+  },
+  {
+    "id": "p037",
+    "a": "¿Cuál fue el detonante principal de la Primera Guerra Mundial?",
+    "b": "¿Qué motivo se considera el desencadenante principal de la Primera Guerra Mundial?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "synthetic",
+    "note": "historia: sinónimos"
+  },
+  {
+    "id": "p038",
+    "a": "¿Cuánto es el 20% de 150?",
+    "b": "Calcula el veinte por ciento de 150.",
+    "label": "dup",
+    "difficulty": "hard",
+    "source": "synthetic",
+    "note": "matemática: número vs palabra"
+  },
+  {
+    "id": "p039",
+    "a": "¿Qué civilización construyó Machu Picchu?",
+    "b": "¿A qué cultura se le atribuye la construcción de Machu Picchu?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "synthetic",
+    "note": "historia: sinónimos"
+  },
+  {
+    "id": "p040",
+    "a": "¿Cuál es el perímetro de un cuadrado de lado 5?",
+    "b": "Si un cuadrado tiene lados de 5, ¿cuánto mide su perímetro?",
+    "label": "dup",
+    "difficulty": "easy",
+    "source": "synthetic",
+    "note": "matemática: reordenado"
+  },
+  {
+    "id": "p041",
+    "a": "¿Qué sustancia se debe añadir al refrigerante para prevenir daños por congelación en bajas temperaturas?",
+    "b": "¿Cuál es la distancia lateral mínima recomendada al adelantar a un ciclista?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "anticongelante vs distancia lateral a ciclista"
+  },
+  {
+    "id": "p042",
+    "a": "¿Cuál es la función principal del mantenimiento preventivo en un vehículo?",
+    "b": "En zonas urbanas, la velocidad máxima permitida para vehículos livianos es de 60 km/h.",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "mantenimiento preventivo vs límite de velocidad urbano"
+  },
+  {
+    "id": "p043",
+    "a": "¿Cuál es la función principal del sistema de refrigeración en un motor?",
+    "b": "¿Qué cubre específicamente el Seguro Obligatorio de Accidentes Personales (SOAP)?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "sistema de refrigeración vs cobertura del SOAP"
+  },
+  {
+    "id": "p044",
+    "a": "¿Cuál es la profundidad mínima aconsejable en los surcos de las bandas de rodamiento para asegurar un buen rendimiento general del neumático?",
+    "b": "¿Cuál es el rango de concentración que define legalmente el 'estado de ebriedad'?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "profundidad de neumático vs rango de ebriedad"
+  },
+  {
+    "id": "p045",
+    "a": "¿Cómo se denomina al espacio invisible detrás del vehículo que es importante conocer para evitar colisiones?",
+    "b": "Los síntomas de intoxicación por monóxido de carbono (CO) incluyen vómitos y dolor de cabeza.",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "punto ciego vs síntomas de intoxicación por CO"
+  },
+  {
+    "id": "p046",
+    "a": "¿Cuál es la función principal del airbag tras un impacto vehicular?",
+    "b": "¿Qué forma geométrica suelen tener las señales reglamentarias, considerando sus excepciones?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "función del airbag vs forma de señales reglamentarias"
+  },
+  {
+    "id": "p047",
+    "a": "¿En qué rango de distancia la percepción humana es más fiable para estimar distancias en el contexto del tránsito vehicular?",
+    "b": "¿Cuál es la separación mínima recomendada entre un vehículo estacionado y otro vehículo estacionado adyacente?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "percepción de distancias vs separación al estacionar"
+  },
+  {
+    "id": "p048",
+    "a": "¿Cuál es el rango de edad que se identifica como óptimo para la reacción compleja al conducir?",
+    "b": "¿Cuál es la distancia lateral mínima recomendada al adelantar a un ciclista?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "edad óptima de reacción vs distancia a ciclista"
+  },
+  {
+    "id": "p049",
+    "a": "¿Cuál es el rango de concentración que define legalmente el 'estado de ebriedad'?",
+    "b": "¿Qué forma geométrica suelen tener las señales reglamentarias, considerando sus excepciones?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "estado de ebriedad vs forma de señales"
+  },
+  {
+    "id": "p050",
+    "a": "El tiempo es el único factor que permite recuperar la sobriedad después del consumo de alcohol.",
+    "b": "En vías no urbanas, ¿cuál es el límite de velocidad permitido para vehículos livianos si solo hay una pista por sentido?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "recuperar sobriedad vs velocidad rural"
+  },
+  {
+    "id": "p051",
+    "a": "¿Qué distancia aproximada se recorre si ocurre un estornudo mientras se circula a 90 km/h?",
+    "b": "¿Qué cubre específicamente el Seguro Obligatorio de Accidentes Personales (SOAP)?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "estornudo a 90 km/h vs cobertura SOAP"
+  },
+  {
+    "id": "p052",
+    "a": "¿Qué grupos son considerados usuarios de vías públicas vulnerables en el tránsito?",
+    "b": "Según AChEE, ¿qué porcentaje aproximado puede reducirse el consumo de combustible aplicando técnicas de Conducción Eficiente?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "usuarios vulnerables vs ahorro de combustible AChEE"
+  },
+  {
+    "id": "p053",
+    "a": "¿Cuál es el color predominante de las señales transitorias que advierten de riesgos no permanentes en la vía?",
+    "b": "¿Cuál es la función principal del airbag tras un impacto vehicular?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "color de señales transitorias vs función del airbag"
+  },
+  {
+    "id": "p054",
+    "a": "Mantener una distancia muy corta solo aumenta riesgos sin afectar la maniobrabilidad o economía del combustible.",
+    "b": "Los síntomas de intoxicación por monóxido de carbono (CO) incluyen vómitos y dolor de cabeza.",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "verificar distancia de seguimiento vs síntomas de CO"
+  },
+  {
+    "id": "p055",
+    "a": "En zonas urbanas, la velocidad máxima permitida para vehículos livianos es de 60 km/h.",
+    "b": "¿Cómo se denomina al espacio invisible detrás del vehículo que es importante conocer para evitar colisiones?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "velocidad urbana vs punto ciego"
+  },
+  {
+    "id": "p056",
+    "a": "¿Qué término describe el acto de situarse delante de otros vehículos desde el costado izquierdo del eje de la calzada?",
+    "b": "¿Qué sustancia se debe añadir al refrigerante para prevenir daños por congelación en bajas temperaturas?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "definición de adelantamiento vs anticongelante"
+  },
+  {
+    "id": "p057",
+    "a": "¿Cuál es la separación mínima recomendada entre un vehículo estacionado y otro vehículo estacionado adyacente?",
+    "b": "¿Por qué son particularmente peligrosas las primeras gotas de lluvia al conducir?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "separación al estacionar vs primeras gotas de lluvia"
+  },
+  {
+    "id": "p058",
+    "a": "Ante una detención del tráfico ('taco') dentro de un túnel, ¿qué medidas deben tomar los conductores?",
+    "b": "¿Qué porcentaje aproximado de conductores fallecidos en tránsito corresponde al grupo etario de 18 a 29 años?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "taco en túnel vs porcentaje de jóvenes fallecidos"
+  },
+  {
+    "id": "p059",
+    "a": "¿Por qué son particularmente peligrosas las primeras gotas de lluvia al conducir?",
+    "b": "¿Qué forma geométrica suelen tener las señales reglamentarias, considerando sus excepciones?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "primeras gotas de lluvia vs forma de señales"
+  },
+  {
+    "id": "p060",
+    "a": "Según AChEE, ¿qué porcentaje aproximado puede reducirse el consumo de combustible aplicando técnicas de Conducción Eficiente?",
+    "b": "¿Cuál es el rango de concentración que define legalmente el 'estado de ebriedad'?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "ahorro de combustible vs estado de ebriedad"
+  },
+  {
+    "id": "p061",
+    "a": "¿Qué cubre específicamente el Seguro Obligatorio de Accidentes Personales (SOAP)?",
+    "b": "¿En qué rango de distancia la percepción humana es más fiable para estimar distancias en el contexto del tránsito vehicular?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "cobertura SOAP vs percepción de distancias"
+  },
+  {
+    "id": "p062",
+    "a": "Los síntomas de intoxicación por monóxido de carbono (CO) incluyen vómitos y dolor de cabeza.",
+    "b": "¿Cuál es la distancia lateral mínima recomendada al adelantar a un ciclista?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "síntomas de CO vs distancia a ciclista"
+  },
+  {
+    "id": "p063",
+    "a": "¿Qué distintivo individualiza a un vehículo en las vías públicas?",
+    "b": "¿Cuál es la función principal del sistema de refrigeración en un motor?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "placa patente vs sistema de refrigeración"
+  },
+  {
+    "id": "p064",
+    "a": "La reproducción del material educativo sobre seguridad vial puede realizarse sin obtener autorización previa de CONASET.",
+    "b": "En vías no urbanas, ¿cuál es el límite de velocidad permitido para vehículos livianos si solo hay una pista por sentido?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "autorización de CONASET vs velocidad rural"
+  },
+  {
+    "id": "p065",
+    "a": "Es cierto que los peatones tienen una alta probabilidad de supervivencia en impactos a velocidades superiores a 45 km/h.",
+    "b": "¿Qué cubre específicamente el Seguro Obligatorio de Accidentes Personales (SOAP)?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "supervivencia de peatón vs cobertura SOAP"
+  },
+  {
+    "id": "p066",
+    "a": "¿Qué porcentaje aproximado de conductores fallecidos en tránsito corresponde al grupo etario de 18 a 29 años?",
+    "b": "¿Cuál es la separación mínima recomendada entre un vehículo estacionado y otro vehículo estacionado adyacente?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "porcentaje de jóvenes fallecidos vs separación al estacionar"
+  },
+  {
+    "id": "p067",
+    "a": "Respecto a la física aplicada a la conducción, ¿qué sucede con la energía del movimiento si se duplica la velocidad?",
+    "b": "¿Cuáles son las causas específicas que pueden resultar en la suspensión de una licencia de conducir?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "energía cinética vs suspensión de licencia"
+  },
+  {
+    "id": "p068",
+    "a": "¿Qué forma geométrica suelen tener las señales reglamentarias, considerando sus excepciones?",
+    "b": "El tiempo es el único factor que permite recuperar la sobriedad después del consumo de alcohol.",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "forma de señales vs recuperar sobriedad"
+  },
+  {
+    "id": "p069",
+    "a": "En vías no urbanas, ¿cuál es el límite de velocidad permitido para vehículos livianos si solo hay una pista por sentido?",
+    "b": "¿Cómo se denomina al espacio invisible detrás del vehículo que es importante conocer para evitar colisiones?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "velocidad rural vs punto ciego"
+  },
+  {
+    "id": "p070",
+    "a": "¿Cuál es la distancia lateral mínima recomendada al adelantar a un ciclista?",
+    "b": "¿Cuál es la función principal del mantenimiento preventivo en un vehículo?",
+    "label": "no_dup",
+    "difficulty": "easy",
+    "source": "conaset-real",
+    "note": "distancia a ciclista vs mantenimiento preventivo"
+  },
+  {
+    "id": "p071",
+    "a": "Respecto a la física aplicada a la conducción, ¿qué sucede con la energía del movimiento si se duplica la velocidad?",
+    "b": "Si se duplica la velocidad, ¿qué sucede con la distancia de frenado?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "misma estructura 'duplicar velocidad->x4' pero energía cinética vs distancia de frenado"
+  },
+  {
+    "id": "p072",
+    "a": "Si se duplica la velocidad, ¿qué sucede con la distancia de frenado?",
+    "b": "¿Qué relación existe entre la velocidad y la distancia de frenado?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "distancia de frenado: caso específico (x4) vs relación general con la velocidad"
+  },
+  {
+    "id": "p073",
+    "a": "¿Cuál es la función principal del airbag tras un impacto vehicular?",
+    "b": "¿Cuál es una de las funciones principales del airbag en caso de accidente?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "función del airbag: amortiguar ocupantes vs prevenir impacto contra volante/tablero (respuestas distintas)"
+  },
+  {
+    "id": "p074",
+    "a": "¿Cuál es el primer paso recomendado en el procedimiento seguro al adelantar?",
+    "b": "¿Cuál es la primera acción recomendada antes de iniciar un adelantamiento?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "primer paso al adelantar: redacción casi idéntica, respuesta distinta (mirar lejos vs evaluar espacio)"
+  },
+  {
+    "id": "p075",
+    "a": "¿Qué debe hacer un conductor si su vehículo está equipado con sistema ABS durante una frenada fuerte?",
+    "b": "Si un vehículo NO cuenta con sistema ABS y se requiere una frenada fuerte, ¿cuál es la técnica recomendada?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "frenada fuerte: con ABS vs sin ABS (condición opuesta)"
+  },
+  {
+    "id": "p076",
+    "a": "¿Qué acción se recomienda tomar si un neumático trasero de un vehículo sufre una reventón?",
+    "b": "Si ocurre una reventón en un neumático delantero, ¿cuál es el procedimiento correcto?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "reventón de neumático: trasero vs delantero (acción distinta)"
+  },
+  {
+    "id": "p077",
+    "a": "Los remolques con carga superior a 750 kg siempre deben estar equipados con frenos eléctricos para garantizar la seguridad.",
+    "b": "¿Qué efecto tiene aplicar presión excesiva sobre la esfera del remolque?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "presión en la esfera del remolque: baja/nula vs excesiva (efecto opuesto)"
+  },
+  {
+    "id": "p078",
+    "a": "¿Cuál es la característica distintiva de las señales preventivas (advertencia de peligro) según su forma y coloración estándar?",
+    "b": "¿Qué forma geométrica suelen tener las señales reglamentarias, considerando sus excepciones?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "forma de señales: preventivas vs reglamentarias"
+  },
+  {
+    "id": "p079",
+    "a": "¿Cuál es el color predominante de las señales transitorias que advierten de riesgos no permanentes en la vía?",
+    "b": "¿Qué color suelen tener las señales informativas que señalan atractivos turísticos en una vía?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "color de señales: transitorias (naranja) vs informativas turísticas (café)"
+  },
+  {
+    "id": "p080",
+    "a": "¿Cuál es el límite máximo de velocidad establecido para buses, camiones y transporte escolar en zonas urbanas?",
+    "b": "En zonas urbanas, la velocidad máxima permitida para vehículos livianos es de 60 km/h.",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "velocidad urbana: buses/camiones (50) vs livianos (60)"
+  },
+  {
+    "id": "p081",
+    "a": "En vías no urbanas, ¿cuál es el límite de velocidad permitido para vehículos livianos si solo hay una pista por sentido?",
+    "b": "En zonas urbanas, la velocidad máxima permitida para vehículos livianos es de 60 km/h.",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "velocidad de livianos: rural (100) vs urbano (60)"
+  },
+  {
+    "id": "p082",
+    "a": "¿Cuál es la distancia de seguridad recomendada en carreteras respecto al vehículo que va delante, utilizando como referencia el velocímetro?",
+    "b": "Si se circula en un entorno urbano, ¿cómo se recomienda ajustar la distancia de seguridad respecto al vehículo precedente comparado con las carreteras?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "distancia de seguridad: carretera vs urbano (regla distinta)"
+  },
+  {
+    "id": "p083",
+    "a": "Es cierto que los niños son considerados relativamente seguros en el tránsito durante el rango de edad entre los 9 y 12 años.",
+    "b": "¿Cuál de las siguientes características describe un riesgo específico asociado a los niños en el tránsito?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "niños en el tránsito: seguridad por edad vs riesgo por comportamiento"
+  },
+  {
+    "id": "p084",
+    "a": "¿Cuál es la acción principal recomendada al conducir sobre nieve para prevenir deslizamientos?",
+    "b": "¿Cuál es la técnica recomendada para frenar en condiciones invernales?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "conducción invernal: manejo general en nieve vs técnica de frenado"
+  },
+  {
+    "id": "p085",
+    "a": "¿Cuál es la acción prioritaria al conducir en condiciones de baja visibilidad como niebla?",
+    "b": "En niebla, realizar paradas o detenciones es siempre seguro si se utilizan luces antiniebla.",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "niebla: reducir velocidad al conducir vs (in)seguridad de detenerse"
+  },
+  {
+    "id": "p086",
+    "a": "¿Cuál es la distancia lateral mínima recomendada al adelantar a un ciclista?",
+    "b": "¿Qué tipo de precaución se debe aplicar al encontrarse con ganado como ovejas o caballos?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "distancia lateral segura: a un ciclista vs a ganado en la vía"
+  },
+  {
+    "id": "p087",
+    "a": "¿Cuál es la profundidad mínima aconsejable en los surcos de las bandas de rodamiento para asegurar un buen rendimiento general del neumático?",
+    "b": "Cuando la profundidad del surco es inferior a 1,6 mm, el neumático mejora su fricción con pavimento mojado debido a una mejor evacuación de agua.",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "profundidad de banda de rodadura: mínima recomendada vs umbral 1,6 mm y agarre en mojado"
+  },
+  {
+    "id": "p088",
+    "a": "¿Cuál es el rango de edad que se identifica como óptimo para la reacción compleja al conducir?",
+    "b": "Los conductores jóvenes tienden a tener menor índice de participación en accidentes debido a su etapa vital.",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "conductores por edad: rango óptimo de reacción vs siniestralidad de los jóvenes"
+  },
+  {
+    "id": "p089",
+    "a": "¿Cómo se calcula la distancia de detención total (S)?",
+    "b": "Si se duplica la velocidad, ¿qué sucede con la distancia de frenado?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-real",
+    "note": "distancia de detención total (reacción+frenado) vs distancia de frenado al duplicar velocidad"
+  },
+  {
+    "id": "p090",
+    "a": "¿Qué es la distancia de frenado de un vehículo?",
+    "b": "¿Qué factores hacen que aumente la distancia de frenado?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "definición vs factores"
+  },
+  {
+    "id": "p091",
+    "a": "¿Para qué sirve el cinturón de seguridad?",
+    "b": "¿Qué lesiones puede provocar el cinturón de seguridad si se usa de forma incorrecta?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "función vs riesgo del cinturón"
+  },
+  {
+    "id": "p092",
+    "a": "¿Qué es el punto ciego de un vehículo?",
+    "b": "¿Cómo se reduce el riesgo del punto ciego al cambiar de pista?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "definición vs mitigación"
+  },
+  {
+    "id": "p093",
+    "a": "¿Qué efectos produce el alcohol sobre la conducción?",
+    "b": "¿Cuánto tarda el cuerpo en eliminar el alcohol de la sangre?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "efectos vs cinética de eliminación"
+  },
+  {
+    "id": "p094",
+    "a": "¿Qué es la conducción eficiente?",
+    "b": "¿Qué beneficios económicos aporta la conducción eficiente?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "definición vs beneficios"
+  },
+  {
+    "id": "p095",
+    "a": "¿Qué es el sistema ABS de frenos?",
+    "b": "¿Cómo se debe frenar en un vehículo que NO cuenta con ABS?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "definición vs técnica sin ABS"
+  },
+  {
+    "id": "p096",
+    "a": "¿Qué velocidad máxima rige para autos livianos dentro de la ciudad?",
+    "b": "¿Qué velocidad máxima rige para autos livianos en carretera?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "mismo tema, zona distinta"
+  },
+  {
+    "id": "p097",
+    "a": "¿Qué cubre el seguro SOAP?",
+    "b": "¿Qué documentos se requieren para obtener el permiso de circulación?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "cobertura vs requisitos documentales"
+  },
+  {
+    "id": "p098",
+    "a": "¿Qué precauciones se deben tomar al conducir bajo lluvia?",
+    "b": "¿Qué precauciones se deben tomar al conducir sobre nieve?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "misma familia, condición distinta"
+  },
+  {
+    "id": "p099",
+    "a": "¿Por qué aumenta el riesgo de accidente al conducir de noche?",
+    "b": "¿Qué tipo de luces se deben usar de noche en una vía interurbana?",
+    "label": "no_dup",
+    "difficulty": "hard",
+    "source": "conaset-paraphrase",
+    "note": "causa del riesgo vs norma de luces"
+  }
+]

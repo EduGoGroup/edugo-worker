@@ -6,6 +6,9 @@
 //   - mode=review (040 T2c): corre ReviewAnswer contra una batería de casos de
 //     muestra en español (correcto, incorrecto, parcial, vacío/sin sentido,
 //     parafraseo, prompt-injection) y evalúa verdict/score esperados PASS/FAIL.
+//   - mode=embed (044 F1b): calibra el dedupe por embeddings. Vectoriza una batería
+//     de pares dup/no_dup en español, calcula el coseno de cada par y reporta los
+//     umbrales dup_high/dup_low, la zona gris y la separación por modelo candidato.
 //
 // Sirve para (a) smoke de la infra LLM, (b) elegir el modelo local midiendo (no
 // en papel) y (c) regresión de prompts. Mide el PROMPT, no el modelo: con modelos
@@ -46,7 +49,7 @@ oxígeno. En la fase oscura (ciclo de Calvin), el dióxido de carbono se fija pa
 glucosa. La ecuación general es: 6 CO2 + 6 H2O + luz -> C6H12O6 + 6 O2.`
 
 func main() {
-	mode := flag.String("mode", "generate", "modo del harness: generate (contrato 038) | review (corrección, 040 T2c) | prep (preparación, 042 F2d) | review-prep (carril triturado short_answer, 042 F3d) | material (pipeline A/B material→evaluación, 043 F3b)")
+	mode := flag.String("mode", "generate", "modo del harness: generate (contrato 038) | review (corrección, 040 T2c) | prep (preparación, 042 F2d) | review-prep (carril triturado short_answer, 042 F3d) | material (pipeline A/B material→evaluación, 043 F3b) | embed (calibración dedupe por embeddings, 044 F1b)")
 	provider := flag.String("provider", "local", "provider LLM: local (alias de ollama) | ollama | api. 'local'/'api' espejan el vocabulario de la política por escuela (D-039.2; 'off' no aplica al harness)")
 	materialPath := flag.String("material", "", "ruta a un archivo de texto con el material (vacío = muestra interna)")
 	title := flag.String("title", "Fotosíntesis — capítulo 3", "título del material")
@@ -65,7 +68,18 @@ func main() {
 
 	materialInputsCSV := flag.String("material-inputs", "", "modo material: rutas coma-separadas a documentos (.pdf → pdf.Extractor, .txt → texto plano). Vacío = todos los .txt de "+defaultMaterialDir)
 
+	embedModelsCSV := flag.String("embed-models", "nomic-embed-text,embeddinggemma", "modo embed: modelos de embeddings coma-separados a comparar (secuencial)")
+	embedPairsPath := flag.String("embed-pairs", defaultEmbedPairs, "modo embed: ruta a la batería de pares dup/no_dup")
+	embedOutDir := flag.String("embed-out-dir", "", "modo embed: carpeta donde escribir results-<modelo>.json (vacío = junto a -embed-pairs)")
+
 	flag.Parse()
+
+	// El modo embed no genera texto: usa el puerto Embedder (no LLMProvider), así que
+	// no construye el provider LLM ni necesita material. Se resuelve y retorna aquí.
+	if *mode == "embed" {
+		runEmbed(*ollamaURL, *embedModelsCSV, *embedPairsPath, *embedOutDir, *timeout)
+		return
+	}
 
 	content := sampleMaterial
 	if *materialPath != "" {
@@ -103,7 +117,7 @@ func main() {
 	case "material":
 		runMaterial(p, *timeout, *materialInputsCSV)
 	default:
-		fatalf("modo desconocido %q (usa generate|review|prep|review-prep|material)", *mode)
+		fatalf("modo desconocido %q (usa generate|review|prep|review-prep|material|embed)", *mode)
 	}
 }
 
