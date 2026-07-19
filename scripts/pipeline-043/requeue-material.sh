@@ -73,7 +73,13 @@ if [ "$ST" = "failed" ]; then
              WHERE id=(SELECT material_id FROM content.material_pipeline_job WHERE id='$JOB_ID');"
 fi
 if [ "$ST" = "done" ]; then
-  echo ">> el job ya está done: nada que re-encolar"; exit 0
+  # 044: done SIN assessment_id = fase 1 completa, la fase 2 (reduce) queda por correr;
+  # done CON assessment_id = entregado de verdad, terminal.
+  AID=$($=PSQL -tA -c "SELECT COALESCE(assessment_id::text,'') FROM content.material_pipeline_job WHERE id='$JOB_ID';")
+  if [ -n "$AID" ]; then
+    echo ">> el job ya entregó su evaluación (assessment_id=$AID): nada que re-encolar"; exit 0
+  fi
+  echo ">> job done de fase 1 sin assessment: re-encolando para la fase 2 (reduce, plan 044)"
 fi
 
 # A) re-inyectar desde la DLQ (o re-publicar el evento reconstruido si la DLQ está vacía)
