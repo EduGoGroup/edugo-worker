@@ -46,7 +46,7 @@ func (c Config) Validate() error {
 	if c.TargetWords <= 0 || c.MaxWords <= 0 || c.MinWords <= 0 || c.MergeThresholdWords <= 0 {
 		return fmt.Errorf("chunking: todos los parámetros deben ser mayores que 0")
 	}
-	if !(c.MinWords <= c.TargetWords && c.TargetWords <= c.MaxWords) {
+	if c.MinWords > c.TargetWords || c.TargetWords > c.MaxWords {
 		return fmt.Errorf("chunking: se requiere MinWords <= TargetWords <= MaxWords")
 	}
 	if c.MergeThresholdWords > c.MinWords {

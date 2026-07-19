@@ -311,7 +311,7 @@ func TestSplit_ConfigOrderEnforced(t *testing.T) {
 	// Min > Target > Max desordenados: normalized debe reordenar sin panic.
 	weird := Config{TargetWords: 300, MaxWords: 200, MinWords: 900, MergeThresholdWords: 400}
 	got := weird.normalized()
-	if !(got.MinWords <= got.TargetWords && got.TargetWords <= got.MaxWords) {
+	if got.MinWords > got.TargetWords || got.TargetWords > got.MaxWords {
 		t.Fatalf("normalized no aseguró Min<=Target<=Max: %+v", got)
 	}
 	if got.MergeThresholdWords > got.MinWords {
