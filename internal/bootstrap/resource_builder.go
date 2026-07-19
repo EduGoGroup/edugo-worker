@@ -596,9 +596,10 @@ func (b *ResourceBuilder) buildReduceDeps(localProvider llm.LLMProvider, mpCfg c
 
 	dedupeCfg := reduce.Config{DupHigh: mpCfg.DedupeHigh, DupLow: mpCfg.DedupeLow}
 	relevanceCfg := reduce.RelevanceConfig{
-		RelevanceMin:     mpCfg.RelevanceMin,
-		Mode:             mpCfg.RelevanceMode,
-		VerbatimMaxWords: mpCfg.VerbatimMaxWords,
+		RelevanceMin:      mpCfg.RelevanceMin,
+		Mode:              mpCfg.RelevanceMode,
+		VerbatimMaxWords:  mpCfg.VerbatimMaxWords,
+		RelevanceMaxIdeas: mpCfg.RelevanceMaxIdeas,
 	}
 
 	return processor.ReduceDeps{

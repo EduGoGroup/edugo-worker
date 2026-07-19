@@ -227,6 +227,12 @@ type MaterialPipelineConfig struct {
 	// una candidata que cite literalmente MÁS de este número de palabras contiguas del
 	// chunk se marca local_only y sus pasadas LLM nunca salen por API. Default 25.
 	VerbatimMaxWords int `mapstructure:"verbatim_max_words"`
+	// RelevanceMaxIdeas es el tope de ideas del AGREGADO global del job que la pasada 2
+	// muestrea para el prompt de cada candidata (además de sus source_ideas, siempre
+	// presentes). Acota el contexto del juez local: en un job real el agregado llega a
+	// cientos de ideas y, metidas todas, revientan el num_ctx del modelo y el parseo del
+	// juez (bug de escala CONASET). Default 50 (condición medida por el harness).
+	RelevanceMaxIdeas int `mapstructure:"relevance_max_ideas"`
 	// TargetQuestionsDefault es el cupo de preguntas de la selección final (pasada 4,
 	// D-044.5) cuando el job no expone `target_questions`. El GET job de learning NO
 	// entrega los params del job hoy (los guarda server-side pero no los publica en el
@@ -449,6 +455,9 @@ func (c *Config) GetMaterialPipelineConfigWithDefaults() MaterialPipelineConfig 
 	}
 	if cfg.VerbatimMaxWords == 0 {
 		cfg.VerbatimMaxWords = 25
+	}
+	if cfg.RelevanceMaxIdeas == 0 {
+		cfg.RelevanceMaxIdeas = 50
 	}
 	if cfg.TargetQuestionsDefault == 0 {
 		cfg.TargetQuestionsDefault = 20

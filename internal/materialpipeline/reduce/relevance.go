@@ -28,6 +28,15 @@ const (
 // contrato §4): 0 = no se responde; ~0.5 = periférica; ~1 = central.
 const defaultRelevanceMin = 0.4
 
+// defaultRelevanceMaxIdeas es el tope de ideas del AGREGADO global que se muestrean para
+// el prompt de una candidata (además de las source_ideas de su origen, siempre presentes).
+// Acota el contexto del juez: en el job real CONASET el agregado llegó a >400 ideas y, al
+// meterlas todas en cada prompt, no cabían en el num_ctx del modelo local (gemma4:e4b,
+// 4096) → el parseo del juez fallaba y toda la selección quedaba en 0. El harness midió la
+// condición buena con ~50 ideas globales por prompt (D-044.3). Fallback cuando la config
+// llega en cero.
+const defaultRelevanceMaxIdeas = 50
+
 // RelevanceConfig parametriza la pasada 2 (relevancia). El constructor aplica defaults si
 // un campo llega en su cero, de modo que el literal RelevanceConfig{} sea seguro.
 type RelevanceConfig struct {
@@ -38,6 +47,11 @@ type RelevanceConfig struct {
 	Mode string
 	// VerbatimMaxWords: umbral del candado local_only (default 25, D-044.4).
 	VerbatimMaxWords int
+	// RelevanceMaxIdeas: tope de ideas del AGREGADO global muestreadas para el prompt de
+	// cada candidata (default 50). Las source_ideas del origen van SIEMPRE además de esto
+	// (ver ideasForCandidate). Acota el contexto del juez para que quepa en el num_ctx del
+	// modelo local (ver defaultRelevanceMaxIdeas).
+	RelevanceMaxIdeas int
 }
 
 // relevanceJudge es el juicio LLM de relevancia de UNA candidata (pasada 2, un candidata
@@ -84,6 +98,9 @@ func NewRelevancePass(store candidateStore, localJudge, apiJudge relevanceJudge,
 	if cfg.VerbatimMaxWords == 0 {
 		cfg.VerbatimMaxWords = defaultVerbatimMaxWords
 	}
+	if cfg.RelevanceMaxIdeas == 0 {
+		cfg.RelevanceMaxIdeas = defaultRelevanceMaxIdeas
+	}
 	return &RelevancePass{
 		store:      store,
 		localJudge: localJudge,
@@ -116,6 +133,12 @@ type RelevanceReport struct {
 // del job, pero el cliente M2M NO expone los ChunkArtifacts (main_ideas) de los chunks ya
 // procesados. Como acordó el contrato de la tarea, se cae al AGREGADO de las source_ideas
 // de las candidatas del job (unión normalizada) como proxy de las ideas del material.
+//
+// El agregado NO se pasa completo al juez: en un job real llega a cientos de ideas y no
+// cabe en el num_ctx del modelo local, reventando el parseo del juez (ver
+// defaultRelevanceMaxIdeas). Por candidata se arma una lista ACOTADA (ideasForCandidate):
+// SIEMPRE sus source_ideas (su origen) + una muestra global determinista del agregado
+// hasta RelevanceMaxIdeas. Así reproduce la condición medida por el harness.
 //
 // Errores: propaga los del store tal cual (el caller los clasifica). Un fallo del juez LLM
 // NO aborta la pasada ni descarta la candidata: se reintenta una vez y, si persiste, se
@@ -158,7 +181,10 @@ func (r *RelevancePass) Run(ctx context.Context, jobID string) (RelevanceReport,
 			report.LocalForced++
 		}
 
-		result, calls, ok := r.scoreWithRetry(ctx, judge, *payload, mainIdeas)
+		// Ideas acotadas para el prompt de ESTA candidata: sus source_ideas (origen) +
+		// muestra global determinista del agregado hasta el tope (ver ideasForCandidate).
+		ideas := ideasForCandidate(payload.SourceIdeas, mainIdeas, r.cfg.RelevanceMaxIdeas)
+		result, calls, ok := r.scoreWithRetry(ctx, judge, *payload, ideas)
 		report.LLMCalls += calls
 		if !ok {
 			r.logger.Warn("relevancia: el juez LLM falló dos veces; score nil (no se descarta)",
@@ -250,6 +276,66 @@ func (r *RelevancePass) scoreWithRetry(ctx context.Context, judge relevanceJudge
 		return result, 2, true
 	}
 	return llm.RelevanceResult{}, 2, false
+}
+
+// ideasForCandidate arma la lista de ideas para el prompt de UNA candidata, acotada para
+// que quepa en el contexto del juez local (D-044.3). Composición:
+//   - SIEMPRE las source_ideas del origen (deduplicadas por textmatch.Normalize,
+//     preservando el crudo y el orden) — la candidata debe verse frente a SUS ideas.
+//   - + una muestra uniforme DETERMINISTA del agregado global del job (uniformSample),
+//     hasta maxGlobal ideas, con dedup exacto contra las del origen.
+//
+// El orden es estable (origen primero, luego la muestra en orden de aparición) y no usa
+// aleatoriedad: la misma entrada produce siempre la misma salida. Un agregado más chico
+// que el tope pasa entero.
+func ideasForCandidate(sourceIdeas, aggregate []string, maxGlobal int) []string {
+	seen := make(map[string]struct{})
+	out := make([]string, 0, len(sourceIdeas)+maxGlobal)
+
+	// Origen: siempre presente (dedup interno por normalización).
+	for _, idea := range sourceIdeas {
+		key := textmatch.Normalize(idea)
+		if key == "" {
+			continue
+		}
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, idea)
+	}
+
+	// Muestra global determinista, dedup exacto contra el origen.
+	for _, idea := range uniformSample(aggregate, maxGlobal) {
+		key := textmatch.Normalize(idea)
+		if key == "" {
+			continue
+		}
+		if _, dup := seen[key]; dup {
+			continue
+		}
+		seen[key] = struct{}{}
+		out = append(out, idea)
+	}
+	return out
+}
+
+// uniformSample toma hasta `size` elementos de `items` con paso fijo, repartidos de forma
+// uniforme sobre el slice ordenado (determinista, sin aleatoriedad). Si `items` no supera
+// el tope, se devuelve entero. El índice i·len/size reparte las tomas a lo largo de todo el
+// slice y —como len > size— nunca repite índice.
+func uniformSample(items []string, size int) []string {
+	if size <= 0 {
+		return nil
+	}
+	if len(items) <= size {
+		return items
+	}
+	out := make([]string, 0, size)
+	for i := 0; i < size; i++ {
+		out = append(out, items[i*len(items)/size])
+	}
+	return out
 }
 
 // aggregateSourceIdeas reúne la unión NORMALIZADA de las source_ideas de todas las

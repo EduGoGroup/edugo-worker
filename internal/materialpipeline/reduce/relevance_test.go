@@ -3,6 +3,8 @@ package reduce
 import (
 	"context"
 	"errors"
+	"fmt"
+	"reflect"
 	"testing"
 
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
@@ -251,5 +253,120 @@ func TestRelevance_ModoAPI_SinResolver_CaeALocal(t *testing.T) {
 	}
 	if rep.LocalForced != 1 {
 		t.Fatalf("LocalForced = %d, quiero 1", rep.LocalForced)
+	}
+}
+
+// --- tests del acotado de ideas del prompt (bug de escala CONASET) ---
+
+// genIdeas produce n ideas distintas y deterministas.
+func genIdeas(prefix string, n int) []string {
+	out := make([]string, n)
+	for i := 0; i < n; i++ {
+		out[i] = fmt.Sprintf("%s idea %d", prefix, i)
+	}
+	return out
+}
+
+func countNotIn(ideas, exclude []string) int {
+	set := make(map[string]struct{}, len(exclude))
+	for _, e := range exclude {
+		set[e] = struct{}{}
+	}
+	c := 0
+	for _, idea := range ideas {
+		if _, ok := set[idea]; !ok {
+			c++
+		}
+	}
+	return c
+}
+
+// Agregado gigante (500 ideas): la muestra global respeta el tope; el total no explota.
+func TestIdeasForCandidate_ToperRespetadoAgregadoGigante(t *testing.T) {
+	source := []string{"origen A", "origen B"}
+	aggregate := genIdeas("agg", 500)
+	const maxGlobal = 50
+
+	ideas := ideasForCandidate(source, aggregate, maxGlobal)
+
+	// Las del origen no viven en el agregado → la porción global es todo lo que no es origen.
+	global := countNotIn(ideas, source)
+	if global > maxGlobal {
+		t.Fatalf("porción global = %d, no debe superar el tope %d", global, maxGlobal)
+	}
+	if global != maxGlobal {
+		t.Fatalf("con agregado gigante la muestra debe llenar el tope: global=%d, quiero %d", global, maxGlobal)
+	}
+	if len(ideas) != len(source)+maxGlobal {
+		t.Fatalf("total = %d, quiero %d (origen %d + tope %d)", len(ideas), len(source)+maxGlobal, len(source), maxGlobal)
+	}
+}
+
+// Las source_ideas del origen SIEMPRE están, aunque no aparezcan en el agregado; y no se
+// duplican si el agregado también las trae.
+func TestIdeasForCandidate_SourceSiemprePresentes(t *testing.T) {
+	source := []string{"origen X", "origen Y", "origen Z"}
+	// El agregado incluye una del origen (para probar el dedup) más ruido.
+	aggregate := append([]string{"origen Y"}, genIdeas("agg", 10)...)
+
+	ideas := ideasForCandidate(source, aggregate, 50)
+
+	for _, s := range source {
+		found := false
+		for _, idea := range ideas {
+			if idea == s {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("la idea de origen %q debe estar siempre presente", s)
+		}
+	}
+	// "origen Y" aparece una sola vez (dedup exacto contra el origen).
+	n := 0
+	for _, idea := range ideas {
+		if idea == "origen Y" {
+			n++
+		}
+	}
+	if n != 1 {
+		t.Fatalf("origen Y debe aparecer una sola vez (dedup), apareció %d", n)
+	}
+}
+
+// Determinismo: misma entrada → exactamente la misma salida (sin aleatoriedad).
+func TestIdeasForCandidate_Determinista(t *testing.T) {
+	source := []string{"origen A"}
+	aggregate := genIdeas("agg", 500)
+
+	a := ideasForCandidate(source, aggregate, 50)
+	b := ideasForCandidate(source, aggregate, 50)
+	if !reflect.DeepEqual(a, b) {
+		t.Fatalf("ideasForCandidate no es determinista:\n a=%v\n b=%v", a, b)
+	}
+}
+
+// Agregado más chico que el tope: pasa entero (nada se recorta).
+func TestIdeasForCandidate_AgregadoChicoPasaEntero(t *testing.T) {
+	source := []string{"origen A"}
+	aggregate := genIdeas("agg", 12) // < tope
+
+	ideas := ideasForCandidate(source, aggregate, 50)
+
+	for _, agg := range aggregate {
+		found := false
+		for _, idea := range ideas {
+			if idea == agg {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Fatalf("con agregado chico todas deben pasar; falta %q", agg)
+		}
+	}
+	if len(ideas) != len(source)+len(aggregate) {
+		t.Fatalf("total = %d, quiero %d (origen + agregado entero)", len(ideas), len(source)+len(aggregate))
 	}
 }

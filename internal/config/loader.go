@@ -45,9 +45,10 @@ func Load() (*Config, error) {
 			"material_pipeline.dedupe_low":  "MATERIAL_PIPELINE_DEDUPE_LOW",
 			// Reduce fase 2 (plan 044 D-044.3/D-044.4): umbral de relevancia, modo del paso
 			// (local|api) y candado verbatim local_only.
-			"material_pipeline.relevance_min":      "MATERIAL_PIPELINE_RELEVANCE_MIN",
-			"material_pipeline.relevance_mode":     "MATERIAL_PIPELINE_RELEVANCE_MODE",
-			"material_pipeline.verbatim_max_words": "MATERIAL_PIPELINE_VERBATIM_MAX_WORDS",
+			"material_pipeline.relevance_min":       "MATERIAL_PIPELINE_RELEVANCE_MIN",
+			"material_pipeline.relevance_mode":      "MATERIAL_PIPELINE_RELEVANCE_MODE",
+			"material_pipeline.verbatim_max_words":  "MATERIAL_PIPELINE_VERBATIM_MAX_WORDS",
+			"material_pipeline.relevance_max_ideas": "MATERIAL_PIPELINE_RELEVANCE_MAX_IDEAS",
 			// Selección final (plan 044 D-044.5): cupo de preguntas cuando el job no expone
 			// target_questions por M2M.
 			"material_pipeline.target_questions_default": "MATERIAL_PIPELINE_TARGET_QUESTIONS_DEFAULT",
