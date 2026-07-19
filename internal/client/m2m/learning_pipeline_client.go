@@ -29,6 +29,8 @@ const (
 	pipelineJobStatusPathFmt    = "/api/v1/internal/pipeline/jobs/%s/status"
 	pipelineArtifactsPathFmt    = "/api/v1/internal/pipeline/chunks/%s/artifacts"
 	pipelineChunkStatusPathFmt  = "/api/v1/internal/pipeline/chunks/%s/status"
+	pipelineCandidatesPathFmt   = "/api/v1/internal/pipeline/jobs/%s/candidates"
+	pipelineCandidatesPath      = "/api/v1/internal/pipeline/candidates"
 )
 
 // PipelineJob es el estado de un job del carril material→evaluación (GET job).
@@ -80,6 +82,51 @@ type NextChunk struct {
 // crudo (PUT artifacts). El shape del payload lo valida learning contra su contrato.
 type CandidatePayload struct {
 	Payload json.RawMessage `json:"payload"`
+}
+
+// CandidateRecord es una candidata del job con sus columnas de control del reduce
+// (plan 044 §4), tal como las devuelve GET jobs/{id}/candidates. `Payload` y
+// `Embedding` viajan crudos (JSON): el reduce los interpreta (el payload contra
+// CandidatePayloadV1, el embedding como []float32). `DedupeGroup`/`Score`/`Embedding`
+// vienen nil mientras la pasada correspondiente no los produce. El orden de la lista
+// es chunk_sequence ASC, id ASC (determinista para la selección de representante).
+type CandidateRecord struct {
+	ID            string          `json:"id"`
+	ChunkID       string          `json:"chunk_id"`
+	ChunkSequence int             `json:"chunk_sequence"`
+	Payload       json.RawMessage `json:"payload"`
+	Status        string          `json:"status"`
+	DedupeGroup   *string         `json:"dedupe_group"`
+	Score         *float64        `json:"score"`
+	Embedding     json.RawMessage `json:"embedding"`
+}
+
+// CandidateUpdate es un cambio PARCIAL a una candidata (PATCH candidates): solo los
+// campos presentes (no-nil) se aplican; el resto queda como está. El batch es atómico
+// en learning; si el nuevo `status` de una candidata YA terminal difiere del actual,
+// learning responde 409 (→ ErrPipelineConflict) y no aplica nada. `Embedding` es JSON
+// crudo (vector []float32 serializado).
+type CandidateUpdate struct {
+	ID          string          `json:"id"`
+	Status      *string         `json:"status,omitempty"`
+	DedupeGroup *string         `json:"dedupe_group,omitempty"`
+	Score       *float64        `json:"score,omitempty"`
+	Embedding   json.RawMessage `json:"embedding,omitempty"`
+}
+
+// listCandidatesResponse es el sobre de GET jobs/{id}/candidates.
+type listCandidatesResponse struct {
+	Candidates []CandidateRecord `json:"candidates"`
+}
+
+// updateCandidatesRequest es el body de PATCH candidates.
+type updateCandidatesRequest struct {
+	Updates []CandidateUpdate `json:"updates"`
+}
+
+// updateCandidatesResponse es el sobre de PATCH candidates ({"updated": n}).
+type updateCandidatesResponse struct {
+	Updated int `json:"updated"`
 }
 
 // nextChunkEnvelope es el sobre real de GET chunks/pending: chunk puede ser null
@@ -259,6 +306,43 @@ func (c *LearningPipelineClient) UpdateJobStatus(ctx context.Context, jobID, sta
 		Phase:     phase,
 		LastError: lastError,
 	}, nil)
+}
+
+// ListCandidates lee todas las candidatas de un job con sus columnas de control del
+// reduce (pasada 1 de dedupe, plan 044 D-044.2). El orden viene fijado por learning
+// (chunk_sequence ASC, id ASC). Semántica de estado idéntica al resto del carril: 404
+// (job inexistente) → ErrLearningPermanent; 5xx/red/timeout → transitorio.
+func (c *LearningPipelineClient) ListCandidates(ctx context.Context, jobID string) ([]CandidateRecord, error) {
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelineCandidatesPathFmt, jobID)
+
+	var out listCandidatesResponse
+	if err := c.do(ctx, http.MethodGet, url, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.Candidates, nil
+}
+
+// UpdateCandidates persiste cambios parciales a un lote de candidatas (embedding,
+// score, status, dedupe_group) — el reduce lo usa para guardar embeddings calculados y
+// el resultado del agrupado. Devuelve cuántas filas actualizó learning. Un lote vacío
+// no llama a la red (0, nil). Semántica de estado: 409 → ErrPipelineConflict (una
+// candidata ya terminal cuyo status se intentó cambiar a otro valor; el batch es
+// atómico y no se aplicó nada — el caller decide); 4xx → ErrLearningPermanent;
+// 5xx/red/timeout → transitorio.
+func (c *LearningPipelineClient) UpdateCandidates(ctx context.Context, updates []CandidateUpdate) (int, error) {
+	if len(updates) == 0 {
+		return 0, nil
+	}
+	url := c.baseURL + pipelineCandidatesPath
+
+	var out updateCandidatesResponse
+	if err := c.do(ctx, http.MethodPatch, url, updateCandidatesRequest{Updates: updates}, &out); err != nil {
+		return 0, err
+	}
+	return out.Updated, nil
 }
 
 // do ejecuta una request M2M autenticada y (si out != nil) decodifica la respuesta.

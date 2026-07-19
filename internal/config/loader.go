@@ -40,6 +40,9 @@ func Load() (*Config, error) {
 			"material_pipeline.chunk_max_words":             "MATERIAL_PIPELINE_CHUNK_MAX_WORDS",
 			"material_pipeline.chunk_min_words":             "MATERIAL_PIPELINE_CHUNK_MIN_WORDS",
 			"material_pipeline.chunk_merge_threshold_words": "MATERIAL_PIPELINE_CHUNK_MERGE_THRESHOLD_WORDS",
+			// Umbrales de dedupe (plan 044 D-044.2): coseno de embeddings; calibrados en F1b.
+			"material_pipeline.dedupe_high": "MATERIAL_PIPELINE_DEDUPE_HIGH",
+			"material_pipeline.dedupe_low":  "MATERIAL_PIPELINE_DEDUPE_LOW",
 			// LLM (plan 039 D-039.3): credenciales/URL/modelo de EduGo, no por escuela.
 			"llm.local.base_url": "LLM_LOCAL_BASE_URL",
 			"llm.local.model":    "LLM_LOCAL_MODEL",

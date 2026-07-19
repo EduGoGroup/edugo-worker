@@ -207,6 +207,14 @@ type MaterialPipelineConfig struct {
 	// ChunkMergeThresholdWords: un resto final por debajo de este umbral se fusiona
 	// con la porción anterior en lugar de quedar como un trozo diminuto.
 	ChunkMergeThresholdWords int `mapstructure:"chunk_merge_threshold_words"`
+	// DedupeHigh es el umbral de coseno (embeddings) a partir del cual dos candidatas
+	// se declaran duplicadas SIN gastar LLM (pasada 1 de dedupe, D-044.2). Calibrado en
+	// el harness F1b con pares reales en español (default 0.93).
+	DedupeHigh float64 `mapstructure:"dedupe_high"`
+	// DedupeLow es el umbral de coseno por debajo del cual dos candidatas se declaran
+	// DISTINTAS sin gastar LLM. El intervalo [DedupeLow, DedupeHigh) es la "zona gris"
+	// que resuelve el juicio LLM par a par (default 0.50).
+	DedupeLow float64 `mapstructure:"dedupe_low"`
 }
 
 // ServiceJWTConfig configura la firma del service JWT M2M (HS256) que el worker
@@ -410,6 +418,12 @@ func (c *Config) GetMaterialPipelineConfigWithDefaults() MaterialPipelineConfig 
 	if cfg.ChunkMergeThresholdWords == 0 {
 		cfg.ChunkMergeThresholdWords = 80
 	}
+	if cfg.DedupeHigh == 0 {
+		cfg.DedupeHigh = 0.93
+	}
+	if cfg.DedupeLow == 0 {
+		cfg.DedupeLow = 0.50
+	}
 	return cfg
 }
 
@@ -452,12 +466,14 @@ func (c *Config) GetLLMConfigWithDefaults() LLMConfig {
 		cfg.API.MaxTokens = 4096
 	}
 	// Embeddings local (plan 044 D-044.1): mismo host de Ollama por defecto; el modelo
-	// de embeddings arranca en nomic-embed-text (el harness F1b puede cambiarlo por env).
+	// de embeddings arranca en embeddinggemma, elegido por el harness F1b midiendo pares
+	// reales en español (discrimina mejor que nomic-embed-text con los umbrales 0.93/0.50).
+	// Se puede cambiar por env (LLM_EMBED_MODEL).
 	if cfg.Embed.BaseURL == "" {
 		cfg.Embed.BaseURL = "http://localhost:11434"
 	}
 	if cfg.Embed.Model == "" {
-		cfg.Embed.Model = "nomic-embed-text"
+		cfg.Embed.Model = "embeddinggemma"
 	}
 	if cfg.Embed.Timeout == 0 {
 		cfg.Embed.Timeout = 60 * time.Second
