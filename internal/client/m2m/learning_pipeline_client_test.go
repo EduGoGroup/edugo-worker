@@ -387,3 +387,50 @@ func TestLearningPipelineClient_UpdateCandidates_409Conflict(t *testing.T) {
 		t.Fatalf("esperaba ErrPipelineConflict, got: %v", err)
 	}
 }
+
+func TestLearningPipelineClient_DeliverJob_OK(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != http.MethodPost {
+			t.Errorf("método inesperado: %s", r.Method)
+		}
+		if !strings.HasSuffix(r.URL.Path, "/pipeline/jobs/job-1/deliver") {
+			t.Errorf("path inesperado: %s", r.URL.Path)
+		}
+		_ = json.NewEncoder(w).Encode(deliverResponse{AssessmentID: "asmt-9", Questions: 12})
+	}))
+	defer srv.Close()
+
+	c := NewLearningPipelineClient(LearningPipelineClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"tok"}})
+	id, n, err := c.DeliverJob(context.Background(), "job-1")
+	if err != nil {
+		t.Fatalf("DeliverJob falló: %v", err)
+	}
+	if id != "asmt-9" || n != 12 {
+		t.Fatalf("respuesta mal mapeada: id=%q questions=%d", id, n)
+	}
+}
+
+func TestLearningPipelineClient_DeliverJob_422Permanent(t *testing.T) {
+	// 422 (sin candidatas seleccionadas) es un 4xx → ErrLearningPermanent (dead-end → DLQ).
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(http.StatusUnprocessableEntity)
+		_, _ = w.Write([]byte(`{"error":"no selected candidates"}`))
+	}))
+	defer srv.Close()
+
+	c := NewLearningPipelineClient(LearningPipelineClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"tok"}})
+	_, _, err := c.DeliverJob(context.Background(), "job-1")
+	if !errors.Is(err, ErrLearningPermanent) {
+		t.Fatalf("esperaba ErrLearningPermanent, got: %v", err)
+	}
+	if errors.Is(err, ErrPipelineConflict) {
+		t.Fatal("422 no debe ser ErrPipelineConflict")
+	}
+}
+
+func TestLearningPipelineClient_DeliverJob_EmptyJobID(t *testing.T) {
+	c := NewLearningPipelineClient(LearningPipelineClientConfig{BaseURL: "http://unused", TokenProvider: staticToken{"tok"}})
+	if _, _, err := c.DeliverJob(context.Background(), ""); err == nil {
+		t.Fatal("job_id vacío debería fallar sin llamar a la red")
+	}
+}

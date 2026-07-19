@@ -48,6 +48,9 @@ func Load() (*Config, error) {
 			"material_pipeline.relevance_min":      "MATERIAL_PIPELINE_RELEVANCE_MIN",
 			"material_pipeline.relevance_mode":     "MATERIAL_PIPELINE_RELEVANCE_MODE",
 			"material_pipeline.verbatim_max_words": "MATERIAL_PIPELINE_VERBATIM_MAX_WORDS",
+			// Selección final (plan 044 D-044.5): cupo de preguntas cuando el job no expone
+			// target_questions por M2M.
+			"material_pipeline.target_questions_default": "MATERIAL_PIPELINE_TARGET_QUESTIONS_DEFAULT",
 			// LLM (plan 039 D-039.3): credenciales/URL/modelo de EduGo, no por escuela.
 			"llm.local.base_url": "LLM_LOCAL_BASE_URL",
 			"llm.local.model":    "LLM_LOCAL_MODEL",

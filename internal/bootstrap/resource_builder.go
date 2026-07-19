@@ -3,6 +3,7 @@ package bootstrap
 import (
 	"context"
 	"fmt"
+	"sync"
 	"time"
 
 	"github.com/EduGoGroup/edugo-shared/lifecycle"
@@ -22,6 +23,7 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
 	llmapi "github.com/EduGoGroup/edugo-worker/internal/llm/api"
 	"github.com/EduGoGroup/edugo-worker/internal/llm/ollama"
+	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline/reduce"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
 
@@ -502,6 +504,13 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		MinWords:            mpCfg.ChunkMinWords,
 		MergeThresholdWords: mpCfg.ChunkMergeThresholdWords,
 	}
+	// Fase 2 del carril (reduce, plan 044 F3c): las cuatro pasadas destilan las candidatas
+	// sobregeneradas de la fase 1 hasta el draft. Se cablean con Resources —embedder,
+	// providers local/api, cliente M2M, config del riel— y se inyectan al processor.
+	reduceDeps, ok := b.buildReduceDeps(localProvider, mpCfg)
+	if !ok {
+		return b // b.err ya fijado por buildReduceDeps
+	}
 	b.processorRegistry.Register(processor.NewMaterialPipelineProcessor(
 		b.settingsClient,
 		b.learningPipelineClient,
@@ -510,12 +519,96 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 		m2m.DownloadFile,
 		chunkCfg,
 		mpCfg.DownloadMaxBytes,
+		reduceDeps,
 		b.logger,
 	))
 
-	b.logger.Info("✅ Processor registry initialized (carriles revisión 040 + preparación 042 + materiales 043)",
+	b.logger.Info("✅ Processor registry initialized (carriles revisión 040 + preparación 042 + materiales 043/044)",
 		"count", b.processorRegistry.Count())
 	return b
+}
+
+// relevanceScorer es el subconjunto de un provider LLM que puntúa relevancia (pasada 2
+// del reduce, D-044.3). NO está en llm.LLMProvider (es propio del carril 044); los
+// providers concretos (ollama/api) lo satisfacen. Se asserta desde el mapa de providers
+// —cuyo tipo estático es llm.LLMProvider, sin ScoreRelevance— para pasarlo a la pasada 2.
+type relevanceScorer interface {
+	ScoreRelevance(ctx context.Context, req llm.RelevanceRequest) (llm.RelevanceResult, error)
+}
+
+// cachingChunkTextResolver envuelve GetChunkText con una caché en memoria por chunk_id
+// para no re-pedir el mismo trozo dentro de una corrida del reduce (varias candidatas
+// nacen del mismo chunk y comparten su texto). El candado verbatim local_only (D-044.4,
+// solo activo en RelevanceMode="api") es su único consumidor: en el default local la
+// caché nunca se puebla. Los chunk_id son únicos por material, así que reusar el resolver
+// entre jobs no mezcla textos; la caché no se vacía por job (aceptable: solo crece en
+// modo api, opt-in). Seguro para uso concurrente.
+type cachingChunkTextResolver struct {
+	client *m2m.LearningPipelineClient
+	mu     sync.Mutex
+	cache  map[string]string
+}
+
+func (r *cachingChunkTextResolver) ChunkText(ctx context.Context, chunkID string) (string, error) {
+	r.mu.Lock()
+	if text, ok := r.cache[chunkID]; ok {
+		r.mu.Unlock()
+		return text, nil
+	}
+	r.mu.Unlock()
+
+	text, err := r.client.GetChunkText(ctx, chunkID)
+	if err != nil {
+		return "", err
+	}
+	r.mu.Lock()
+	r.cache[chunkID] = text
+	r.mu.Unlock()
+	return text, nil
+}
+
+// buildReduceDeps construye las cuatro pasadas del reduce (fase 2) con las dependencias ya
+// inicializadas: el cliente M2M del carril como store/ideas, el embedder para el dedupe,
+// los providers LLM para el juez de equivalencia (dedupe) y de relevancia, y la config del
+// riel. Respeta el candado ADR 0036 §4 / D-044.4: el juez del dedupe es SIEMPRE local (la
+// pasada 1 no evalúa el candado verbatim, así que jamás sale por API); la relevancia recibe
+// local + api (opcional) y decide por candidata (IsLocalOnly manda). Devuelve ok=false y
+// fija b.err si el provider local no expone ScoreRelevance.
+func (b *ResourceBuilder) buildReduceDeps(localProvider llm.LLMProvider, mpCfg config.MaterialPipelineConfig) (processor.ReduceDeps, bool) {
+	// La relevancia necesita ScoreRelevance (fuera de llm.LLMProvider): assert del local.
+	localScorer, ok := localProvider.(relevanceScorer)
+	if !ok {
+		b.err = fmt.Errorf("el provider LLM local no implementa ScoreRelevance (reduce fase 2, D-044.3)")
+		return processor.ReduceDeps{}, false
+	}
+	// El provider por API es opcional (RelevanceMode="api"); si falta o no puntúa, la
+	// relevancia cae a local por candidata sin romper el carril.
+	var apiScorer relevanceScorer
+	if api := b.llmProviders["api"]; api != nil {
+		if s, ok := api.(relevanceScorer); ok {
+			apiScorer = s
+		} else {
+			b.logger.Warn("provider LLM por API no implementa ScoreRelevance; relevancia mode=api caerá a local")
+		}
+	}
+
+	chunkResolver := &cachingChunkTextResolver{client: b.learningPipelineClient, cache: map[string]string{}}
+
+	dedupeCfg := reduce.Config{DupHigh: mpCfg.DedupeHigh, DupLow: mpCfg.DedupeLow}
+	relevanceCfg := reduce.RelevanceConfig{
+		RelevanceMin:     mpCfg.RelevanceMin,
+		Mode:             mpCfg.RelevanceMode,
+		VerbatimMaxWords: mpCfg.VerbatimMaxWords,
+	}
+
+	return processor.ReduceDeps{
+		// Juez del dedupe = local por código (candado D-044.4): la pasada 1 no filtra verbatim.
+		Dedupe:                 reduce.NewDedupePass(b.learningPipelineClient, b.embedder, localProvider, dedupeCfg, b.logger),
+		Relevance:              reduce.NewRelevancePass(b.learningPipelineClient, localScorer, apiScorer, chunkResolver, relevanceCfg, b.logger),
+		Quality:                reduce.NewQualityPass(b.learningPipelineClient, b.logger),
+		Selection:              reduce.NewSelectionPass(b.learningPipelineClient, b.learningPipelineClient, b.logger),
+		TargetQuestionsDefault: mpCfg.TargetQuestionsDefault,
+	}, true
 }
 
 // WithHealthChecks configura los health checks para las dependencias

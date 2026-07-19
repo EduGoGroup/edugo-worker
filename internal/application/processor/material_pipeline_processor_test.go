@@ -12,6 +12,7 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
 	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
+	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline/reduce"
 )
 
 // --- mocks del carril de materiales ---
@@ -47,6 +48,11 @@ type mockMaterialPipeline struct {
 
 	updateErr   error
 	updateCalls []updateRecord
+
+	deliverAssessmentID string
+	deliverQuestions    int
+	deliverErr          error
+	deliverCalls        int
 }
 
 func (m *mockMaterialPipeline) record(name string) {
@@ -106,6 +112,63 @@ func (m *mockMaterialPipeline) UpdateJobStatus(_ context.Context, _, status stri
 	m.record("UpdateJobStatus:" + status)
 	m.updateCalls = append(m.updateCalls, updateRecord{status: status, phase: phase, lastError: lastError})
 	return m.updateErr
+}
+
+func (m *mockMaterialPipeline) DeliverJob(_ context.Context, _ string) (string, int, error) {
+	m.record("DeliverJob")
+	m.deliverCalls++
+	if m.deliverErr != nil {
+		return "", 0, m.deliverErr
+	}
+	return m.deliverAssessmentID, m.deliverQuestions, nil
+}
+
+// --- fakes de las pasadas del reduce (fase 2) ---
+//
+// Cada fake registra su nº de llamadas y opcionalmente devuelve un error, para probar el
+// encadenamiento y la clasificación sin ejercer embeddings/LLM/learning reales. Los
+// reportes van en cero (el processor solo los loguea).
+
+type fakeDedupe struct {
+	calls int
+	err   error
+}
+
+func (f *fakeDedupe) Run(_ context.Context, _ string) (reduce.DedupeReport, error) {
+	f.calls++
+	return reduce.DedupeReport{}, f.err
+}
+
+type fakeRelevance struct {
+	calls int
+	err   error
+}
+
+func (f *fakeRelevance) Run(_ context.Context, _ string) (reduce.RelevanceReport, error) {
+	f.calls++
+	return reduce.RelevanceReport{}, f.err
+}
+
+type fakeQuality struct {
+	calls int
+	err   error
+}
+
+func (f *fakeQuality) Run(_ context.Context, _ string) (reduce.QualityReport, error) {
+	f.calls++
+	return reduce.QualityReport{}, f.err
+}
+
+type fakeSelection struct {
+	calls     int
+	gotTarget int
+	err       error
+}
+
+func (f *fakeSelection) Run(_ context.Context, _ string, targetQuestions int) (reduce.SelectionReport, error) {
+	f.calls++
+	f.gotTarget = targetQuestions
+	return reduce.SelectionReport{}, f.err
 }
 
 // digestOutcome es la salida de UNA llamada a DigestChunk (para probar el reintento por
@@ -185,14 +248,35 @@ func (m *mockMaterialProvider) Name() string { return "mock-local" }
 
 // --- helpers ---
 
+// testTargetQuestions es el cupo por defecto que newMaterialProcessor inyecta en la
+// selección (fase 2) para los tests que no lo controlan.
+const testTargetQuestions = 20
+
+// defaultReduceDeps arma unas dependencias del reduce con pasadas fake que SIEMPRE
+// suceden (encadenamiento feliz por defecto). Los tests que quieren inspeccionar o
+// forzar un error de una pasada construyen las suyas con newMaterialProcessorWithReduce.
+func defaultReduceDeps() ReduceDeps {
+	return ReduceDeps{
+		Dedupe:                 &fakeDedupe{},
+		Relevance:              &fakeRelevance{},
+		Quality:                &fakeQuality{},
+		Selection:              &fakeSelection{},
+		TargetQuestionsDefault: testTargetQuestions,
+	}
+}
+
 func newMaterialProcessor(settings SchoolSettingsReader, pipe MaterialPipelineClient, prov MaterialLLMProvider) *MaterialPipelineProcessor {
+	return newMaterialProcessorWithReduce(settings, pipe, prov, defaultReduceDeps())
+}
+
+func newMaterialProcessorWithReduce(settings SchoolSettingsReader, pipe MaterialPipelineClient, prov MaterialLLMProvider, reduceDeps ReduceDeps) *MaterialPipelineProcessor {
 	// El extractor y la descarga NO deben usarse en estos tests (el job entra ya
 	// porcionado → la fase 0 se salta sola). Si alguno se invoca, falla claro.
 	ex := &mockPhase0Extractor{err: errors.New("extractor no debe invocarse en estos tests")}
 	dl := func(_ context.Context, _ string, _ int64) ([]byte, error) {
 		return nil, errors.New("descarga no debe invocarse en estos tests")
 	}
-	return NewMaterialPipelineProcessor(settings, pipe, prov, ex, dl, chunking.DefaultConfig(), 1024, newTestLogger())
+	return NewMaterialPipelineProcessor(settings, pipe, prov, ex, dl, chunking.DefaultConfig(), 1024, reduceDeps, newTestLogger())
 }
 
 func materialEventJSON(jobID, materialID, schoolID string) []byte {
@@ -315,8 +399,9 @@ func TestMaterialProcess_FullFlow_Order(t *testing.T) {
 	}
 
 	// Orden esperado: el processor GET job (guarda 404/terminal), la fase 0 GET job de
-	// nuevo (reanudación → no-op), y luego el loop de fase 1.
-	want := []string{"GetJob", "GetJob", "GetNextPendingChunk", "DigestChunk", "ProposeCandidates", "SaveChunkArtifacts", "GetNextPendingChunk", "UpdateJobStatus:done"}
+	// nuevo (reanudación → no-op), el loop de fase 1 y, encadenada, la entrega de la fase 2
+	// (las pasadas del reduce son fakes que no registran; solo el DeliverJob del cliente).
+	want := []string{"GetJob", "GetJob", "GetNextPendingChunk", "DigestChunk", "ProposeCandidates", "SaveChunkArtifacts", "GetNextPendingChunk", "UpdateJobStatus:done", "DeliverJob"}
 	if len(seq) != len(want) {
 		t.Fatalf("secuencia = %v, se esperaba %v", seq, want)
 	}
@@ -722,13 +807,35 @@ func TestMaterialProcess_SettingsError_Transient(t *testing.T) {
 	}
 }
 
-func TestMaterialProcess_TerminalJob_Acks(t *testing.T) {
-	pipe := &mockMaterialPipeline{job: &m2m.PipelineJob{JobID: "job-1", Status: jobStatusDone, ChunkCounts: map[string]int{}}}
+func TestMaterialProcess_FailedJob_Acks(t *testing.T) {
+	pipe := &mockMaterialPipeline{job: &m2m.PipelineJob{JobID: "job-1", Status: jobStatusFailed, ChunkCounts: map[string]int{}}}
 	if err := newMaterialProcessor(onSettings(), pipe, &mockMaterialProvider{}).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
-		t.Fatalf("job terminal debería ACKear, got %v", err)
+		t.Fatalf("job failed debería ACKear, got %v", err)
 	}
-	if pipe.nextIdx != 0 || len(pipe.updateCalls) != 0 {
-		t.Fatalf("job terminal no debe entrar al loop ni actualizar estado")
+	if pipe.nextIdx != 0 || len(pipe.updateCalls) != 0 || pipe.deliverCalls != 0 {
+		t.Fatalf("job failed no debe entrar al loop, actualizar estado ni entregar")
+	}
+}
+
+func TestMaterialProcess_DonePhase2_NoOpAcks(t *testing.T) {
+	// Un job ya entregado (done + assessment_id) es fase 2 completa: no-op benigno. No
+	// corre el reduce ni re-entrega.
+	assessment := "assess-1"
+	pipe := &mockMaterialPipeline{job: &m2m.PipelineJob{
+		JobID: "job-1", Status: jobStatusDone, Phase: 2,
+		AssessmentID: &assessment, ChunkCounts: map[string]int{},
+	}}
+	dedupe, relevance, quality, selection := &fakeDedupe{}, &fakeRelevance{}, &fakeQuality{}, &fakeSelection{}
+	deps := ReduceDeps{Dedupe: dedupe, Relevance: relevance, Quality: quality, Selection: selection, TargetQuestionsDefault: testTargetQuestions}
+
+	if err := newMaterialProcessorWithReduce(onSettings(), pipe, &mockMaterialProvider{}, deps).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("job entregado debería ACKear, got %v", err)
+	}
+	if pipe.nextIdx != 0 || len(pipe.updateCalls) != 0 || pipe.deliverCalls != 0 {
+		t.Fatalf("job ya entregado no debe entrar al loop, actualizar estado ni re-entregar")
+	}
+	if dedupe.calls != 0 || relevance.calls != 0 || quality.calls != 0 || selection.calls != 0 {
+		t.Fatalf("job ya entregado no debe correr ninguna pasada del reduce")
 	}
 }
 
@@ -740,5 +847,118 @@ func TestMaterialProcess_JobDeleted_Permanent(t *testing.T) {
 	}
 	if len(pipe.updateCalls) != 0 {
 		t.Fatalf("no hay job que marcar failed si GET job dio 404")
+	}
+}
+
+// --- fase 2 (reduce): encadenamiento, reanudación y entrega ---
+
+func TestMaterialProcess_Phase1ChainsPhase2(t *testing.T) {
+	// La fase 1 completa (job processing sin pendientes → cierra done/phase1) encadena la
+	// fase 2: las cuatro pasadas corren en orden y luego la entrega. El cupo de la selección
+	// es el default del riel (el M2M no expone target_questions).
+	pipe := &mockMaterialPipeline{job: processingJob(), deliverAssessmentID: "assess-9", deliverQuestions: 7}
+	pipe.nextIdx, pipe.pending = 0, nil // sin pendientes: fase 1 cierra de una
+
+	dedupe, relevance, quality, selection := &fakeDedupe{}, &fakeRelevance{}, &fakeQuality{}, &fakeSelection{}
+	deps := ReduceDeps{Dedupe: dedupe, Relevance: relevance, Quality: quality, Selection: selection, TargetQuestionsDefault: testTargetQuestions}
+
+	if err := newMaterialProcessorWithReduce(onSettings(), pipe, &mockMaterialProvider{}, deps).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("el encadenamiento fase1→fase2 no debe fallar, got %v", err)
+	}
+	if dedupe.calls != 1 || relevance.calls != 1 || quality.calls != 1 || selection.calls != 1 {
+		t.Fatalf("las cuatro pasadas deben correr una vez, got dedupe=%d rel=%d qual=%d sel=%d",
+			dedupe.calls, relevance.calls, quality.calls, selection.calls)
+	}
+	if selection.gotTarget != testTargetQuestions {
+		t.Fatalf("la selección debe recibir el cupo default %d, got %d", testTargetQuestions, selection.gotTarget)
+	}
+	if pipe.deliverCalls != 1 {
+		t.Fatalf("la entrega M2M debe llamarse una vez, got %d", pipe.deliverCalls)
+	}
+	// La fase 1 cerró done/phase1; la fase 2 NO vuelve a tocar el status (deliver lo cierra
+	// server-side). Debe haber exactamente un PATCH done/phase1.
+	if len(pipe.updateCalls) != 1 || pipe.updateCalls[0].status != jobStatusDone || pipe.updateCalls[0].phase != 1 {
+		t.Fatalf("la fase 2 no debe PATCHear el status del job, got %+v", pipe.updateCalls)
+	}
+}
+
+func TestMaterialProcess_RetriggerDonePhase1_RunsOnlyPhase2(t *testing.T) {
+	// Re-disparo del evento sobre un job ya done de fase 1 (sin assessment_id): se reanuda
+	// DIRECTO en la fase 2, sin repetir fase 0/1 (no se pide un chunk pendiente ni se PATCHea
+	// el status; deliver lo cierra server-side).
+	pipe := &mockMaterialPipeline{
+		job:                 &m2m.PipelineJob{JobID: "job-1", Status: jobStatusDone, Phase: 1, ChunkCounts: map[string]int{"done": 3}},
+		deliverAssessmentID: "assess-2", deliverQuestions: 5,
+	}
+	dedupe, relevance, quality, selection := &fakeDedupe{}, &fakeRelevance{}, &fakeQuality{}, &fakeSelection{}
+	deps := ReduceDeps{Dedupe: dedupe, Relevance: relevance, Quality: quality, Selection: selection, TargetQuestionsDefault: testTargetQuestions}
+
+	if err := newMaterialProcessorWithReduce(onSettings(), pipe, &mockMaterialProvider{}, deps).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
+		t.Fatalf("el re-disparo sobre done/fase1 debe correr solo la fase 2, got %v", err)
+	}
+	if dedupe.calls != 1 || relevance.calls != 1 || quality.calls != 1 || selection.calls != 1 {
+		t.Fatalf("la fase 2 debe correr completa, got dedupe=%d rel=%d qual=%d sel=%d",
+			dedupe.calls, relevance.calls, quality.calls, selection.calls)
+	}
+	if pipe.deliverCalls != 1 {
+		t.Fatalf("la entrega debe llamarse una vez, got %d", pipe.deliverCalls)
+	}
+	if pipe.nextIdx != 0 {
+		t.Fatalf("no debe repetirse la fase 1 (GetNextPendingChunk), nextIdx=%d", pipe.nextIdx)
+	}
+	if len(pipe.updateCalls) != 0 {
+		t.Fatalf("la reanudación en fase 2 no debe PATCHear el status, got %+v", pipe.updateCalls)
+	}
+}
+
+func TestMaterialProcess_Deliver422_PermanentNotDone(t *testing.T) {
+	// La entrega devuelve 422 (sin candidatas seleccionadas) → ErrLearningPermanent: sube
+	// como permanente (→ DLQ) y NO marca el job done de fase 2. failIfPermanent lo marca
+	// failed best-effort; nunca done.
+	pipe := &mockMaterialPipeline{
+		job:        &m2m.PipelineJob{JobID: "job-1", Status: jobStatusDone, Phase: 1, ChunkCounts: map[string]int{"done": 3}},
+		deliverErr: m2m.ErrLearningPermanent,
+	}
+	deps := defaultReduceDeps()
+
+	err := newMaterialProcessorWithReduce(onSettings(), pipe, &mockMaterialProvider{}, deps).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1"))
+	if err == nil || classifyError(err) != ErrorTypePermanent {
+		t.Fatalf("un 422 en la entrega debe ser permanente, got %v", err)
+	}
+	if pipe.deliverCalls != 1 {
+		t.Fatalf("la entrega debe intentarse una vez, got %d", pipe.deliverCalls)
+	}
+	for _, u := range pipe.updateCalls {
+		if u.status == jobStatusDone {
+			t.Fatalf("un 422 en la entrega NO debe marcar el job done, got %+v", pipe.updateCalls)
+		}
+	}
+	// best-effort: se marca failed/phase2 con rastro.
+	last := pipe.updateCalls[len(pipe.updateCalls)-1]
+	if last.status != jobStatusFailed || last.phase != 2 || last.lastError == nil {
+		t.Fatalf("un permanente en la entrega debe marcar failed/phase2 (best-effort), got %+v", pipe.updateCalls)
+	}
+}
+
+func TestMaterialProcess_ReducePassTransient_PropagatesNoDeliver(t *testing.T) {
+	// Un fallo transitorio de una pasada del reduce (p.ej. 5xx del store) sube intacto: NO
+	// marca failed (el redelivery reanuda por status) y NO entrega.
+	pipe := &mockMaterialPipeline{
+		job: &m2m.PipelineJob{JobID: "job-1", Status: jobStatusDone, Phase: 1, ChunkCounts: map[string]int{"done": 3}},
+	}
+	deps := defaultReduceDeps()
+	deps.Relevance = &fakeRelevance{err: errors.New("learning 503")}
+
+	err := newMaterialProcessorWithReduce(onSettings(), pipe, &mockMaterialProvider{}, deps).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1"))
+	if err == nil || classifyError(err) != ErrorTypeTransient {
+		t.Fatalf("un fallo transitorio del reduce debe subir transitorio, got %v", err)
+	}
+	if pipe.deliverCalls != 0 {
+		t.Fatalf("un fallo del reduce NO debe entregar, got deliverCalls=%d", pipe.deliverCalls)
+	}
+	for _, u := range pipe.updateCalls {
+		if u.status == jobStatusFailed {
+			t.Fatalf("un transitorio del reduce NO debe marcar failed, got %+v", pipe.updateCalls)
+		}
 	}
 }

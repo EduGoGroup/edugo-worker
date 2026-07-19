@@ -227,6 +227,11 @@ type MaterialPipelineConfig struct {
 	// una candidata que cite literalmente MÁS de este número de palabras contiguas del
 	// chunk se marca local_only y sus pasadas LLM nunca salen por API. Default 25.
 	VerbatimMaxWords int `mapstructure:"verbatim_max_words"`
+	// TargetQuestionsDefault es el cupo de preguntas de la selección final (pasada 4,
+	// D-044.5) cuando el job no expone `target_questions`. El GET job de learning NO
+	// entrega los params del job hoy (los guarda server-side pero no los publica en el
+	// read-model M2M), así que el worker cae a este default. Default 20.
+	TargetQuestionsDefault int `mapstructure:"target_questions_default"`
 }
 
 // ServiceJWTConfig configura la firma del service JWT M2M (HS256) que el worker
@@ -444,6 +449,9 @@ func (c *Config) GetMaterialPipelineConfigWithDefaults() MaterialPipelineConfig 
 	}
 	if cfg.VerbatimMaxWords == 0 {
 		cfg.VerbatimMaxWords = 25
+	}
+	if cfg.TargetQuestionsDefault == 0 {
+		cfg.TargetQuestionsDefault = 20
 	}
 	return cfg
 }

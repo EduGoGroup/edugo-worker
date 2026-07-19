@@ -33,6 +33,7 @@ const (
 	pipelineCandidatesPath      = "/api/v1/internal/pipeline/candidates"
 	pipelineJobIdeasPathFmt     = "/api/v1/internal/pipeline/jobs/%s/ideas"
 	pipelineChunkTextPathFmt    = "/api/v1/internal/pipeline/chunks/%s/text"
+	pipelineDeliverPathFmt      = "/api/v1/internal/pipeline/jobs/%s/deliver"
 )
 
 // PipelineJob es el estado de un job del carril material→evaluación (GET job).
@@ -137,6 +138,14 @@ type updateCandidatesResponse struct {
 // no produjo ideas; el caller cae al agregado de source_ideas (ver SelectionPass).
 type jobIdeasResponse struct {
 	MainIdeas []string `json:"main_ideas"`
+}
+
+// deliverResponse es el sobre de POST jobs/{id}/deliver (plan 044 D-044.6): el id del
+// assessment draft creado (o el ya existente en una reentrega idempotente) y su número
+// de preguntas.
+type deliverResponse struct {
+	AssessmentID string `json:"assessment_id"`
+	Questions    int    `json:"questions"`
 }
 
 // chunkTextResponse es el sobre de GET chunks/{id}/text: el texto plano de un chunk ya
@@ -396,6 +405,27 @@ func (c *LearningPipelineClient) UpdateCandidates(ctx context.Context, updates [
 		return 0, err
 	}
 	return out.Updated, nil
+}
+
+// DeliverJob cierra la fase 2 del reduce (plan 044 D-044.6): pide a learning que arme el
+// draft desde las candidatas `selected` del job y lo persista (assessment_id + job a `done`
+// fase 2, todo server-side). Devuelve el id del assessment creado y su número de preguntas.
+// Idempotente: un job ya entregado responde 200 con el assessment existente (mismo id).
+// Semántica de estado (helper do): 422 (sin candidatas seleccionadas o import rechazado)
+// y 404 → ErrLearningPermanent (permanente, el job NO avanza server-side; el caller lo
+// trata como dead-end → DLQ); 5xx/red/timeout → transitorio (el redelivery reanuda la
+// fase 2 por status, las pasadas saltan lo terminal).
+func (c *LearningPipelineClient) DeliverJob(ctx context.Context, jobID string) (string, int, error) {
+	if jobID == "" {
+		return "", 0, fmt.Errorf("job_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelineDeliverPathFmt, jobID)
+
+	var out deliverResponse
+	if err := c.do(ctx, http.MethodPost, url, nil, &out); err != nil {
+		return "", 0, err
+	}
+	return out.AssessmentID, out.Questions, nil
 }
 
 // do ejecuta una request M2M autenticada y (si out != nil) decodifica la respuesta.
