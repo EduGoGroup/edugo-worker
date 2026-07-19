@@ -1,0 +1,434 @@
+{
+  "model": "gemma4:e4b",
+  "provider": "ollama:gemma4:e4b",
+  "cases": 60,
+  "malformed": 0,
+  "elapsed_ms": 328807,
+  "distributions": [
+    {
+      "label": "central",
+      "n": 20,
+      "malformed": 0,
+      "min": 0.7,
+      "p25": 0.7,
+      "median": 0.9,
+      "p75": 0.9,
+      "max": 1,
+      "mean": 0.8300000000000001
+    },
+    {
+      "label": "peripheral",
+      "n": 20,
+      "malformed": 0,
+      "min": 0,
+      "p25": 0.07500000000000001,
+      "median": 0.2,
+      "p75": 0.3,
+      "max": 0.3,
+      "mean": 0.17999999999999997
+    },
+    {
+      "label": "unanswerable",
+      "n": 20,
+      "malformed": 0,
+      "min": 0,
+      "p25": 0,
+      "median": 0,
+      "p75": 0,
+      "max": 0.3,
+      "mean": 0.045000000000000005
+    }
+  ],
+  "thresholds": [
+    {
+      "threshold": 0.3,
+      "false_alive": 1,
+      "false_drop_central": 0,
+      "false_drop_peripheral": 12,
+      "false_drop_total": 12
+    },
+    {
+      "threshold": 0.4,
+      "false_alive": 0,
+      "false_drop_central": 0,
+      "false_drop_peripheral": 20,
+      "false_drop_total": 20
+    },
+    {
+      "threshold": 0.5,
+      "false_alive": 0,
+      "false_drop_central": 0,
+      "false_drop_peripheral": 20,
+      "false_drop_total": 20
+    },
+    {
+      "threshold": 0.6,
+      "false_alive": 0,
+      "false_drop_central": 0,
+      "false_drop_peripheral": 20,
+      "false_drop_total": 20
+    }
+  ],
+  "scores": [
+    {
+      "id": "r001",
+      "label": "central",
+      "score": 0.7,
+      "rationale": "La pregunta aborda directamente la inclusión o exclusión de componentes del costo total, lo cual es una idea principal mencionada en el material."
+    },
+    {
+      "id": "r002",
+      "label": "central",
+      "score": 0.7,
+      "rationale": "La pregunta aborda directamente el mecanismo de desconexión de potencia al presionar el embrague, lo cual es una idea principal mencionada."
+    },
+    {
+      "id": "r003",
+      "label": "central",
+      "score": 0.9,
+      "rationale": "La pregunta aborda directamente la profundidad mínima aconsejable de los surcos, que es una idea principal explícitamente mencionada en el material."
+    },
+    {
+      "id": "r004",
+      "label": "central",
+      "score": 0.7,
+      "rationale": "La pregunta aborda directamente un concepto central mencionado en las ideas principales (la dependencia de la fuerza centrífuga de la velocidad y el radio)."
+    },
+    {
+      "id": "r005",
+      "label": "central",
+      "score": 0.8,
+      "rationale": "La pregunta aborda directamente la función principal del airbag, lo cual es una idea central mencionada en el material."
+    },
+    {
+      "id": "r006",
+      "label": "central",
+      "score": 0.9,
+      "rationale": "La pregunta aborda directamente la identificación de las múltiples situaciones de riesgo mencionadas como un punto central del material."
+    },
+    {
+      "id": "r007",
+      "label": "central",
+      "score": 0.9,
+      "rationale": "La pregunta aborda directamente la definición de percepción selectiva mencionada en las ideas principales."
+    },
+    {
+      "id": "r008",
+      "label": "central",
+      "score": 0.8,
+      "rationale": "La pregunta aborda directamente la manifestación de las habilidades riesgosas mencionadas en la primera idea principal."
+    },
+    {
+      "id": "r009",
+      "label": "central",
+      "score": 0.9,
+      "rationale": "La pregunta aborda directamente la jerarquía de afectación funcional mencionada en una de las ideas principales del material."
+    },
+    {
+      "id": "r010",
+      "label": "central",
+      "score": 0.7,
+      "rationale": "La pregunta aborda directamente un efecto específico (anfetaminas) mencionado en una de las ideas principales sobre los efectos de las drogas."
+    },
+    {
+      "id": "r011",
+      "label": "central",
+      "score": 0.7,
+      "rationale": "La pregunta aborda directamente la naturaleza de los microsueños como un fenómeno pasable desapercibido, lo cual es una idea principal."
+    },
+    {
+      "id": "r012",
+      "label": "central",
+      "score": 1,
+      "rationale": "La pregunta aborda directamente dos datos estadísticos fundamentales mencionados en la primera idea principal sobre los atropellos."
+    },
+    {
+      "id": "r013",
+      "label": "central",
+      "score": 0.9,
+      "rationale": "La pregunta aborda directamente la autoridad competente para regular el tránsito ante fallas de señalización, lo cual es una idea principal del material."
+    },
+    {
+      "id": "r014",
+      "label": "central",
+      "score": 0.9,
+      "rationale": "La pregunta aborda directamente la descripción visual de los pasos peatonales no semaforizados, lo cual es una idea principal del material."
+    },
+    {
+      "id": "r015",
+      "label": "central",
+      "score": 1,
+      "rationale": "La pregunta aborda directamente un límite de velocidad específico mencionado como idea principal del material."
+    },
+    {
+      "id": "r016",
+      "label": "central",
+      "score": 0.9,
+      "rationale": "La pregunta aborda directamente la regla general de estacionamiento en calzada cuando no hay señalización específica."
+    },
+    {
+      "id": "r017",
+      "label": "central",
+      "score": 0.7,
+      "rationale": "La pregunta aborda directamente la razón principal mencionada en las ideas sobre los buses y camiones y sus luces."
+    },
+    {
+      "id": "r018",
+      "label": "central",
+      "score": 0.7,
+      "rationale": "La pregunta aborda directamente la excepción mencionada en la primera idea principal sobre estacionar o recoger personas."
+    },
+    {
+      "id": "r019",
+      "label": "central",
+      "score": 0.9,
+      "rationale": "La pregunta aborda directamente la técnica de frenado, que es una idea principal tratada en el primer punto del material."
+    },
+    {
+      "id": "r020",
+      "label": "central",
+      "score": 0.9,
+      "rationale": "La pregunta aborda directamente la primera idea principal mencionada sobre el impacto del peso adicional en el consumo de combustible."
+    },
+    {
+      "id": "r021",
+      "label": "peripheral",
+      "score": 0.2,
+      "rationale": "La pregunta se centra en la probabilidad de supervivencia del peatón, un tema que no es abordado directamente ni mencionado en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r022",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "La pregunta se centra en componentes mecánicos de vehículos, un tema no abordado en las ideas principales sobre estadísticas y causas de accidentes."
+    },
+    {
+      "id": "r023",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "La pregunta aborda un concepto avanzado sobre sistemas ABS que no es mencionado en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r024",
+      "label": "peripheral",
+      "score": 0.3,
+      "rationale": "La pregunta aborda el diagnóstico general del desgaste, mientras que las ideas principales se centran específicamente en la profundidad de los surcos y la fricción asociada."
+    },
+    {
+      "id": "r025",
+      "label": "peripheral",
+      "score": 0.3,
+      "rationale": "La pregunta aborda un tema relacionado (desgaste) pero no se centra directamente en las tres ideas principales mencionadas (posición, presión fría, inspección de daños)."
+    },
+    {
+      "id": "r026",
+      "label": "peripheral",
+      "score": 0.3,
+      "rationale": "La pregunta es demasiado general e invita a revisar múltiples elementos (neumáticos, luces, etc.), mientras que las ideas principales se centran en la función específica de tres componentes (neblineras, espejos, ángulo muerto)."
+    },
+    {
+      "id": "r027",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "La pregunta aborda conceptos de física (energía y velocidad) que no son tratados en las ideas principales proporcionadas sobre seguridad vial."
+    },
+    {
+      "id": "r028",
+      "label": "peripheral",
+      "score": 0.3,
+      "rationale": "La pregunta se enfoca en 'beneficios adicionales', lo cual va más allá del concepto central de reducir muertes y lesiones mencionado en las ideas principales."
+    },
+    {
+      "id": "r029",
+      "label": "peripheral",
+      "score": 0.3,
+      "rationale": "La pregunta se centra en la experiencia como determinante absoluto del riesgo, lo cual es un detalle específico que no aborda directamente las ideas principales sobre educación o percepción de riesgo."
+    },
+    {
+      "id": "r030",
+      "label": "peripheral",
+      "score": 0.2,
+      "rationale": "La pregunta aborda un tipo específico de error perceptivo que no se menciona en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r031",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "La pregunta aborda la comparación de la visión humana con depredadores en la oscuridad, un tema no mencionado en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r032",
+      "label": "peripheral",
+      "score": 0.1,
+      "rationale": "La pregunta se centra en la anatomía óptica, un tema no abordado en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r033",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "La pregunta trata sobre la correlación entre edad y tasa de accidentes, lo cual no se aborda en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r034",
+      "label": "peripheral",
+      "score": 0.2,
+      "rationale": "La pregunta aborda el desarrollo moral, un tema que no es mencionado en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r035",
+      "label": "peripheral",
+      "score": 0.3,
+      "rationale": "La pregunta se centra en una situación específica que exige atención, lo cual es un detalle secundario comparado con los conceptos de madurez o el espíritu de las normas."
+    },
+    {
+      "id": "r036",
+      "label": "peripheral",
+      "score": 0.1,
+      "rationale": "La pregunta aborda la seguridad al conducir en general, lo cual no es una idea principal discutida; el material se centra en los efectos específicos de las drogas."
+    },
+    {
+      "id": "r037",
+      "label": "peripheral",
+      "score": 0.3,
+      "rationale": "La pregunta pide ejemplos específicos de medicamentos, lo cual es un detalle secundario no cubierto directamente en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r038",
+      "label": "peripheral",
+      "score": 0.3,
+      "rationale": "La pregunta se centra en las causas del cansancio, mientras que las ideas principales describen los síntomas y comportamientos asociados a los microsueños."
+    },
+    {
+      "id": "r039",
+      "label": "peripheral",
+      "score": 0.2,
+      "rationale": "La pregunta aborda las consecuencias legales del incumplimiento, un tema no mencionado en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r040",
+      "label": "peripheral",
+      "score": 0.2,
+      "rationale": "La pregunta aborda un detalle específico de demarcaciones viales que no se menciona ni se detalla en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r041",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta aborda estadísticas geográficas específicas (porcentaje de accidentes en zonas urbanas) que no son mencionadas en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r042",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta solicita un dato estadístico específico (porcentaje de fallecidos por edad) que no se menciona en las ideas principales sobre la secuencia de eventos viales."
+    },
+    {
+      "id": "r043",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta trata sobre mantenimiento vehicular, lo cual no se aborda en las ideas principales relacionadas con la clasificación de señales reglamentarias, preventivas e informativas."
+    },
+    {
+      "id": "r044",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta trata sobre gases de escape y oxidación, temas que no son abordados en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r045",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta aborda síntomas mecánicos específicos que no son tratados en las ideas principales sobre la función y clasificación de señales viales."
+    },
+    {
+      "id": "r046",
+      "label": "unanswerable",
+      "score": 0.2,
+      "rationale": "La pregunta se enfoca en un tema específico (frenos) que no es abordado directamente como idea principal en el material proporcionado."
+    },
+    {
+      "id": "r047",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta aborda sistemas de frenado avanzados que no son mencionados ni discutidos en las ideas principales proporcionadas."
+    },
+    {
+      "id": "r048",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta trata sobre el mantenimiento de frenos, lo cual no tiene relación alguna con los signos o causas de la somnolencia descritos en las ideas principales."
+    },
+    {
+      "id": "r049",
+      "label": "unanswerable",
+      "score": 0.2,
+      "rationale": "La pregunta se centra en la inspección de neumáticos, un tema no abordado directamente por las ideas principales sobre infracciones o técnicas de frenado."
+    },
+    {
+      "id": "r050",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta trata sobre la mecánica vehicular tras un pinchazo, tema no abordado en las ideas principales relacionadas con los efectos de las drogas."
+    },
+    {
+      "id": "r051",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta trata sobre normas de conducción vehicular, un tema ajeno a la definición geográfica de zonas rurales y urbanas."
+    },
+    {
+      "id": "r052",
+      "label": "unanswerable",
+      "score": 0.3,
+      "rationale": "La pregunta es demasiado general y no se enfoca directamente en las características o riesgos específicos de los microsueños o cambios conductuales descritos como ideas principales."
+    },
+    {
+      "id": "r053",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta aborda una técnica de conducción específica (bloqueo de ruedas sin ABS) que no se menciona en las ideas principales sobre tipos y colores de señales viales."
+    },
+    {
+      "id": "r054",
+      "label": "unanswerable",
+      "score": 0.2,
+      "rationale": "La pregunta se centra en la física vehicular (componentes de agarre) y no aborda las normas específicas sobre estacionar o fallas mecánicas en autopistas."
+    },
+    {
+      "id": "r055",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta trata sobre seguridad pasiva en accidentes, lo cual no es abordado en las ideas principales relacionadas con los efectos del alcohol."
+    },
+    {
+      "id": "r056",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta aborda un cálculo algebraico ajeno a los conceptos de distancia de detención, fuerza centrífuga o frenado vehicular."
+    },
+    {
+      "id": "r057",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta trata sobre un evento histórico ajeno a las ideas principales discutidas sobre la conducción juvenil y la madurez."
+    },
+    {
+      "id": "r058",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta trata sobre geometría y no tiene ninguna relación temática con las ideas principales sobre accidentes peatonales."
+    },
+    {
+      "id": "r059",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta trata sobre literatura y autores, temas completamente ajenos a las normas de estacionamiento descritas en el material."
+    },
+    {
+      "id": "r060",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "La pregunta sobre raíces cuadradas no tiene ninguna relación temática con los sistemas vehiculares o la mecánica descrita en las ideas principales."
+    }
+  ]
+}

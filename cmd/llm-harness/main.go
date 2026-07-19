@@ -49,7 +49,7 @@ oxígeno. En la fase oscura (ciclo de Calvin), el dióxido de carbono se fija pa
 glucosa. La ecuación general es: 6 CO2 + 6 H2O + luz -> C6H12O6 + 6 O2.`
 
 func main() {
-	mode := flag.String("mode", "generate", "modo del harness: generate (contrato 038) | review (corrección, 040 T2c) | prep (preparación, 042 F2d) | review-prep (carril triturado short_answer, 042 F3d) | material (pipeline A/B material→evaluación, 043 F3b) | embed (calibración dedupe por embeddings, 044 F1b)")
+	mode := flag.String("mode", "generate", "modo del harness: generate (contrato 038) | review (corrección, 040 T2c) | prep (preparación, 042 F2d) | review-prep (carril triturado short_answer, 042 F3d) | material (pipeline A/B material→evaluación, 043 F3b) | embed (calibración dedupe por embeddings, 044 F1b) | relevance (calibración umbral relevancia, 044 F2a)")
 	provider := flag.String("provider", "local", "provider LLM: local (alias de ollama) | ollama | api. 'local'/'api' espejan el vocabulario de la política por escuela (D-039.2; 'off' no aplica al harness)")
 	materialPath := flag.String("material", "", "ruta a un archivo de texto con el material (vacío = muestra interna)")
 	title := flag.String("title", "Fotosíntesis — capítulo 3", "título del material")
@@ -71,6 +71,9 @@ func main() {
 	embedModelsCSV := flag.String("embed-models", "nomic-embed-text,embeddinggemma", "modo embed: modelos de embeddings coma-separados a comparar (secuencial)")
 	embedPairsPath := flag.String("embed-pairs", defaultEmbedPairs, "modo embed: ruta a la batería de pares dup/no_dup")
 	embedOutDir := flag.String("embed-out-dir", "", "modo embed: carpeta donde escribir results-<modelo>.json (vacío = junto a -embed-pairs)")
+
+	relevanceCasesPath := flag.String("relevance-cases", defaultRelevanceCases, "modo relevance: ruta a la batería de casos central/peripheral/unanswerable")
+	relevanceOutPath := flag.String("relevance-out", "", "modo relevance: ruta del results-<modelo>.json (vacío = junto a -relevance-cases)")
 
 	flag.Parse()
 
@@ -116,8 +119,10 @@ func main() {
 		runReviewPrep(p, *timeout)
 	case "material":
 		runMaterial(p, *timeout, *materialInputsCSV)
+	case "relevance":
+		runRelevance(p, *ollamaModel, *relevanceCasesPath, *relevanceOutPath, *timeout)
 	default:
-		fatalf("modo desconocido %q (usa generate|review|prep|review-prep|material|embed)", *mode)
+		fatalf("modo desconocido %q (usa generate|review|prep|review-prep|material|embed|relevance)", *mode)
 	}
 }
 

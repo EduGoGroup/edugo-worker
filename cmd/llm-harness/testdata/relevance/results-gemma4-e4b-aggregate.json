@@ -1,0 +1,434 @@
+{
+  "model": "gemma4:e4b",
+  "provider": "ollama:gemma4:e4b",
+  "cases": 60,
+  "malformed": 0,
+  "elapsed_ms": 434634,
+  "distributions": [
+    {
+      "label": "central",
+      "n": 20,
+      "malformed": 0,
+      "min": 0.5,
+      "p25": 1,
+      "median": 1,
+      "p75": 1,
+      "max": 1,
+      "mean": 0.95
+    },
+    {
+      "label": "peripheral",
+      "n": 20,
+      "malformed": 0,
+      "min": 0,
+      "p25": 0,
+      "median": 0.5,
+      "p75": 0.5,
+      "max": 1,
+      "mean": 0.325
+    },
+    {
+      "label": "unanswerable",
+      "n": 20,
+      "malformed": 0,
+      "min": 0,
+      "p25": 0,
+      "median": 0,
+      "p75": 0,
+      "max": 0,
+      "mean": 0
+    }
+  ],
+  "thresholds": [
+    {
+      "threshold": 0.3,
+      "false_alive": 0,
+      "false_drop_central": 0,
+      "false_drop_peripheral": 8,
+      "false_drop_total": 8
+    },
+    {
+      "threshold": 0.4,
+      "false_alive": 0,
+      "false_drop_central": 0,
+      "false_drop_peripheral": 8,
+      "false_drop_total": 8
+    },
+    {
+      "threshold": 0.5,
+      "false_alive": 0,
+      "false_drop_central": 0,
+      "false_drop_peripheral": 8,
+      "false_drop_total": 8
+    },
+    {
+      "threshold": 0.6,
+      "false_alive": 0,
+      "false_drop_central": 2,
+      "false_drop_peripheral": 19,
+      "false_drop_total": 21
+    }
+  ],
+  "scores": [
+    {
+      "id": "r001-a",
+      "label": "central",
+      "score": 0.5,
+      "rationale": "peripheral: La pregunta pide identificar qué elemento NO es un costo, lo cual requiere comparar varios elementos listados en las ideas principales (pérdidas de productividad, sufrimiento físico/psicológico) con opciones no proporcionadas."
+    },
+    {
+      "id": "r002-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente el funcionamiento mecánico básico del vehículo relacionado con la desconexión de potencia al accionar el embrague."
+    },
+    {
+      "id": "r003-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente la profundidad mínima aconsejable de los surcos de rodamiento, un dato específico mencionado en las ideas principales."
+    },
+    {
+      "id": "r004-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: El material establece directamente que la fuerza centrífuga depende de la velocidad y del radio de curvatura."
+    },
+    {
+      "id": "r005-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente la función principal del airbag, un tema tratado explícitamente en las ideas principales."
+    },
+    {
+      "id": "r006-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta solicita identificar los tipos de riesgos que afectan al conductor en una secuencia de eventos viales, lo cual es un tema central abordado en el material."
+    },
+    {
+      "id": "r007-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta describe directamente el concepto de percepción selectiva, un tema abordado en las ideas principales sobre la atención y la conducción."
+    },
+    {
+      "id": "r008-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente la conducta arriesgada de los conductores jóvenes mencionada en las ideas principales."
+    },
+    {
+      "id": "r009-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente la jerarquía de afectación del cuerpo humano al consumir alcohol, un tema central en las ideas sobre conducción bajo influencia."
+    },
+    {
+      "id": "r010-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente las consecuencias de conducir bajo la influencia de drogas específicas mencionadas en el material."
+    },
+    {
+      "id": "r011-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente la naturaleza de los riesgos asociados al cansancio, un tema tratado en detalle sobre microsueños y deterioro de la percepción."
+    },
+    {
+      "id": "r012-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente estadísticas específicas sobre la siniestralidad peatonal mencionadas en las ideas principales."
+    },
+    {
+      "id": "r013-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: El material establece explícitamente que Carabineros de Chile puede regular el tránsito en situaciones como fallas en la señalización o congestión."
+    },
+    {
+      "id": "r014-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente la descripción de un tipo específico de paso peatonal mencionado en las ideas principales."
+    },
+    {
+      "id": "r015-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente un límite de velocidad específico mencionado en las normas de circulación del material."
+    },
+    {
+      "id": "r016-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente las normas de estacionamiento vehicular en la calzada, un tema tratado explícitamente en el material."
+    },
+    {
+      "id": "r017-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: La pregunta aborda directamente una recomendación específica de conducción relacionada con vehículos grandes mencionada en las ideas principales."
+    },
+    {
+      "id": "r018-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: El material establece explícitamente que está prohibido estacionar o recoger personas en autopistas o sus bermas, salvo emergencia."
+    },
+    {
+      "id": "r019-a",
+      "label": "central",
+      "score": 0.5,
+      "rationale": "peripheral: Aunque se relaciona con las condiciones climáticas adversas (nieve/escarcha), la pregunta es específica sobre una 'técnica' de frenado que no se detalla explícitamente como recomendación principal, sino más bien se aborda el tema general del frenado en lluvia y pendientes."
+    },
+    {
+      "id": "r020-a",
+      "label": "central",
+      "score": 1,
+      "rationale": "central: El material menciona explícitamente que el peso adicional incrementa el consumo de combustible."
+    },
+    {
+      "id": "r021-a",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "unanswerable: El material no proporciona información específica sobre la probabilidad de supervivencia de peatones en impactos a velocidades superiores a 45 km/h."
+    },
+    {
+      "id": "r022-a",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "unanswerable: El material no menciona ningún componente vehicular al que se refiera como 'corazón del vehículo' ni describe una función asociada a dicho sistema."
+    },
+    {
+      "id": "r023-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: El material indica qué hacer al bloquearse las ruedas sin ABS (reducir presión), pero no afirma que siempre se reduzca la distancia total de frenado independientemente del sistema."
+    },
+    {
+      "id": "r024-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: Aunque el texto menciona la revisión de neumáticos, esta pregunta se enfoca específicamente en diagnosticar patrones de desgaste anormal, un detalle más allá del mantenimiento general cubierto."
+    },
+    {
+      "id": "r025-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: La pregunta se relaciona con el cuidado de los neumáticos, pero aborda las causas del desgaste en general, mientras que el material se centra más en la revisión periódica y la presión correcta."
+    },
+    {
+      "id": "r026-a",
+      "label": "peripheral",
+      "score": 1,
+      "rationale": "central: La pregunta aborda la revisión preventiva del vehículo, un tema central que incluye revisar neumáticos, luces y otros elementos mencionados en las ideas principales."
+    },
+    {
+      "id": "r027-a",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "unanswerable: El material aborda principios de conducción, seguridad vial y mecánica, pero no profundiza en cálculos físicos como la relación entre velocidad y energía cinética."
+    },
+    {
+      "id": "r028-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: La pregunta aborda los beneficios del cinturón de seguridad, un tema cubierto, pero se enfoca en 'beneficios adicionales' más allá de salvar vidas, lo cual no es especificado en el texto."
+    },
+    {
+      "id": "r029-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: La pregunta aborda la relación entre experiencia y riesgo, un tema relacionado con la conducción segura, pero no establece una regla directa ni es una idea principal explícita del material."
+    },
+    {
+      "id": "r030-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: La pregunta aborda un tipo específico de error perceptivo que es un ejemplo más detallado de las 'interpretaciones erróneas del entorno' mencionadas en el material."
+    },
+    {
+      "id": "r031-a",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "unanswerable: El material no compara la capacidad visual humana con la de depredadores como los halcones ni aborda su eficiencia en condiciones de oscuridad."
+    },
+    {
+      "id": "r032-a",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio aborda temas de tránsito, conducción y seguridad vial, pero no menciona componentes del proceso óptico humano."
+    },
+    {
+      "id": "r033-a",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "unanswerable: El material no contiene información que establezca una relación entre la edad del conductor (jóvenes) y su índice de participación en accidentes."
+    },
+    {
+      "id": "r034-a",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "unanswerable: El material se centra en la seguridad vial, conducción y normativas, no aborda procesos de desarrollo moral."
+    },
+    {
+      "id": "r035-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: La pregunta es general sobre aumentar la exigencia de atención, pero las ideas principales detallan varias situaciones específicas (lluvia, baja visibilidad, etc.) en lugar de dar una respuesta única y abarcadora."
+    },
+    {
+      "id": "r036-a",
+      "label": "peripheral",
+      "score": 0,
+      "rationale": "unanswerable: El material advierte sobre los riesgos de conducir bajo influencia de drogas, pero no establece condiciones bajo las cuales sería seguro si los efectos son leves."
+    },
+    {
+      "id": "r037-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: La pregunta pide nombrar ejemplos específicos de fármacos, mientras que el material solo menciona categorías generales como agentes somníferos o antihistamínicos."
+    },
+    {
+      "id": "r038-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: El material menciona que el cansancio aumenta el tiempo de reacción, pero no especifica una causa común para este estado más allá del contexto general de la conducción."
+    },
+    {
+      "id": "r039-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: Aunque se menciona la obligatoriedad del uso de SRI, el texto no especifica las consecuencias legales exactas (solo multa o afectación a licencia) por su incumplimiento."
+    },
+    {
+      "id": "r040-a",
+      "label": "peripheral",
+      "score": 0.5,
+      "rationale": "peripheral: Aunque no se menciona explícitamente, las líneas viales son parte de las demarcaciones que el material sí aborda en general."
+    },
+    {
+      "id": "r061-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material se centra en seguridad vial y no menciona nada sobre la función de las mitocondrias en la célula."
+    },
+    {
+      "id": "r062-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio aborda temas de tránsito, seguridad vial y mecánica vehicular, pero no menciona ningún proceso biológico como la fotosíntesis."
+    },
+    {
+      "id": "r063-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial, conducción y normativas, no contiene información biológica sobre cromosomas humanos."
+    },
+    {
+      "id": "r064-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial y no menciona ningún órgano corporal ni su función endocrina como la producción de insulina."
+    },
+    {
+      "id": "r065-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio no contiene información alguna sobre la llegada de Cristóbal Colón a América."
+    },
+    {
+      "id": "r066-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial en Chile y no menciona información histórica sobre presidentes de Estados Unidos."
+    },
+    {
+      "id": "r067-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial y no menciona información sobre la construcción de civilizaciones como Machu Picchu."
+    },
+    {
+      "id": "r068-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial y no menciona quién escribió la obra Don Quijote de la Mancha."
+    },
+    {
+      "id": "r069-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial, conducción y normativas, no aborda figuras literarias."
+    },
+    {
+      "id": "r070-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial y no menciona ningún género literario ni la Ilíada de Homero."
+    },
+    {
+      "id": "r071-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial y no contiene información matemática ni el valor de pi."
+    },
+    {
+      "id": "r072-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: La pregunta solicita un cálculo matemático que no está abordado en ninguno de los temas tratados sobre seguridad vial o normativas."
+    },
+    {
+      "id": "r073-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: La pregunta solicita un cálculo geométrico que no está relacionado ni mencionado en ninguno de los temas tratados sobre tránsito o seguridad vial."
+    },
+    {
+      "id": "r074-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial y no menciona información astronómica como los planetas del sistema solar."
+    },
+    {
+      "id": "r075-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial y no menciona información geográfica como la capital de Francia."
+    },
+    {
+      "id": "r056-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: La pregunta solicita resolver una ecuación matemática que no está relacionada ni mencionada en las ideas principales del material de estudio."
+    },
+    {
+      "id": "r057-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial, normas de tránsito y aspectos vehiculares, no contiene información histórica sobre la Declaración de Independencia de Chile."
+    },
+    {
+      "id": "r058-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: La pregunta solicita calcular el área de una figura geométrica que no tiene relación alguna con los temas tratados en el material de estudio sobre tránsito."
+    },
+    {
+      "id": "r059-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: El material de estudio trata sobre seguridad vial y no menciona información literaria como la autoría de novelas."
+    },
+    {
+      "id": "r060-a",
+      "label": "unanswerable",
+      "score": 0,
+      "rationale": "unanswerable: La pregunta solicita un cálculo matemático que no está abordado en ninguno de los temas tratados sobre seguridad vial o normativas."
+    }
+  ]
+}

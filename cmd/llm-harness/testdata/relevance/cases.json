@@ -1,0 +1,745 @@
+[
+  {
+    "id": "r001",
+    "ideas": [
+      "Los costos de los accidentes incluyen pérdidas futuras de productividad, sufrimiento físico/psicológico del lesionado y de familiares/amigos.",
+      "Los accidentes de tránsito no son eventos puramente casuales o impredecibles, sino que pueden ser evitados al identificar factores de riesgo conocidos.",
+      "Se cuestiona la definición tradicional de 'accidente' en el contexto vial debido a patrones observables (ej. aumento con lluvia, mayor siniestralidad nocturna o bajo efectos del alcohol)."
+    ],
+    "question": "¿Cuál de los siguientes elementos NO se considera un componente del costo total asociado a los accidentes de tránsito según las ideas proporcionadas?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 3 (Naturaleza y Costos de los Accidentes de Trán)"
+  },
+  {
+    "id": "r002",
+    "ideas": [
+      "El monóxido de carbono puede entrar en el habitáculo si el portaequipajes está abierto",
+      "La dirección se desalinea más rápido ante sobrecargas o al golpear obstáculos/hoyos",
+      "Al presionar el embrague, la transmisión de potencia del motor a la caja de cambios se desconecta",
+      "La caja de cambios multiplica la fuerza del motor y tiene varias marchas para diferentes rangos de velocidad"
+    ],
+    "question": "¿Qué sucede con la transmisión de potencia del motor cuando se acciona el embrague?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 9 (Componentes de transmisión y seguridad vial ()"
+  },
+  {
+    "id": "r003",
+    "ideas": [
+      "Los surcos de las bandas de rodamiento deben tener una profundidad mínima aconsejable de 3 mm para un buen rendimiento en frenado, agarre y direccionalidad.",
+      "Cuando la profundidad es inferior a 1,6 mm, empeora la fricción con pavimento mojado por acumulación de agua.",
+      "Los neumáticos requieren mayor revisión del conductor que otros elementos del vehículo."
+    ],
+    "question": "¿Cuál es la profundidad mínima aconsejable en los surcos de las bandas de rodamiento para asegurar un buen rendimiento general del neumático?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 14 (Revisión y desgaste adecuado de los neumático)"
+  },
+  {
+    "id": "r004",
+    "ideas": [
+      "La distancia de detención total (S) es la suma de la distancia de reacción ($d_{reac}$) y la distancia de frenado ($d_{fren}$); $S = d_{reac} + d_{fren}$.",
+      "La fuerza centrífuga depende directamente de la velocidad y del radio de curvatura.",
+      "La distancia de frenado aumenta con el cuadrado de la velocidad (duplicar la velocidad cuadruplica la distancia)."
+    ],
+    "question": "¿Qué factores influyen en el cálculo de la fuerza centrífuga?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 19 (Cálculo de Distancias y Técnicas de Frenado e)"
+  },
+  {
+    "id": "r005",
+    "ideas": [
+      "El airbag previene impactos contra elementos internos del vehículo como volante, tablero o ventanas",
+      "La eficacia del airbag depende de su uso conjunto con el cinturón de seguridad",
+      "Para maximizar la protección del airbag frontal se requiere usarlo junto con cinturón y apoya cabezas regulado a nivel de orejas"
+    ],
+    "question": "¿Cuál es una de las funciones principales del airbag en caso de accidente?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 27 (Funcionamiento, limitaciones y tipos de airba)"
+  },
+  {
+    "id": "r006",
+    "ideas": [
+      "El texto describe una secuencia de eventos viales complejos en un trayecto continuo.",
+      "Se identifican múltiples situaciones de riesgo que afectan al conductor (vehículo apagado, estrechez de la vía, peatón desatendido, animales cruzando).",
+      "El conductor experimenta distracción y realiza maniobras correctivas sucesivas (reducir velocidad, frenar).",
+      "Al final del tramo, el conductor sobrepasa la línea central al girar sin encontrar oposición vial."
+    ],
+    "question": "¿Qué tipo de situaciones de riesgo afectan al conductor durante la secuencia de eventos viales descrita?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 36 (Análisis de un trayecto vial con múltiples in)"
+  },
+  {
+    "id": "r007",
+    "ideas": [
+      "La percepción selectiva limita la visión al hacer que los individuos descubran lo que están dispuestos a ver o lo que esperan encontrar.",
+      "El estado de ánimo (como tener prisa) puede llevar a un mecanismo de represión, haciendo que se ignore información irrelevante para el objetivo inmediato."
+    ],
+    "question": "¿Qué fenómeno explica que los conductores tiendan a notar o enfocarse en aquello que ya están predispuestos a ver o esperar encontrar?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 41 (Percepción Selectiva como limitación visual e)"
+  },
+  {
+    "id": "r008",
+    "ideas": [
+      "Los conductores jóvenes pueden probar sus habilidades mediante acciones riesgosas como exceder límites de velocidad o tomar curvas a exceso de velocidad.",
+      "El conocimiento adecuado de sí mismo implica reconocer tanto las propias habilidades como las limitaciones, aceptando posibles falencias.",
+      "Existe una tendencia general en los jóvenes conductores a sobreestimar su habilidad para conducir, independientemente del género.",
+      "El autocontrol es un indicador de madurez personal, manifestándose en la capacidad de gestionar emociones intensas como la ira sin recurrir a conductas agresivas."
+    ],
+    "question": "¿Qué tipo de comportamiento es característico en los conductores jóvenes al intentar demostrar sus capacidades?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 48 (Autoconocimiento, sobreestimación y autocontr)"
+  },
+  {
+    "id": "r009",
+    "ideas": [
+      "El alcohol afecta las capacidades de reacción, coordinación, estado de ánimo y comunicación nerviosa incluso en pequeñas cantidades.",
+      "La visión periférica disminuye con el consumo de alcohol, aunque la visión directa pueda no notarse inicialmente.",
+      "Las funciones decisivas (visión periférica, atención, tiempo de reacción, interpretación) se ven afectadas antes que las partes motrices.",
+      "El nivel seguro de alcohol para conducir es cero; si se consume, no se debe conducir."
+    ],
+    "question": "¿Qué tipo de funciones se ven afectadas primero por el consumo de alcohol antes que las partes motrices?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 55 (Efectos cognitivos y visuales del alcohol en )"
+  },
+  {
+    "id": "r010",
+    "ideas": [
+      "Esperar a que los efectos de las drogas desaparezcan no es una solución viable.",
+      "Las anfetaminas aumentan la vigilia causando exceso de actividad y autoconfianza temporal, pero luego provocan irritación y falta de concentración.",
+      "Los agentes somníferos y sedantes reducen la vigilia generando relajamiento y amodorramiento, pudiendo causar apatía o inconsciencia con uso prolongado.",
+      "Conducir bajo efectos de medicamentos o enfermedades conlleva riesgos desconocidos, aunque hay mayor conciencia sobre alcohol/drogas."
+    ],
+    "question": "¿Cuál es una consecuencia potencial de conducir bajo los efectos de las anfetaminas?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 61 (Riesgos de drogas, fármacos y enfermedades en)"
+  },
+  {
+    "id": "r011",
+    "ideas": [
+      "Los microsueños son períodos breves e inconscientes de sueño que ocurren en el conductor, pasando desapercibidos incluso al despertar.",
+      "La percepción del entorno se deteriora con el sueño, causando visión borrosa y dificultad para enfocar, aumentando el riesgo de deslumbramiento.",
+      "El comportamiento del conductor puede cambiar, manifestándose como inquietud o hostilidad, e incrementando la aceptación de riesgos como aumentar la velocidad."
+    ],
+    "question": "¿Cuál es una manifestación específica del cansancio que puede pasar desapercibida para el conductor?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 69 (Manifestaciones y causas del cansancio en la )"
+  },
+  {
+    "id": "r012",
+    "ideas": [
+      "Los atropellos representan el 15% de los accidentes en Chile para peatones, pero causan el 40% de las muertes totales.",
+      "La alta accidentabilidad de los peatones se debe a su impredecible comportamiento, dificultando la anticipación por parte del conductor.",
+      "Peatones cometen infracciones como descender sorpresivamente a la calzada, cruzar indebidamente o no usar pasos peatonales/semáforos."
+    ],
+    "question": "¿Qué porcentaje de los accidentes en Chile para peatones representan los atropellos, y qué porcentaje de las muertes totales causan?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 76 (Riesgos e infracciones de los peatones en la )"
+  },
+  {
+    "id": "r013",
+    "ideas": [
+      "En situaciones de congestión o fallas en la señalización, Carabineros de Chile puede regular el tránsito",
+      "Las indicaciones de Carabineros prevalecen sobre cualquier otra instrucción (semáforo u otra)",
+      "Los semáforos se usan en cruces de alto flujo para seguridad",
+      "Luz verde indica paso, permitiendo continuar o girar si no hay prohibición; los peatones tienen prioridad y los vehículos deben cederles el paso al girar"
+    ],
+    "question": "¿Qué autoridad tiene la potestad de regular el tránsito cuando hay fallas en la señalización o congestión?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 85 (Regulación del Tránsito: Señales de Carabiner)"
+  },
+  {
+    "id": "r014",
+    "ideas": [
+      "Los pasos peatonales no semaforizados (pasos cebra) se marcan con franjas blancas paralelas al eje de la vía, precedidas por una línea de detención transversal y a menudo líneas en zig-zag al borde de la calzada.",
+      "En todos los casos de paso cebra o paso peatonal sin señalización semafórica, debe existir una línea de detención (imaginaria si no está pintada) ubicada a no menos de un metro antes del cruce.",
+      "El peatón tiene prioridad en un paso cebra.",
+      "Las líneas amarillas diagonales que forman cuadrados advierten en intersecciones congestionadas sobre la obligación de no detenerse en el cruce.",
+      "Las marcas de símbolos y leyendas indican maniobras permitidas, acciones requeridas o alertan sobre peligros (ej. flechas, señales Ceda el Paso/PARE, leyenda LENTO).",
+      "Existen líneas longitudinales para delimitar paradas de buses, pistas ciclistas y vías prioritarias de emergencia, además de áreas achuradas que canalizan flujos; estas últimas no deben ser ocupadas ni estacionadas."
+    ],
+    "question": "¿Qué elemento visual caracteriza a los pasos peatonales no semaforizados (pasos cebra)?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 91 (Demarcaciones específicas: Pasos peatonales, )"
+  },
+  {
+    "id": "r015",
+    "ideas": [
+      "El límite máximo de velocidad para buses, camiones y transporte escolar es de 50 km/h en zonas urbanas (implícito por la comparación con el contexto anterior).",
+      "En zonas no urbanas, el límite para vehículos livianos es de 100 km/h si hay una pista por sentido, y aumenta a 120 km/h si hay dos o más pistas en un mismo sentido.",
+      "Los buses, camiones y transporte escolar tienen límites específicos: no superar los 90 km/h; los buses interurbanos no deben exceder los 100 km/h.",
+      "La autoridad puede modificar los límites de velocidad mediante señalización específica.",
+      "Existen múltiples situaciones que obligan a reducir la velocidad por mayor riesgo, incluyendo zonas pobladas, baja visibilidad, curvas, pendientes, caminos angostos, y proximidad a peatones o animales."
+    ],
+    "question": "¿Cuál es el límite máximo de velocidad establecido para buses, camiones y transporte escolar en zonas urbanas?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 104 (Límites de velocidad específicos y condicione)"
+  },
+  {
+    "id": "r016",
+    "ideas": [
+      "El estacionamiento debe realizarse al lado derecho de la calzada en sentido del tránsito si no es posible otra opción y no lo prohíbe señalización.",
+      "Si se permite estacionar a la izquierda, esta excepción está sujeta a señalización.",
+      "El estacionamiento debe ser paralelo a la cuneta, sin exceder los 30 centímetros de distancia y manteniendo al menos 60 centímetros de separación con otros vehículos estacionados.",
+      "En vías rurales, el vehículo debe quedar sobre la berma; si no hay berma, se estaciona al costado derecho lo más cerca posible de la cuneta."
+    ],
+    "question": "¿Cuál es la regla general para estacionar un vehículo en una calzada si no hay señalización que indique lo contrario?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 112 (Normas y lugares prohibidos para el estaciona)"
+  },
+  {
+    "id": "r017",
+    "ideas": [
+      "Los buses y camiones requieren bajar sus luces con mayor anticipación debido a sus espejos retrovisores grandes.",
+      "Al adelantar, se debe cambiar a luces altas solo cuando no haya riesgo de cegar al vehículo precedente.",
+      "Es útil usar luces bajas en curvas o cambios de rasante para detectar obstáculos como peatones gracias al resplandor de vehículos contrarios.",
+      "En estacionamiento sin alumbrado público, deben encenderse las luces de estacionamiento y, si es posible, la iluminación interna."
+    ],
+    "question": "¿Por qué los buses y camiones deben bajar sus luces con mayor anticipación al acercarse a un vehículo?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 118 (Manejo avanzado de luces y reconocimiento veh)"
+  },
+  {
+    "id": "r018",
+    "ideas": [
+      "Está prohibido estacionar o recoger/dejar personas en autopistas o sus bermas, salvo emergencia",
+      "Ante fallas mecánicas, se debe salir de la autopista en la próxima salida o área de servicio"
+    ],
+    "question": "Es permitido estacionar o recoger personas en las bermas de autopistas si se está realizando una parada breve por emergencia.",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 125 (Procedimientos ante fallas mecánicas en autop)"
+  },
+  {
+    "id": "r019",
+    "ideas": [
+      "Frenar debe hacerse principalmente con el motor y los frenos de forma muy suave y anticipada para prevenir patinazos.",
+      "Al tomar curvas, la velocidad debe ser tal que no requiera frenado durante todo el giro, ya que esto aumenta el riesgo de bloqueo de ruedas delanteras.",
+      "La escarcha es un peligro al atardecer debido a la rápida congelación de nieve sobre la ruta.",
+      "Para mejorar la visibilidad ante nieve en cristales, se deben accionar limpiaparabrisas y lavaparabrisas; sin embargo, si la temperatura es bajo cero, el agua puede helarse, requiriendo anticongelante en el líquido lavador."
+    ],
+    "question": "¿Cuál es la técnica recomendada para frenar en condiciones invernales?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 132 (Técnicas avanzadas de conducción: Frenado, cu)"
+  },
+  {
+    "id": "r020",
+    "ideas": [
+      "El peso adicional en el vehículo incrementa el consumo de combustible",
+      "Los equipos portaequipajes o bultos en el techo aumentan la resistencia aerodinámica y el consumo",
+      "Mantener la presión correcta de los neumáticos es crucial para la eficiencia del combustible"
+    ],
+    "question": "¿Qué efecto tiene añadir peso extra a un vehículo en su consumo de combustible?",
+    "label": "central",
+    "source": "conaset",
+    "note": "pregunta ataca directamente una main_idea del chunk seq 138 (Factores que afectan el consumo de combustibl)"
+  },
+  {
+    "id": "r021",
+    "ideas": [
+      "Anualmente en Chile se registran más de 70.000 accidentes de tránsito, causando aproximadamente 1.600 muertes anuales (4-5 diarias).",
+      "La probabilidad de muerte por atropello aumenta significativamente con la velocidad del vehículo: el riesgo se multiplica por ocho al pasar de 30 a 50 km/h.",
+      "Aunque las muertes ocurren mayormente en vías interurbanas, el 86% de los accidentes totales suceden en áreas urbanas, concentrándose en cruces e intersecciones.",
+      "Los períodos y momentos más peligrosos son feriados largos, fines de semana (normales o largos), la noche y la madrugada, coincidiendo con bajo flujo vehicular."
+    ],
+    "question": "Es cierto que los peatones tienen una alta probabilidad de supervivencia en impactos a velocidades superiores a 45 km/h.",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 4; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r022",
+    "ideas": [
+      "Los jóvenes (18-29 años) son el grupo etario más accidentable, representando el 26% de conductores fallecidos en tránsito.",
+      "El 78% de los conductores fallecidos son varones.",
+      "La falla humana está presente en más del 90% de los accidentes de tránsito.",
+      "Factores clave de accidentes incluyen consumo de alcohol y desobediencia a señales de tránsito."
+    ],
+    "question": "Según las ideas proporcionadas, ¿qué componente es descrito como el corazón del vehículo y qué función cumple su sistema asociado?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 5; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r023",
+    "ideas": [
+      "Se deben revisar las mangueras de líquido de frenos en busca de grietas o fugas visibles",
+      "Es obligatorio cambiar el líquido de frenos según los plazos del fabricante",
+      "Se debe inspeccionar periódicamente discos y pastillas, prestando atención a ruidos anormales"
+    ],
+    "question": "El bloqueo de ruedas durante frenadas bruscas siempre reduce la distancia total de frenado, independientemente del sistema de asistencia.",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 13; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r024",
+    "ideas": [
+      "Los surcos de las bandas de rodamiento deben tener una profundidad mínima aconsejable de 3 mm para un buen rendimiento en frenado, agarre y direccionalidad.",
+      "Cuando la profundidad es inferior a 1,6 mm, empeora la fricción con pavimento mojado por acumulación de agua.",
+      "Los neumáticos requieren mayor revisión del conductor que otros elementos del vehículo."
+    ],
+    "question": "¿Qué condiciones o problemas pueden estar señalando los patrones de desgaste anormal en los neumáticos?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 14; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r025",
+    "ideas": [
+      "Los neumáticos deben ir siempre atrás para asegurar la mejor estabilidad",
+      "La presión de los neumáticos debe controlarse cuando están fríos y respetando las indicaciones del fabricante",
+      "Es crucial inspeccionar periódicamente la banda de rodadura en busca de cortes profundos o grietas"
+    ],
+    "question": "¿Qué acciones o condiciones pueden acelerar el desgaste de los neumáticos?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 15; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r026",
+    "ideas": [
+      "Las luces neblineras son opcionales y deben usarse solo en baja visibilidad (niebla o lluvia torrencial), apagándose al mejorar la visibilidad.",
+      "Los espejos permiten ver el tráfico lateral y trasero, pero los convexos distorsionan las imágenes haciéndolas más lejanas de lo real.",
+      "Existe un espacio invisible detrás del vehículo llamado ángulo muerto o punto ciego."
+    ],
+    "question": "¿Qué elementos se deben revisar periódicamente antes de iniciar una conducción segura?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 17; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r027",
+    "ideas": [
+      "No debe haber objetos sueltos en el vehículo que puedan causar lesiones ante una frenada brusca.",
+      "El calzado debe permitir un control adecuado de los pedales.",
+      "Al iniciar la marcha, es crucial revisar el entorno y los puntos ciegos."
+    ],
+    "question": "Respecto a la física aplicada a la conducción, ¿qué sucede con la energía del movimiento si se duplica la velocidad?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 18; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r028",
+    "ideas": [
+      "Los elementos de seguridad pasiva aminoran las consecuencias de un accidente, aunque no previenen su ocurrencia.",
+      "El cinturón de seguridad es crucial para reducir muertes y lesiones en accidentes de tránsito."
+    ],
+    "question": "¿Qué beneficios adicionales aporta el uso del cinturón de seguridad más allá de salvar vidas?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 22; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r029",
+    "ideas": [
+      "La Convivencia Vial requiere que todos los protagonistas (conductores, peatones, pasajeros y usuarios de las vías) tengan un nivel adecuado de Educación Vial.",
+      "La Seguridad Vial busca la eliminación total de accidentes de tránsito mediante la reducción y minimización de consecuencias.",
+      "Una adecuada percepción del riesgo es esencial para la Seguridad Vial, ya que el riesgo no percibido se considera inexistente."
+    ],
+    "question": "Si un conductor está muy experimentado, automáticamente su nivel de riesgo al conducir será bajo.",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 29; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r030",
+    "ideas": [
+      "Las interpretaciones erróneas del entorno son peligrosas y ocurren cuando los indicios de distancia o forma son insuficientes o poco claros.",
+      "La percepción de distancias es más fiable para distancias cortas; a partir de 50 m, la importancia de los indicios ambientales aumenta drásticamente."
+    ],
+    "question": "¿Qué tipo de error perceptual ocurre cuando se confunde una curva izquierda con una derecha?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 37; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r031",
+    "ideas": [
+      "La visibilidad puede verse comprometida en situaciones como salir de un túnel a plena luz solar o al atardecer con el sol directo a los ojos.",
+      "La distancia de visibilidad en un cruce vehicular con luces bajas no excede los 15 ó 20 metros, y sin cruces se pueden ver demarcaciones hasta unos 70 metros.",
+      "Un efecto de ceguera temporal reduce la distancia de visibilidad a 0 metro, dificultando el avistamiento de personas o animales en la vía."
+    ],
+    "question": "La capacidad visual humana es comparable en eficiencia con la de depredadores como los halcones para percibir en condiciones de oscuridad.",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 40; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r032",
+    "ideas": [
+      "La percepción es subjetiva; lo visto por un individuo puede no ser percibido o interpretado igual por otro.",
+      "Tras la percepción rápida se decide una acción que, combinada con las acciones de otros usuarios y la vía, genera un resultado experiencial.",
+      "El acto de mirar (dirección, orden y tiempo) es un factor clave en la conducción, junto a la percepción selectiva y las limitaciones visuales."
+    ],
+    "question": "¿Cuáles son los componentes clave del proceso óptico humano mencionados?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 42; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r033",
+    "ideas": [
+      "El punto de cruce real (PR) se ubica más cerca del conductor más lento que el estimado (PE) al cruzarse con un vehículo más rápido.",
+      "La magnitud del error en la predicción del punto de cruce aumenta con la diferencia de velocidad entre los vehículos."
+    ],
+    "question": "Los conductores jóvenes tienden a tener menor índice de participación en accidentes debido a su etapa vital.",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 45; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r034",
+    "ideas": [
+      "La conducta agresiva ajena debe interpretarse como ignorancia e involuntaria para evitar conflictos adicionales.",
+      "Mantener la atención y concentración es una cualidad esencial del buen conductor, siendo el 'soñar despierto' un ejemplo de distracción negativa.",
+      "La madurez está directamente ligada a la responsabilidad, requiriendo que los individuos cumplan con obligaciones sociales además de derechos."
+    ],
+    "question": "¿Qué proceso implica el desarrollo moral al pasar de etapas tempranas a niveles superiores?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 49; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r035",
+    "ideas": [
+      "El espíritu de las normas es más importante que su mero conocimiento",
+      "El egocentrismo puede llevar a un retroceso en la madurez del individuo",
+      "Las deficiencias de madurez afectan la gravedad y cantidad de accidentes de tránsito",
+      "La necesidad de demostrar poder o superioridad mediante el vehículo lleva al exceso de potencia"
+    ],
+    "question": "¿Qué situación aumenta significativamente la exigencia de atención del conductor?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 50; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r036",
+    "ideas": [
+      "La sicosis y las alucinaciones pueden manifestarse días o semanas después del consumo y durar semanas o meses.",
+      "Los efectos físicos comunes incluyen falta de coordinación, mareos, dilatación pupilar, temblores, náuseas/vómitos.",
+      "El éxtasis puede causar ilusiones ópticas (flashes periféricos) que inducen maniobras evasivas peligrosas.",
+      "Otros efectos del éxtasis son sensibilidad a la luz, visión borrosa, dificultad de concentración, episodios de depresión/ansiedad y agotamiento físico/mental."
+    ],
+    "question": "Conducir después del consumo de cualquier droga es seguro si los efectos son leves y pasajeros.",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 60; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r037",
+    "ideas": [
+      "La depresión puede causar inseguridad al conducir, llevando a errores o comportamientos inesperados.",
+      "El uso regular de medicamentos afecta la capacidad para conducir y su mal uso causa accidentes.",
+      "Los antihistamínicos pueden tener efectos peligrosos en la conducción, equiparables a beber alcohol (0,5 g/l a 0,8 g/l) con los tipos antiguos."
+    ],
+    "question": "Mencione dos ejemplos de psicofármacos que pueden afectar la capacidad de conducir.",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 66; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r038",
+    "ideas": [
+      "Los microsueños son períodos breves e inconscientes de sueño que ocurren en el conductor, pasando desapercibidos incluso al despertar.",
+      "La percepción del entorno se deteriora con el sueño, causando visión borrosa y dificultad para enfocar, aumentando el riesgo de deslumbramiento.",
+      "El comportamiento del conductor puede cambiar, manifestándose como inquietud o hostilidad, e incrementando la aceptación de riesgos como aumentar la velocidad."
+    ],
+    "question": "¿Cuál es una causa común mencionada para el cansancio al conducir?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 69; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r039",
+    "ideas": [
+      "El 49% de las muertes de menores de 12 años en accidentes de tránsito ocurrió siendo pasajero de un vehículo en Chile.",
+      "Es obligatorio el uso de Sistemas de Retención Infantil (SRI) adecuados a peso, talla y edad desde 2006.",
+      "Desde marzo de 2016, está prohibido trasladar menores de 12 años en asientos delanteros; deben ir en el asiento trasero con SRI o cinturón si aplica.",
+      "Desde marzo de 2017, la Ley de Tránsito exige a particulares transportar menores hasta 8 años (o estatura/peso específicos) en SRI."
+    ],
+    "question": "El incumplimiento de las normas sobre uso de SRI puede resultar únicamente en una multa económica sin afectar la licencia de conducir.",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 80; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r040",
+    "ideas": [
+      "Las señales informativas sobre atractivos turísticos pueden ser de color café.",
+      "Existen las señales transitorias, que advierten de riesgos no permanentes derivados de trabajos en la vía.",
+      "Las señales transitorias son generalmente de color naranja, excepto la primera señal de advertencia de trabajos, que es amarilla.",
+      "Las demarcaciones viales aclaran y fortalecen las normas mediante líneas longitudinales o transversales, flechas, símbolos y leyendas."
+    ],
+    "question": "¿Qué indica una línea continua con tachas reflectantes rojas en el pavimento?",
+    "label": "peripheral",
+    "source": "conaset",
+    "note": "pregunta ataca detalle secundario del chunk seq 89; no cubierto por las main_ideas mostradas"
+  },
+  {
+    "id": "r041",
+    "ideas": [
+      "La ingesta alimentaria disminuye la absorción de alcohol desde el estómago.",
+      "Las bebidas carbonatadas aumentan la absorción de alcohol gástrica.",
+      "Los menores de 18 años y mayores de 65 años son más sensibles a los efectos del alcohol.",
+      "El riesgo de accidente aumenta significativamente con niveles elevados de alcoholemia (ej: 0,3-0,5 g/l duplica el riesgo; 0,5-0,8 g/l quintuplica el riesgo).",
+      "Las drogas afectan múltiples facultades necesarias para conducir (percepción, cognición, atención, etc.)."
+    ],
+    "question": "¿Qué porcentaje de los accidentes totales en Chile ocurre en áreas urbanas?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 4 (Estadísticas y patrones de acc) contra ideas de otro chunk seq 58 (Factores que afectan la intoxi)"
+  },
+  {
+    "id": "r042",
+    "ideas": [
+      "El texto describe una secuencia de eventos viales complejos en un trayecto continuo.",
+      "Se identifican múltiples situaciones de riesgo que afectan al conductor (vehículo apagado, estrechez de la vía, peatón desatendido, animales cruzando).",
+      "El conductor experimenta distracción y realiza maniobras correctivas sucesivas (reducir velocidad, frenar).",
+      "Al final del tramo, el conductor sobrepasa la línea central al girar sin encontrar oposición vial."
+    ],
+    "question": "¿Qué porcentaje aproximado de conductores fallecidos en tránsito corresponde al grupo etario de 18 a 29 años?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 5 (Factores humanos y mecánicos e) contra ideas de otro chunk seq 36 (Análisis de un trayecto vial c)"
+  },
+  {
+    "id": "r043",
+    "ideas": [
+      "Las señales reglamentarias suelen ser circulares o rectangulares con símbolos/números en un círculo u orla roja, salvo excepciones como Pare o Ceda el Paso.",
+      "Las señales preventivas (advertencia de peligro) tienen forma cuadrada con diagonal vertical y fondo amarillo con símbolo negro, excepto la Cruz de San Andrés.",
+      "Las señales informativas guían al conductor para llegar a destinos de manera segura y simple, clasificándose en las que indican destino y otras de interés."
+    ],
+    "question": "¿Cuál es la función principal del mantenimiento preventivo en un vehículo?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 6 (Mantenimiento preventivo: Sist) contra ideas de otro chunk seq 88 (Tipología y características fí)"
+  },
+  {
+    "id": "r044",
+    "ideas": [
+      "Es obligatorio informar al médico sobre los efectos de medicamentos prescritos en la conducción",
+      "Las enfermedades afectan las capacidades necesarias para conducir un vehículo con seguridad",
+      "Los trastornos neurológicos y mentales presentan riesgos significativos para la conducción"
+    ],
+    "question": "Los gases de escape son inofensivos y solo representan un riesgo si el sistema está muy oxidado.",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 8 (Sistemas auxiliares: Refrigera) contra ideas de otro chunk seq 62 (Riesgos de conducir con enferm)"
+  },
+  {
+    "id": "r045",
+    "ideas": [
+      "Las Señales Informativas orientan y guían a los usuarios viales para un tránsito seguro, simple y directo.",
+      "Existen señales informativas específicas para servicios (ej. hospital, alimentación) y atractivos turísticos (color café).",
+      "Las señalizaciones transitorias, usadas en obras, son de color naranja; la advertencia inicial es amarilla.",
+      "La señalización horizontal o marcas viales se clasifican según su forma en líneas longitudinales."
+    ],
+    "question": "¿Qué síntomas pueden indicar fallos en el sistema de dirección o problemas neumáticos delanteros?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 10 (Diagnóstico y mantenimiento de) contra ideas de otro chunk seq 157 (Tipos y funciones de señales v)"
+  },
+  {
+    "id": "r046",
+    "ideas": [
+      "Esperar a que los efectos de las drogas desaparezcan no es una solución viable.",
+      "Las anfetaminas aumentan la vigilia causando exceso de actividad y autoconfianza temporal, pero luego provocan irritación y falta de concentración.",
+      "Los agentes somníferos y sedantes reducen la vigilia generando relajamiento y amodorramiento, pudiendo causar apatía o inconsciencia con uso prolongado.",
+      "Conducir bajo efectos de medicamentos o enfermedades conlleva riesgos desconocidos, aunque hay mayor conciencia sobre alcohol/drogas."
+    ],
+    "question": "Además de saber reaccionar ante una falla total de los frenos, ¿qué aspecto general del sistema requiere atención constante según las ideas proporcionadas?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 11 (Mantenimiento y uso correcto d) contra ideas de otro chunk seq 61 (Riesgos de drogas, fármacos y )"
+  },
+  {
+    "id": "r047",
+    "ideas": [
+      "No existe elemento que garantice seguridad al conducir sobre hielo o nieve comparado con pavimento seco y limpio.",
+      "La adherencia en condiciones de niebla se reduce debido a la humedad del pavimento, generando riesgo de deslizamiento similar a la lluvia."
+    ],
+    "question": "¿Qué característica permite que los vehículos modernos mantengan cierto efecto de frenado ante fallas en el sistema de frenos?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 12 (Tipos de sistemas de frenos y ) contra ideas de otro chunk seq 134 (Conducción en Niebla y Adheren)"
+  },
+  {
+    "id": "r048",
+    "ideas": [
+      "Los bostezos profundos, párpados pesados e irregularidad en la velocidad indican somnolencia avanzada.",
+      "La desorientación espacial y las cabezadas son signos de fatiga severa que superan el control voluntario.",
+      "Existen momentos del día (3-5 hrs y 14-16 hrs) propicios para la somnolencia, incluso con sueño adecuado.",
+      "Dormir menos horas de lo habitual o cambiar los horarios normales de sueño incrementan significativamente el riesgo de somnolencia."
+    ],
+    "question": "¿Qué se debe revisar específicamente en las mangueras de líquido de frenos durante un mantenimiento avanzado?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 13 (Mantenimiento y manejo avanzad) contra ideas de otro chunk seq 70 (Signos de somnolencia avanzada)"
+  },
+  {
+    "id": "r049",
+    "ideas": [
+      "Es responsabilidad del conductor conocer todas las infracciones de tránsito y sus sanciones asociadas, incluyendo la posible cancelación de la licencia.",
+      "La técnica de frenado varía según si el vehículo posee sistema ABS o no."
+    ],
+    "question": "Además de revisar cortes profundos y grietas, ¿qué inspección periódica es crucial realizar en los neumáticos?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 15 (Mantenimiento general y recome) contra ideas de otro chunk seq 153 (Responsabilidad del conductor,)"
+  },
+  {
+    "id": "r050",
+    "ideas": [
+      "El consumo de drogas altera la percepción del entorno (colores), el tiempo, el espacio y la velocidad, afectando la capacidad de cálculo de distancias.",
+      "Las drogas dificultan mantener la concentración, aumentando la probabilidad de distracción al volante y prolongando el tiempo de reacción y distancia de detención.",
+      "La cocaína es un estimulante que provoca comportamiento competitivo o agresivo e impulsividad, llevando a sobreestimar capacidades y asumir riesgos peligrosos.",
+      "Los efectos de fumar Pasta Base de Cocaína (PBC) son rápidos e intensos, pasando por etapas definidas: euforia, disforia y consumo ininterrumpido."
+    ],
+    "question": "¿Qué acción se recomienda tomar si un neumático trasero de un vehículo sufre una reventón?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 16 (Revisión de neumáticos y siste) contra ideas de otro chunk seq 59 (Consecuencias del consumo de d)"
+  },
+  {
+    "id": "r051",
+    "ideas": [
+      "La zona rural es un área geográfica que excluye las zonas urbanas.",
+      "Las zonas urbanas deben tener sus límites determinados y señalizados por las Municipalidades."
+    ],
+    "question": "¿Cuándo es apropiado utilizar las luces neblineras según las recomendaciones de seguridad vehicular?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 17 (Equipamiento de seguridad y re) contra ideas de otro chunk seq 162 (Clasificación de Áreas Geográf)"
+  },
+  {
+    "id": "r052",
+    "ideas": [
+      "Los microsueños son períodos breves e inconscientes de sueño que ocurren en el conductor, pasando desapercibidos incluso al despertar.",
+      "La percepción del entorno se deteriora con el sueño, causando visión borrosa y dificultad para enfocar, aumentando el riesgo de deslumbramiento.",
+      "El comportamiento del conductor puede cambiar, manifestándose como inquietud o hostilidad, e incrementando la aceptación de riesgos como aumentar la velocidad."
+    ],
+    "question": "¿Qué es fundamental revisar antes de iniciar la marcha en un vehículo?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 18 (Seguridad y Física Aplicada a ) contra ideas de otro chunk seq 69 (Manifestaciones y causas del c)"
+  },
+  {
+    "id": "r053",
+    "ideas": [
+      "Las señales informativas sobre atractivos turísticos pueden ser de color café.",
+      "Existen las señales transitorias, que advierten de riesgos no permanentes derivados de trabajos en la vía.",
+      "Las señales transitorias son generalmente de color naranja, excepto la primera señal de advertencia de trabajos, que es amarilla.",
+      "Las demarcaciones viales aclaran y fortalecen las normas mediante líneas longitudinales o transversales, flechas, símbolos y leyendas."
+    ],
+    "question": "¿Qué acción debe realizarse inmediatamente al bloquearse las ruedas de un vehículo que no cuenta con sistema ABS en pendientes pronunciadas?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 20 (Manejo en pendientes pronuncia) contra ideas de otro chunk seq 89 (Señales Turísticas, Transitori)"
+  },
+  {
+    "id": "r054",
+    "ideas": [
+      "Está prohibido estacionar o recoger/dejar personas en autopistas o sus bermas, salvo emergencia",
+      "Ante fallas mecánicas, se debe salir de la autopista en la próxima salida o área de servicio"
+    ],
+    "question": "¿Qué componente afecta directamente el comportamiento del vehículo al tomar curvas o perder fricción?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 21 (Comportamiento direccional y s) contra ideas de otro chunk seq 125 (Procedimientos ante fallas mec)"
+  },
+  {
+    "id": "r055",
+    "ideas": [
+      "El alcohol afecta las capacidades de reacción, coordinación, estado de ánimo y comunicación nerviosa incluso en pequeñas cantidades.",
+      "La visión periférica disminuye con el consumo de alcohol, aunque la visión directa pueda no notarse inicialmente.",
+      "Las funciones decisivas (visión periférica, atención, tiempo de reacción, interpretación) se ven afectadas antes que las partes motrices.",
+      "El nivel seguro de alcohol para conducir es cero; si se consume, no se debe conducir."
+    ],
+    "question": "¿Cuál es la función principal de los elementos de seguridad pasiva en un accidente?",
+    "label": "unanswerable",
+    "source": "conaset",
+    "note": "pregunta del chunk seq 22 (Elementos de seguridad pasiva:) contra ideas de otro chunk seq 55 (Efectos cognitivos y visuales )"
+  },
+  {
+    "id": "r056",
+    "ideas": [
+      "La distancia de detención total (S) es la suma de la distancia de reacción ($d_{reac}$) y la distancia de frenado ($d_{fren}$); $S = d_{reac} + d_{fren}$.",
+      "La fuerza centrífuga depende directamente de la velocidad y del radio de curvatura.",
+      "La distancia de frenado aumenta con el cuadrado de la velocidad (duplicar la velocidad cuadruplica la distancia)."
+    ],
+    "question": "¿Cuál es el resultado de resolver la ecuación 2x + 6 = 20?",
+    "label": "unanswerable",
+    "source": "synthetic",
+    "note": "matematica: algebra basica, ajena a seguridad vial"
+  },
+  {
+    "id": "r057",
+    "ideas": [
+      "Los conductores jóvenes pueden probar sus habilidades mediante acciones riesgosas como exceder límites de velocidad o tomar curvas a exceso de velocidad.",
+      "El conocimiento adecuado de sí mismo implica reconocer tanto las propias habilidades como las limitaciones, aceptando posibles falencias.",
+      "Existe una tendencia general en los jóvenes conductores a sobreestimar su habilidad para conducir, independientemente del género.",
+      "El autocontrol es un indicador de madurez personal, manifestándose en la capacidad de gestionar emociones intensas como la ira sin recurrir a conductas agresivas."
+    ],
+    "question": "¿En qué año se firmó la Declaración de Independencia de Chile?",
+    "label": "unanswerable",
+    "source": "synthetic",
+    "note": "historia: fecha de independencia, ajena a las ideas del chunk"
+  },
+  {
+    "id": "r058",
+    "ideas": [
+      "Los atropellos representan el 15% de los accidentes en Chile para peatones, pero causan el 40% de las muertes totales.",
+      "La alta accidentabilidad de los peatones se debe a su impredecible comportamiento, dificultando la anticipación por parte del conductor.",
+      "Peatones cometen infracciones como descender sorpresivamente a la calzada, cruzar indebidamente o no usar pasos peatonales/semáforos."
+    ],
+    "question": "¿Cuál es el área de un triángulo de base 8 cm y altura 5 cm?",
+    "label": "unanswerable",
+    "source": "synthetic",
+    "note": "matematica: geometria, sin relacion con las ideas viales"
+  },
+  {
+    "id": "r059",
+    "ideas": [
+      "El estacionamiento debe realizarse al lado derecho de la calzada en sentido del tránsito si no es posible otra opción y no lo prohíbe señalización.",
+      "Si se permite estacionar a la izquierda, esta excepción está sujeta a señalización.",
+      "El estacionamiento debe ser paralelo a la cuneta, sin exceder los 30 centímetros de distancia y manteniendo al menos 60 centímetros de separación con otros vehículos estacionados.",
+      "En vías rurales, el vehículo debe quedar sobre la berma; si no hay berma, se estaciona al costado derecho lo más cerca posible de la cuneta."
+    ],
+    "question": "¿Quién escribió la novela Cien años de soledad?",
+    "label": "unanswerable",
+    "source": "synthetic",
+    "note": "literatura/historia cultural, ajena al material CONASET"
+  },
+  {
+    "id": "r060",
+    "ideas": [
+      "El monóxido de carbono puede entrar en el habitáculo si el portaequipajes está abierto",
+      "La dirección se desalinea más rápido ante sobrecargas o al golpear obstáculos/hoyos",
+      "Al presionar el embrague, la transmisión de potencia del motor a la caja de cambios se desconecta",
+      "La caja de cambios multiplica la fuerza del motor y tiene varias marchas para diferentes rangos de velocidad"
+    ],
+    "question": "¿Cuál es la raíz cuadrada de 144?",
+    "label": "unanswerable",
+    "source": "synthetic",
+    "note": "matematica: aritmetica, dominio distinto a las ideas mostradas"
+  }
+]
