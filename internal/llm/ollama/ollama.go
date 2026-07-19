@@ -170,6 +170,25 @@ func (p *Provider) CheckCriterion(ctx context.Context, req llm.CriterionCheckReq
 	return result, nil
 }
 
+// ScoreRelevance puntúa la relevancia 0..1 de una candidata contra las ideas del job
+// (plan 044 F2a, pasada 2 del reduce). Mismo camino que las demás llamadas: build prompt
+// → generar → ExtractJSON → ParseRelevanceResult (valida forma y rango [0,1]). Una salida
+// que no parsea o cae fuera de rango es error; el caller (RelevancePass) reintenta una vez
+// y, si persiste, deja el score nil sin descartar la candidata (conservador). No está en
+// el puerto llm.LLMProvider: la pasada la consume por una interfaz mínima propia (ISP).
+func (p *Provider) ScoreRelevance(ctx context.Context, req llm.RelevanceRequest) (llm.RelevanceResult, error) {
+	prompt := llm.BuildRelevancePrompt(req)
+	out, err := p.generate(ctx, prompt)
+	if err != nil {
+		return llm.RelevanceResult{}, err
+	}
+	rawJSON, err := llm.ExtractJSON(out)
+	if err != nil {
+		return llm.RelevanceResult{}, err
+	}
+	return llm.ParseRelevanceResult(rawJSON)
+}
+
 // ExtractIdeas descompone la respuesta del alumno en ideas atómicas (plan 045 F4).
 // Mismo camino que las demás llamadas: build prompt → generar → ExtractJSON → validar
 // la forma {"ideas":[…]}. Una extracción que no parsea es fallo transitorio (el caller

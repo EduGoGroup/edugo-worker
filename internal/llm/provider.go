@@ -183,6 +183,32 @@ type ExtractIdeasRequest struct {
 	Language string
 }
 
+// RelevanceRequest es la petición de RELEVANCIA de UNA candidata contra las ideas del
+// job (plan 044 F2a, pasada 2 del reduce, D-044.3): el modelo puntúa qué tan central es
+// la pregunta respecto a las ideas principales agregadas del material. UNA llamada por
+// candidata, contexto fresco (mismo espíritu que CheckCriterion). El caller valida el
+// JSON y aplica el umbral; una salida malformada NUNCA descarta la candidata
+// (conservador: no se reprueba por un fallo del modelo, solo por un juicio válido).
+type RelevanceRequest struct {
+	// QuestionText es la pregunta candidata a puntuar.
+	QuestionText string
+	// MainIdeas son las ideas principales AGREGADAS del job (el material del que salió la
+	// candidata). El modelo juzga si la pregunta se responde con ellas y si es central o
+	// periférica.
+	MainIdeas []string
+	// Language del contenido (default "es").
+	Language string
+}
+
+// RelevanceResult es el resultado de puntuar la relevancia de una candidata (plan 044
+// F2a). Score es 0..1: 0 = la pregunta NO se responde con las ideas del job; ~0.5 =
+// periférica; ~1 = central. Rationale es una frase de diagnóstico (logs/harness); no se
+// persiste. El caller compara Score contra el umbral RelevanceMin para descartar.
+type RelevanceResult struct {
+	Score     float64 `json:"score"`
+	Rationale string  `json:"rationale"`
+}
+
 // DigestChunkInput es la entrada de la llamada A ("leer") del pipeline material→
 // evaluación (plan 043 F3, D-043.7): UN trozo del material más —encadenado— el
 // resumen del/los trozo(s) anterior(es), para que el modelo mantenga continuidad

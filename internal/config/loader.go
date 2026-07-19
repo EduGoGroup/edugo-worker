@@ -43,6 +43,11 @@ func Load() (*Config, error) {
 			// Umbrales de dedupe (plan 044 D-044.2): coseno de embeddings; calibrados en F1b.
 			"material_pipeline.dedupe_high": "MATERIAL_PIPELINE_DEDUPE_HIGH",
 			"material_pipeline.dedupe_low":  "MATERIAL_PIPELINE_DEDUPE_LOW",
+			// Reduce fase 2 (plan 044 D-044.3/D-044.4): umbral de relevancia, modo del paso
+			// (local|api) y candado verbatim local_only.
+			"material_pipeline.relevance_min":      "MATERIAL_PIPELINE_RELEVANCE_MIN",
+			"material_pipeline.relevance_mode":     "MATERIAL_PIPELINE_RELEVANCE_MODE",
+			"material_pipeline.verbatim_max_words": "MATERIAL_PIPELINE_VERBATIM_MAX_WORDS",
 			// LLM (plan 039 D-039.3): credenciales/URL/modelo de EduGo, no por escuela.
 			"llm.local.base_url": "LLM_LOCAL_BASE_URL",
 			"llm.local.model":    "LLM_LOCAL_MODEL",

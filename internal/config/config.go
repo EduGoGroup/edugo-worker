@@ -215,6 +215,18 @@ type MaterialPipelineConfig struct {
 	// DISTINTAS sin gastar LLM. El intervalo [DedupeLow, DedupeHigh) es la "zona gris"
 	// que resuelve el juicio LLM par a par (default 0.50).
 	DedupeLow float64 `mapstructure:"dedupe_low"`
+	// RelevanceMin es el umbral de score (pasada 2 de relevancia, D-044.3) bajo el cual
+	// una candidata se descarta como irrelevante. Escala 0..1 (contrato §4): 0 = no se
+	// responde; ~0.5 = periférica; ~1 = central. Default 0.4.
+	RelevanceMin float64 `mapstructure:"relevance_min"`
+	// RelevanceMode es el modo del paso de relevancia: "local" | "api" (D-044.4). Default
+	// "local" (la fase 2 solo sale por API si el riel lo pide). Una candidata local_only
+	// usa SIEMPRE el provider local aunque el modo sea "api".
+	RelevanceMode string `mapstructure:"relevance_mode"`
+	// VerbatimMaxWords es el umbral del candado local_only (D-044.4, FIRMADO 2026-07-17):
+	// una candidata que cite literalmente MÁS de este número de palabras contiguas del
+	// chunk se marca local_only y sus pasadas LLM nunca salen por API. Default 25.
+	VerbatimMaxWords int `mapstructure:"verbatim_max_words"`
 }
 
 // ServiceJWTConfig configura la firma del service JWT M2M (HS256) que el worker
@@ -423,6 +435,15 @@ func (c *Config) GetMaterialPipelineConfigWithDefaults() MaterialPipelineConfig 
 	}
 	if cfg.DedupeLow == 0 {
 		cfg.DedupeLow = 0.50
+	}
+	if cfg.RelevanceMin == 0 {
+		cfg.RelevanceMin = 0.4
+	}
+	if cfg.RelevanceMode == "" {
+		cfg.RelevanceMode = "local"
+	}
+	if cfg.VerbatimMaxWords == 0 {
+		cfg.VerbatimMaxWords = 25
 	}
 	return cfg
 }
