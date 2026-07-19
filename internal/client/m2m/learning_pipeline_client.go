@@ -31,6 +31,8 @@ const (
 	pipelineChunkStatusPathFmt  = "/api/v1/internal/pipeline/chunks/%s/status"
 	pipelineCandidatesPathFmt   = "/api/v1/internal/pipeline/jobs/%s/candidates"
 	pipelineCandidatesPath      = "/api/v1/internal/pipeline/candidates"
+	pipelineJobIdeasPathFmt     = "/api/v1/internal/pipeline/jobs/%s/ideas"
+	pipelineChunkTextPathFmt    = "/api/v1/internal/pipeline/chunks/%s/text"
 )
 
 // PipelineJob es el estado de un job del carril material→evaluación (GET job).
@@ -127,6 +129,21 @@ type updateCandidatesRequest struct {
 // updateCandidatesResponse es el sobre de PATCH candidates ({"updated": n}).
 type updateCandidatesResponse struct {
 	Updated int `json:"updated"`
+}
+
+// jobIdeasResponse es el sobre de GET jobs/{id}/ideas: las main_ideas agregadas del
+// material (unión de los ChunkArtifacts de los chunks ya procesados), que la selección
+// final (pasada 4, D-044.5) usa como cobertura objetivo. Puede venir vacío si el job aún
+// no produjo ideas; el caller cae al agregado de source_ideas (ver SelectionPass).
+type jobIdeasResponse struct {
+	MainIdeas []string `json:"main_ideas"`
+}
+
+// chunkTextResponse es el sobre de GET chunks/{id}/text: el texto plano de un chunk ya
+// procesado. Lo consume el candado verbatim local_only (D-044.4) cuando la pasada corre en
+// modo "api" — la ruta de lectura que en F2 quedó como gancho (chunkTextResolver nil).
+type chunkTextResponse struct {
+	Text string `json:"text"`
 }
 
 // nextChunkEnvelope es el sobre real de GET chunks/pending: chunk puede ser null
@@ -323,6 +340,42 @@ func (c *LearningPipelineClient) ListCandidates(ctx context.Context, jobID strin
 		return nil, err
 	}
 	return out.Candidates, nil
+}
+
+// GetJobIdeas lee las main_ideas agregadas del material de un job — la cobertura objetivo
+// de la selección final (pasada 4, D-044.5). Devuelve la lista tal cual la agrega learning
+// (unión de los ChunkArtifacts de los chunks procesados). Puede venir vacía (job sin ideas
+// aún): el caller (SelectionPass) cae entonces al agregado de source_ideas. Semántica de
+// estado idéntica al resto del carril: 404 → ErrLearningPermanent; 5xx/red/timeout →
+// transitorio.
+func (c *LearningPipelineClient) GetJobIdeas(ctx context.Context, jobID string) ([]string, error) {
+	if jobID == "" {
+		return nil, fmt.Errorf("job_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelineJobIdeasPathFmt, jobID)
+
+	var out jobIdeasResponse
+	if err := c.do(ctx, http.MethodGet, url, nil, &out); err != nil {
+		return nil, err
+	}
+	return out.MainIdeas, nil
+}
+
+// GetChunkText lee el texto plano de un chunk ya procesado — la ruta de lectura que en F2
+// quedó como gancho (chunkTextResolver nil) para el candado verbatim local_only (D-044.4).
+// Semántica de estado idéntica al resto del carril: 404 → ErrLearningPermanent;
+// 5xx/red/timeout → transitorio.
+func (c *LearningPipelineClient) GetChunkText(ctx context.Context, chunkID string) (string, error) {
+	if chunkID == "" {
+		return "", fmt.Errorf("chunk_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(pipelineChunkTextPathFmt, chunkID)
+
+	var out chunkTextResponse
+	if err := c.do(ctx, http.MethodGet, url, nil, &out); err != nil {
+		return "", err
+	}
+	return out.Text, nil
 }
 
 // UpdateCandidates persiste cambios parciales a un lote de candidatas (embedding,
