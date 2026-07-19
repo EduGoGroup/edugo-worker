@@ -35,6 +35,7 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/assessmentimport"
+	"github.com/EduGoGroup/edugo-worker/internal/chunking"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
 	llmapi "github.com/EduGoGroup/edugo-worker/internal/llm/api"
 	"github.com/EduGoGroup/edugo-worker/internal/llm/ollama"
@@ -67,6 +68,12 @@ func main() {
 	apiBaseURL := flag.String("api-base-url", "", "base URL del provider api (vacío = default)")
 
 	materialInputsCSV := flag.String("material-inputs", "", "modo material: rutas coma-separadas a documentos (.pdf → pdf.Extractor, .txt → texto plano). Vacío = todos los .txt de "+defaultMaterialDir)
+	chunkTarget := flag.Int("chunk-target", 300, "modo material: TargetWords del porcionado (default = config productiva)")
+	chunkMax := flag.Int("chunk-max", 400, "modo material: MaxWords del porcionado (default = config productiva)")
+	chunkMin := flag.Int("chunk-min", 200, "modo material: MinWords del porcionado (default = config productiva)")
+	chunkMerge := flag.Int("chunk-merge", 80, "modo material: MergeThresholdWords del porcionado (default = config productiva)")
+	skipPropose := flag.Bool("skip-propose", false, "modo material: omite la Batería B (solo mide el digest A)")
+	digestPrompt := flag.String("digest-prompt", "v2", "modo material: variante del prompt A: v2 (tarea partida, ruta productiva del provider local; default) | v1 (llamada única legacy, para regresión)")
 
 	embedModelsCSV := flag.String("embed-models", "nomic-embed-text,embeddinggemma", "modo embed: modelos de embeddings coma-separados a comparar (secuencial)")
 	embedPairsPath := flag.String("embed-pairs", defaultEmbedPairs, "modo embed: ruta a la batería de pares dup/no_dup")
@@ -118,7 +125,21 @@ func main() {
 	case "review-prep":
 		runReviewPrep(p, *timeout)
 	case "material":
-		runMaterial(p, *timeout, *materialInputsCSV)
+		runMaterial(p, materialOptions{
+			timeout:   *timeout,
+			inputsCSV: *materialInputsCSV,
+			chunkCfg: chunking.Config{
+				TargetWords:         *chunkTarget,
+				MaxWords:            *chunkMax,
+				MinWords:            *chunkMin,
+				MergeThresholdWords: *chunkMerge,
+			},
+			skipPropose:   *skipPropose,
+			digestVariant: *digestPrompt,
+			provider:      *provider,
+			ollamaURL:     *ollamaURL,
+			ollamaModel:   *ollamaModel,
+		})
 	case "relevance":
 		runRelevance(p, *ollamaModel, *relevanceCasesPath, *relevanceOutPath, *timeout)
 	default:
@@ -204,7 +225,7 @@ func buildProvider(kind string, f providerFlags) (llm.LLMProvider, error) {
 
 func prettyOrRaw(raw json.RawMessage) string {
 	var buf []byte
-	var tmp interface{}
+	var tmp any
 	if err := json.Unmarshal(raw, &tmp); err == nil {
 		if b, err := json.MarshalIndent(tmp, "", "  "); err == nil {
 			buf = b
@@ -216,7 +237,7 @@ func prettyOrRaw(raw json.RawMessage) string {
 	return string(buf)
 }
 
-func fatalf(format string, args ...interface{}) {
+func fatalf(format string, args ...any) {
 	fmt.Fprintf(os.Stderr, "error: "+format+"\n", args...)
 	os.Exit(1)
 }

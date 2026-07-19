@@ -207,32 +207,50 @@ func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest
 }
 
 // DigestChunk ejecuta la llamada A ("leer") del pipeline material→evaluación (plan 043
-// F3). Mismo camino que las demás llamadas: build prompt → generar → ExtractJSON →
-// ParseDigestResult. El caller valida los artefactos contra ChunkArtifactsV1.
+// F3) en su forma "tarea partida" (digest_split.go): dos llamadas mínimas —A1 solo
+// summary+topic, A2 solo ideas— ensambladas en el mismo DigestChunkResult del contrato.
+// Medido 2026-07-19 con gemma4:e4b sobre las zonas duras del CONASET: la llamada única
+// degeneraba el summary (66% válidos) y la partición lo rescata (97%) sin dañar el
+// control, a ~+22% de latencia. El caller valida contra ChunkArtifactsV1, igual.
 func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
-	prompt := llm.BuildDigestChunkPrompt(in)
 	// Override opcional de temperatura (jitter del reintento por calidad, plan 043);
-	// nil = temperatura por instancia (determinista).
+	// nil = temperatura por instancia (determinista). Aplica a AMBAS mitades.
 	temperature := p.temperature
 	if in.Temperature != nil {
 		temperature = *in.Temperature
 	}
-	out, err := p.generateWithTemperature(ctx, prompt, temperature)
+
+	// A1: summary encadenable + tema (la mitad que sostiene el pipeline, va primero).
+	outS, err := p.generateWithTemperature(ctx, llm.BuildDigestSummaryPrompt(in), temperature)
 	if err != nil {
 		// Fallo de transporte/HTTP: es INFRA, sube SIN el sentinel de calidad.
 		return nil, err
 	}
-	rawJSON, err := llm.ExtractJSON(out)
+	rawS, err := llm.ExtractJSON(outS)
 	if err != nil {
 		// El modelo respondió, pero su salida no trae un objeto JSON usable: CALIDAD.
-		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
+		return nil, fmt.Errorf("%w: digest A1: %v", llm.ErrLLMQuality, err)
 	}
-	artifacts, summary, err := llm.ParseDigestResult(rawJSON)
+	summaryPart, err := llm.ParseDigestSummaryPart(rawS)
 	if err != nil {
-		// El JSON no cumple el contrato del digest: CALIDAD.
 		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
 	}
-	return &llm.DigestChunkResult{Artifacts: artifacts, Summary: summary}, nil
+
+	// A2: solo las ideas del trozo.
+	outI, err := p.generateWithTemperature(ctx, llm.BuildDigestIdeasPrompt(in), temperature)
+	if err != nil {
+		return nil, err
+	}
+	rawI, err := llm.ExtractJSON(outI)
+	if err != nil {
+		return nil, fmt.Errorf("%w: digest A2: %v", llm.ErrLLMQuality, err)
+	}
+	ideasPart, err := llm.ParseDigestIdeasPart(rawI)
+	if err != nil {
+		return nil, fmt.Errorf("%w: %v", llm.ErrLLMQuality, err)
+	}
+
+	return llm.CombineDigestParts(summaryPart, ideasPart), nil
 }
 
 // ProposeCandidates ejecuta la llamada B ("preguntar") del pipeline (plan 043 F3).

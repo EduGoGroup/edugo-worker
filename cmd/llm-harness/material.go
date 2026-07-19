@@ -9,9 +9,10 @@ package main
 //     y valida cada candidata contra CandidatePayloadV1.
 //
 // El flujo espeja al processor de F3c: extrae texto (pdf.Extractor para .pdf, lectura
-// directa para .txt), porciona con chunking.DefaultConfig y encadena A→B por trozo. Mide
-// —no en papel— para elegir modelo (gemma4:e4b vs el piso gemma3:4b). Reporta tabla +
-// JSON; no corre nada si Ollama no responde (reporta el error del provider).
+// directa para .txt), porciona con la Config de los flags -chunk-* (default = la config
+// productiva 300/400/200/80, no chunking.DefaultConfig) y encadena A→B por trozo. Mide
+// —no en papel— para elegir modelo y variante de prompt (-digest-prompt v1|v2). Reporta
+// tabla + JSON; no corre nada si Ollama no responde (reporta el error del provider).
 //
 // NOTA (hallazgo F3b): el extractor de PDF (internal/infrastructure/pdf) devuelve hoy el
 // content-stream crudo (operadores + texto entre paréntesis) y además rechaza PDFs de una
@@ -62,6 +63,7 @@ type materialChunkMetric struct {
 	SummaryOK       bool     `json:"summary_ok"`
 
 	// Batería B (candidatas).
+	BSkipped    bool             `json:"b_skipped,omitempty"`
 	ProposeMS   int64            `json:"propose_ms"`
 	ProposeErr  string           `json:"propose_err,omitempty"`
 	CandTotal   int              `json:"cand_total"`
@@ -87,7 +89,7 @@ type candidateIssue struct {
 func materialInputs(explicit string) ([]string, error) {
 	if strings.TrimSpace(explicit) != "" {
 		var out []string
-		for _, p := range strings.Split(explicit, ",") {
+		for p := range strings.SplitSeq(explicit, ",") {
 			if s := strings.TrimSpace(p); s != "" {
 				out = append(out, s)
 			}
@@ -126,21 +128,54 @@ func loadMaterialText(path string, log logger.Logger) (string, error) {
 	return string(b), nil
 }
 
+// materialOptions agrupa los parámetros del modo material. El porcionado es
+// configurable por flags (default = la config productiva de internal/config, no el
+// DefaultConfig del paquete chunking) para que el harness mida lo que corre en vivo.
+type materialOptions struct {
+	timeout   time.Duration
+	inputsCSV string
+	chunkCfg  chunking.Config
+	// skipPropose omite la Batería B: para experimentos que solo miden el digest A
+	// ahorra la mitad de la corrida.
+	skipPropose bool
+	// digestVariant elige el prompt de la llamada A: "v2" = tarea partida (la ruta
+	// productiva del provider ollama desde el experimento 2026-07-19; default) o
+	// "v1" = llamada única legacy para regresión (vive en material_v1.go, solo local).
+	digestVariant string
+	provider      string
+	ollamaURL     string
+	ollamaModel   string
+}
+
 // runMaterial corre las baterías A y B sobre las entradas y reporta tabla + JSON.
-func runMaterial(p llm.LLMProvider, timeout time.Duration, inputsCSV string) {
-	inputs, err := materialInputs(inputsCSV)
+func runMaterial(p llm.LLMProvider, opts materialOptions) {
+	inputs, err := materialInputs(opts.inputsCSV)
 	if err != nil {
 		fatalf("resolviendo entradas: %v", err)
 	}
 	if len(inputs) == 0 {
 		fatalf("no hay entradas para el modo material (pasa -material-inputs o coloca .txt en %s)", defaultMaterialDir)
 	}
+	if err := opts.chunkCfg.Validate(); err != nil {
+		fatalf("config de chunking inválida: %v", err)
+	}
+	if opts.digestVariant != "v1" && opts.digestVariant != "v2" {
+		fatalf("variante de digest desconocida %q (usa v1|v2)", opts.digestVariant)
+	}
+	// v1 legacy vive en el harness contra Ollama; con provider api el modo material
+	// corre siempre la ruta productiva del provider (que en api sigue siendo la
+	// llamada única — la partición v2 se cableó solo en ollama, donde se midió).
+	if opts.digestVariant == "v1" && opts.provider != "local" && opts.provider != "ollama" {
+		fatalf("-digest-prompt=v1 (llamada única legacy) solo está implementada para el provider local/ollama")
+	}
 
 	log := logger.NewZapLogger("error", "console")
 
 	fmt.Printf("== llm-harness (material) ==\n")
 	fmt.Printf("provider : %s\n", p.Name())
-	fmt.Printf("entradas : %d\n\n", len(inputs))
+	fmt.Printf("entradas : %d\n", len(inputs))
+	fmt.Printf("chunking : target=%d max=%d min=%d merge=%d\n", opts.chunkCfg.TargetWords, opts.chunkCfg.MaxWords, opts.chunkCfg.MinWords, opts.chunkCfg.MergeThresholdWords)
+	fmt.Printf("digest   : %s%s\n\n", opts.digestVariant, map[bool]string{true: " (Batería B omitida)", false: ""}[opts.skipPropose])
 
 	var metrics []materialChunkMetric
 	for _, in := range inputs {
@@ -151,12 +186,12 @@ func runMaterial(p llm.LLMProvider, timeout time.Duration, inputsCSV string) {
 			metrics = append(metrics, materialChunkMetric{Input: name, ChunkSeq: -1, LoadErr: err.Error()})
 			continue
 		}
-		chunks := chunking.Split(text, chunking.DefaultConfig())
+		chunks := chunking.Split(text, opts.chunkCfg)
 		fmt.Printf("  %-24s %d bytes → %d trozos\n", name, len(text), len(chunks))
 
 		var prevSummary *string
 		for _, ch := range chunks {
-			m := runMaterialChunk(p, timeout, name, ch, prevSummary)
+			m := runMaterialChunk(p, opts, name, ch, prevSummary)
 			metrics = append(metrics, m)
 			if strings.TrimSpace(m.summaryText) != "" {
 				s := m.summaryText
@@ -173,7 +208,8 @@ func runMaterial(p llm.LLMProvider, timeout time.Duration, inputsCSV string) {
 // runMaterialChunk corre A y —si A dio ideas— B sobre un trozo. La medición NO reintenta
 // (a diferencia de los modos prep/review): F3b quiere ver la tasa cruda del modelo por
 // llamada, no la tasa tras reintentos.
-func runMaterialChunk(p llm.LLMProvider, timeout time.Duration, input string, ch chunking.Chunk, prevSummary *string) materialChunkMetric {
+func runMaterialChunk(p llm.LLMProvider, opts materialOptions, input string, ch chunking.Chunk, prevSummary *string) materialChunkMetric {
+	timeout := opts.timeout
 	m := materialChunkMetric{
 		Input:      input,
 		ChunkSeq:   ch.Seq,
@@ -181,16 +217,23 @@ func runMaterialChunk(p llm.LLMProvider, timeout time.Duration, input string, ch
 		TypeCounts: map[string]int{},
 	}
 
-	// --- Batería A: DigestChunk ---
-	ctxA, cancelA := context.WithTimeout(context.Background(), timeout)
+	// --- Batería A: DigestChunk (v2 = ruta productiva del provider, partida en dos;
+	// v1 = llamada única legacy para regresión, material_v1.go) ---
+	var digest *llm.DigestChunkResult
+	var errA error
 	startA := time.Now()
-	digest, errA := p.DigestChunk(ctxA, llm.DigestChunkInput{
-		ChunkText:   ch.Text,
-		PrevSummary: prevSummary,
-		Language:    "es",
-	})
+	if opts.digestVariant == "v1" {
+		digest, errA = digestChunkV1(opts, ch.Text, prevSummary)
+	} else {
+		ctxA, cancelA := context.WithTimeout(context.Background(), timeout)
+		digest, errA = p.DigestChunk(ctxA, llm.DigestChunkInput{
+			ChunkText:   ch.Text,
+			PrevSummary: prevSummary,
+			Language:    "es",
+		})
+		cancelA()
+	}
 	m.DigestMS = time.Since(startA).Milliseconds()
-	cancelA()
 
 	if errA != nil {
 		m.DigestErr = errA.Error()
@@ -211,6 +254,10 @@ func runMaterialChunk(p llm.LLMProvider, timeout time.Duration, input string, ch
 	}
 
 	// --- Batería B: ProposeCandidates (solo si A dejó ideas utilizables) ---
+	if opts.skipPropose {
+		m.BSkipped = true
+		return m
+	}
 	if m.MainIdeas == 0 {
 		m.ProposeErr = "A no produjo main_ideas; B omitida"
 		return m
@@ -277,7 +324,7 @@ func printMaterialTable(metrics []materialChunkMetric) {
 		sum := fmt.Sprintf("%d%s", m.SummaryWords, tick(m.SummaryOK))
 		b := fmt.Sprintf("%d", m.ProposeMS)
 		cand, rng, valid, types := "-", "-", "-", ""
-		if m.DigestErr == "" && m.ProposeErr == "" && m.MainIdeas > 0 {
+		if m.DigestErr == "" && m.ProposeErr == "" && m.MainIdeas > 0 && !m.BSkipped {
 			cand = fmt.Sprintf("%d", m.CandTotal)
 			rng = okFail(m.CandInRange)
 			valid = fmt.Sprintf("%d/%d", m.CandValid, m.CandTotal)
@@ -356,7 +403,7 @@ func aggregateMaterial(p llm.LLMProvider, metrics []materialChunkMetric) materia
 		if m.SummaryOK {
 			agg.SummariesOK++
 		}
-		if m.DigestErr == "" && m.ProposeErr == "" && m.MainIdeas > 0 {
+		if m.DigestErr == "" && m.ProposeErr == "" && m.MainIdeas > 0 && !m.BSkipped {
 			agg.ChunksWithB++
 			agg.ProposeMSTotal += m.ProposeMS
 			agg.CandTotal += m.CandTotal
