@@ -63,12 +63,16 @@ type materialChunkMetric struct {
 	SummaryOK       bool     `json:"summary_ok"`
 
 	// Batería B (candidatas).
-	BSkipped    bool             `json:"b_skipped,omitempty"`
-	ProposeMS   int64            `json:"propose_ms"`
-	ProposeErr  string           `json:"propose_err,omitempty"`
-	CandTotal   int              `json:"cand_total"`
-	CandValid   int              `json:"cand_valid"`
-	CandInRange bool             `json:"cand_in_range"`
+	BSkipped    bool   `json:"b_skipped,omitempty"`
+	ProposeMS   int64  `json:"propose_ms"`
+	ProposeErr  string `json:"propose_err,omitempty"`
+	CandTotal   int    `json:"cand_total"`
+	CandValid   int    `json:"cand_valid"`
+	CandInRange bool   `json:"cand_in_range"`
+	// CandDeictic cuenta candidatas cuyo enunciado referencia el contexto del prompt
+	// («según las ideas», «según el texto»…): no autocontenidas (deuda 043). Se mide con
+	// el detector determinista de materialpipeline, independiente de la validez de forma.
+	CandDeictic int              `json:"cand_deictic"`
 	TypeCounts  map[string]int   `json:"type_counts,omitempty"`
 	CandIssues  []candidateIssue `json:"cand_issues,omitempty"`
 
@@ -281,6 +285,9 @@ func runMaterialChunk(p llm.LLMProvider, opts materialOptions, input string, ch 
 	m.CandInRange = m.CandTotal >= 2 && m.CandTotal <= 4
 	for i, c := range candidates {
 		m.TypeCounts[c.QuestionType]++
+		if materialpipeline.DetectDeicticReference(c.QuestionText) != "" {
+			m.CandDeictic++
+		}
 		rawCand, _ := c.Marshal()
 		if _, verr := materialpipeline.ValidateCandidatePayload(rawCand); verr == nil {
 			m.CandValid++
@@ -310,8 +317,8 @@ func issueStrings(err error) []string {
 
 // printMaterialTable imprime una fila por trozo con las métricas de A y B.
 func printMaterialTable(metrics []materialChunkMetric) {
-	fmt.Printf("%-22s %-5s %-6s %-7s %-5s %-9s %-7s %-5s %-4s %-6s %s\n",
-		"INPUT", "TROZO", "PALS", "A(ms)", "ARTF", "SUM(pal)", "B(ms)", "CAND", "2-4", "VÁLID", "TIPOS")
+	fmt.Printf("%-22s %-5s %-6s %-7s %-5s %-9s %-7s %-5s %-4s %-6s %-5s %s\n",
+		"INPUT", "TROZO", "PALS", "A(ms)", "ARTF", "SUM(pal)", "B(ms)", "CAND", "2-4", "VÁLID", "DEÍC", "TIPOS")
 	for _, m := range metrics {
 		if m.ChunkSeq < 0 {
 			fmt.Printf("%-22s %-5s %s\n", trunc(m.Input, 22), "-", "FALLO carga: "+m.LoadErr)
@@ -323,17 +330,18 @@ func printMaterialTable(metrics []materialChunkMetric) {
 		}
 		sum := fmt.Sprintf("%d%s", m.SummaryWords, tick(m.SummaryOK))
 		b := fmt.Sprintf("%d", m.ProposeMS)
-		cand, rng, valid, types := "-", "-", "-", ""
+		cand, rng, valid, deic, types := "-", "-", "-", "-", ""
 		if m.DigestErr == "" && m.ProposeErr == "" && m.MainIdeas > 0 && !m.BSkipped {
 			cand = fmt.Sprintf("%d", m.CandTotal)
 			rng = okFail(m.CandInRange)
 			valid = fmt.Sprintf("%d/%d", m.CandValid, m.CandTotal)
+			deic = fmt.Sprintf("%d", m.CandDeictic)
 			types = typeSummary(m.TypeCounts)
 		} else if m.ProposeErr != "" {
 			cand = "ERR"
 		}
-		fmt.Printf("%-22s %-5d %-6d %-7d %-5s %-9s %-7s %-5s %-4s %-6s %s\n",
-			trunc(m.Input, 22), m.ChunkSeq, m.ChunkWords, m.DigestMS, artf, sum, b, cand, rng, valid, types)
+		fmt.Printf("%-22s %-5d %-6d %-7d %-5s %-9s %-7s %-5s %-4s %-6s %-5s %s\n",
+			trunc(m.Input, 22), m.ChunkSeq, m.ChunkWords, m.DigestMS, artf, sum, b, cand, rng, valid, deic, types)
 		if m.DigestErr != "" {
 			fmt.Printf("      A error: %s\n", trunc(m.DigestErr, 100))
 		}
@@ -358,6 +366,7 @@ func printMaterialJSON(p llm.LLMProvider, metrics []materialChunkMetric) {
 	fmt.Printf("artefactos A válidos     : %d/%d (%s)\n", agg.ArtifactsValid, agg.Chunks, pct(agg.ArtifactsValid, agg.Chunks))
 	fmt.Printf("summaries ≤%d palabras   : %d/%d (%s)\n", maxSummaryWords, agg.SummariesOK, agg.Chunks, pct(agg.SummariesOK, agg.Chunks))
 	fmt.Printf("candidatas B válidas     : %d/%d (%s)\n", agg.CandValid, agg.CandTotal, pct(agg.CandValid, agg.CandTotal))
+	fmt.Printf("candidatas B deícticas   : %d/%d (%s)\n", agg.CandDeictic, agg.CandTotal, pct(agg.CandDeictic, agg.CandTotal))
 	fmt.Printf("trozos con 2–4 candidatas: %d/%d (%s)\n", agg.ChunksCandInRange, agg.ChunksWithB, pct(agg.ChunksCandInRange, agg.ChunksWithB))
 	fmt.Printf("distribución de tipos    : %s\n", typeSummary(agg.TypeCounts))
 	fmt.Printf("latencia A (prom/total)  : %d ms / %d ms\n", avg(agg.DigestMSTotal, agg.Chunks), agg.DigestMSTotal)
@@ -384,6 +393,7 @@ type materialAggregate struct {
 	ChunksCandInRange int            `json:"chunks_cand_in_range"`
 	CandTotal         int            `json:"cand_total"`
 	CandValid         int            `json:"cand_valid"`
+	CandDeictic       int            `json:"cand_deictic"`
 	TypeCounts        map[string]int `json:"type_counts"`
 	DigestMSTotal     int64          `json:"digest_ms_total"`
 	ProposeMSTotal    int64          `json:"propose_ms_total"`
@@ -408,6 +418,7 @@ func aggregateMaterial(p llm.LLMProvider, metrics []materialChunkMetric) materia
 			agg.ProposeMSTotal += m.ProposeMS
 			agg.CandTotal += m.CandTotal
 			agg.CandValid += m.CandValid
+			agg.CandDeictic += m.CandDeictic
 			if m.CandInRange {
 				agg.ChunksCandInRange++
 			}

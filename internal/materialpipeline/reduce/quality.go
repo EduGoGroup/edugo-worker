@@ -86,7 +86,9 @@ func (q *QualityPass) Run(ctx context.Context, jobID string) (QualityReport, err
 // validateCandidateQuality valida el payload contra el contrato import v1 (reusa
 // materialpipeline.ValidateCandidatePayload — no se duplican reglas) más el techo de
 // opciones anti-abuso del 038 (que el validador de candidata no cubre: solo verifica el
-// mínimo por tipo, no el máximo). Devuelve "" si es válida, o un motivo corto para el log.
+// mínimo por tipo, no el máximo) y el guard de enunciado autocontenido (deuda 043: un
+// enunciado que dice «según las ideas» referencia contexto del prompt que el alumno no
+// ve). Devuelve "" si es válida, o un motivo corto para el log.
 func validateCandidateQuality(raw []byte) string {
 	payload, err := materialpipeline.ValidateCandidatePayload(raw)
 	if err != nil {
@@ -94,6 +96,9 @@ func validateCandidateQuality(raw []byte) string {
 	}
 	if len(payload.Options) > assessmentimport.DefaultMaxOptionsPerQ {
 		return fmt.Sprintf("%d opciones exceden el máximo de %d", len(payload.Options), assessmentimport.DefaultMaxOptionsPerQ)
+	}
+	if phrase := materialpipeline.DetectDeicticReference(payload.QuestionText); phrase != "" {
+		return fmt.Sprintf("enunciado no autocontenido: referencia deíctica al contexto (%q)", phrase)
 	}
 	return ""
 }

@@ -11,7 +11,7 @@ import (
 // manyOptions genera n opciones distintas.
 func manyOptions(n int) []string {
 	out := make([]string, n)
-	for i := 0; i < n; i++ {
+	for i := range n {
 		out[i] = "op" + strconv.Itoa(i)
 	}
 	return out
@@ -31,6 +31,8 @@ func TestQuality_ValidaEInvalidaPorRegla(t *testing.T) {
 		candRecord("tipoMalo", 3, "trivia", "q", "op0", []string{"op0", "op1"}, []string{"i"}),
 		// demasiadas opciones (> MaxOptionsPerQ = 10)
 		candRecord("muchasOpc", 4, "multiple_choice", "q", "op0", manyOptions(11), []string{"i"}),
+		// enunciado no autocontenido (referencia deíctica al contexto del prompt, deuda 043)
+		candRecord("deictica", 6, "multiple_choice", "¿Cuál es el costo según las ideas proporcionadas?", "op0", []string{"op0", "op1"}, []string{"i"}),
 	}}
 	// mc sin correct_answer (obligatorio salvo open_ended): candRecord con correct nil.
 	store.records = append(store.records,
@@ -41,17 +43,17 @@ func TestQuality_ValidaEInvalidaPorRegla(t *testing.T) {
 	if err != nil {
 		t.Fatalf("Run: %v", err)
 	}
-	if rep.Processed != 6 {
-		t.Fatalf("Processed = %d, quiero 6", rep.Processed)
+	if rep.Processed != 7 {
+		t.Fatalf("Processed = %d, quiero 7", rep.Processed)
 	}
-	if rep.Valid != 1 || rep.DroppedInvalid != 5 {
-		t.Fatalf("Valid/DroppedInvalid = %d/%d, quiero 1/5", rep.Valid, rep.DroppedInvalid)
+	if rep.Valid != 1 || rep.DroppedInvalid != 6 {
+		t.Fatalf("Valid/DroppedInvalid = %d/%d, quiero 1/6", rep.Valid, rep.DroppedInvalid)
 	}
 	st := statusByID(store)
 	if st["ok"] != statusCandidate {
 		t.Fatalf("la candidata válida debe seguir en candidate, está en %q", st["ok"])
 	}
-	for _, id := range []string{"pocasOpc", "correctaFuera", "tipoMalo", "muchasOpc", "sinCorrecta"} {
+	for _, id := range []string{"pocasOpc", "correctaFuera", "tipoMalo", "muchasOpc", "sinCorrecta", "deictica"} {
 		if st[id] != statusDroppedIrrelevant {
 			t.Fatalf("%q debe caer a dropped_irrelevant, está en %q", id, st[id])
 		}

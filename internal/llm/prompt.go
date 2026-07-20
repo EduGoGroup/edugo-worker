@@ -687,7 +687,10 @@ func BuildProposeCandidatesPrompt(in ProposeCandidatesInput) string {
 	// Sin sesgo (lección 045): preguntas claras y justas, sin inclinar la respuesta ni
 	// regalar pistas; los distractores plausibles pero inequívocamente incorrectos.
 	b.WriteString("- Redacta preguntas CLARAS y JUSTAS, sin pistas que delaten la respuesta y sin ambigüedad; en opción múltiple los distractores deben ser plausibles pero inequívocamente incorrectos.\n")
-	b.WriteString("- Genera preguntas SOLO a partir de las ideas dadas: no introduzcas hechos que no estén en ellas.\n\n")
+	b.WriteString("- Genera preguntas SOLO a partir de las ideas dadas: no introduzcas hechos que no estén en ellas.\n")
+	// Autocontenido (deuda 043): el alumno no comparte el contexto de este prompt; un
+	// enunciado que dice «según las ideas» referencia algo que él jamás verá.
+	b.WriteString("- Cada enunciado debe ser AUTOCONTENIDO: el alumno NO ve estas ideas ni ningún texto. PROHIBIDO escribir «según el texto», «según las ideas», «el material», «lo visto» o similares; si la pregunta necesita un dato, el dato va DENTRO del enunciado.\n\n")
 
 	b.WriteString(prepAntiInjection)
 	b.WriteString("\n")
