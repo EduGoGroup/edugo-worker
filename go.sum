@@ -6,8 +6,8 @@ github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c h1:udKWzYgxTojEK
 github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c/go.mod h1:xomTg63KZ2rFqZQzSB4Vz2SUXa1BpHTVz9L5PTmPC4E=
 github.com/EduGoGroup/edugo-shared/auth v0.900.2 h1:iZXZTVnnGBUsBq4jsxSyKpJ2+cAwwyGP3k4eBjqK33E=
 github.com/EduGoGroup/edugo-shared/auth v0.900.2/go.mod h1:X75eF8JizaAbUxcb/RZECHZ2xQBuVLbPEuvRREbaGR4=
-github.com/EduGoGroup/edugo-shared/common v0.900.4 h1:XGu9yvhS3DTPHmPi2+PvP0k1KAUneVTvhxlu3hvo1sI=
-github.com/EduGoGroup/edugo-shared/common v0.900.4/go.mod h1:NMBRyufKBKFtp/S/p63xGAJz1VtqRymH0VJrsQWnBoM=
+github.com/EduGoGroup/edugo-shared/common v0.900.5 h1:X/hoZptp74ktZ7FFgVWD9sJb9g4+f4MrqSnPH0kZoz0=
+github.com/EduGoGroup/edugo-shared/common v0.900.5/go.mod h1:NMBRyufKBKFtp/S/p63xGAJz1VtqRymH0VJrsQWnBoM=
 github.com/EduGoGroup/edugo-shared/config v0.1.0 h1:pZiOR/YmaoDLYCawBy0xnt2lu+aRyjwuvIvDbcittto=
 github.com/EduGoGroup/edugo-shared/config v0.1.0/go.mod h1:xirrLI+2wAiwSRfZOcWSxdKBFcTUwdZHgJhH4fuiEd4=
 github.com/EduGoGroup/edugo-shared/health v0.1.0 h1:ULGFf3XmobNVgY4rOy6VlGxKMGvtj6vT6hYf6GSk6xg=

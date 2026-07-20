@@ -4,7 +4,7 @@ go 1.25.0
 
 require (
 	github.com/EduGoGroup/edugo-shared/auth v0.900.2
-	github.com/EduGoGroup/edugo-shared/common v0.900.4
+	github.com/EduGoGroup/edugo-shared/common v0.900.5
 	github.com/EduGoGroup/edugo-shared/config v0.1.0
 	github.com/EduGoGroup/edugo-shared/health v0.1.0
 	github.com/EduGoGroup/edugo-shared/lifecycle v0.1.0
