@@ -46,13 +46,13 @@ func setupRabbitMQ(t *testing.T) (*amqp.Channel, func()) {
 
 	channel, err := conn.Channel()
 	if err != nil {
-		conn.Close()
+		_ = conn.Close()
 		t.Fatalf("Failed to create channel: %v", err)
 	}
 
 	cleanup := func() {
-		channel.Close()
-		conn.Close()
+		_ = channel.Close()
+		_ = conn.Close()
 	}
 
 	return channel, cleanup
