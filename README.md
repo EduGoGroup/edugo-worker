@@ -94,7 +94,7 @@ Contexto de lo retirado antes del esqueleto:
 
 ## 📦 Requisitos
 
-- Go 1.25 o superior
+- Go 1.27.4 o superior
 - RabbitMQ 3.11+
 - Docker y Docker Compose (para desarrollo)
 
