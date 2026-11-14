@@ -11,4 +11,4 @@ ProcessorRegistry + ResourceBuilder) está cerrada (ver `README.md`).
 
 Deuda viva (ecosistema): el flujo `assessment.published`/announcements → notificaciones no está
 cerrado end-to-end; los procesadores de notificación existen pero falta el disparo completo desde
-platform. Se coordina en `../../../docs/ACTIVE.md`.
+platform. Se coordina en `../../../documentacion/AHORA.md`.
