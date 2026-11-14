@@ -10,8 +10,9 @@ COVERAGE_DIR=coverage
 MAIN_PATH=./cmd
 
 # Versions (keep in sync with .github/workflows/ci.yml)
-GO_VERSION  := 1.25
-LINT_VERSION := v2.4.0
+GO_VERSION  := 1.27.4
+LINT_VERSION := v2.14.0
+GOVULNCHECK_VERSION := v1.9.0
 
 # Go commands
 GOCMD=go
@@ -111,6 +112,11 @@ lint: ## Linter completo
 	@echo "$(YELLOW)🔎 Ejecutando golangci-lint...$(RESET)"
 	@golangci-lint run --timeout=5m || echo "$(YELLOW)⚠️  Instalar con: make tools$(RESET)"
 
+vuln: ## Vulnerabilidades alcanzables con govulncheck ($(GOVULNCHECK_VERSION))
+	@echo "$(YELLOW)🛡️  Ejecutando govulncheck...$(RESET)"
+	@GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+	@echo "$(GREEN)✓ Sin vulnerabilidades alcanzables$(RESET)"
+
 audit: ## Auditoría de calidad completa
 	@echo "$(BLUE)=== 🔐 AUDITORÍA ===$(RESET)"
 	@echo "$(YELLOW)1. Verificando go.mod...$(RESET)"
@@ -139,7 +145,7 @@ tidy: ## Limpiar go.mod
 
 tools: ## Instalar herramientas
 	@echo "$(YELLOW)🛠️  Instalando herramientas...$(RESET)"
-	@go install github.com/golangci/golangci-lint/cmd/golangci-lint@$(LINT_VERSION)
+	@go install github.com/golangci/golangci-lint/v2/cmd/golangci-lint@$(LINT_VERSION)
 	@echo "$(GREEN)✓ Herramientas instaladas$(RESET)"
 
 # ============================================
@@ -168,20 +174,21 @@ docker-logs: ## Ver logs
 ci: audit test-coverage ## CI pipeline
 	@echo "$(GREEN)✅ CI completado$(RESET)"
 
-ci-local: fmt vet lint test-unit ## Pre-push: mismos checks que el CI de GitHub (con lint)
+ci-local: fmt vet lint test-unit vuln ## Pre-push: mismos checks que el CI de GitHub (con lint y govulncheck)
 	@echo "$(GREEN)CI local OK$(RESET)"
 
-ci-docker: ## Simula el CI en Docker (Go $(GO_VERSION) + golangci-lint $(LINT_VERSION)) — requiere Docker
+ci-docker: ## Simula el CI en Docker (Go $(GO_VERSION) + golangci-lint $(LINT_VERSION) + govulncheck $(GOVULNCHECK_VERSION)) — requiere Docker
 	@which docker > /dev/null 2>&1 || (echo "$(RED)Docker no instalado$(RESET)" && exit 1)
 	@echo "$(YELLOW)Ejecutando CI en Docker (Go $(GO_VERSION))...$(RESET)"
 	@docker run --rm \
 		-e GOPRIVATE=github.com/EduGoGroup/* \
+		-e GOWORK=off \
 		-v "$(HOME)/.netrc:/root/.netrc:ro" \
 		-v "$$(go env GOPATH)/pkg/mod:/go/pkg/mod" \
 		-v "$(PWD):/workspace" \
 		-w /workspace \
 		golang:$(GO_VERSION)-bookworm \
-		bash -c "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b /usr/local/bin $(LINT_VERSION) && go vet ./... && golangci-lint run --timeout=5m && go test -short -race ./..."
+		bash -c "curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/HEAD/install.sh | sh -s -- -b /usr/local/bin $(LINT_VERSION) && go vet ./... && golangci-lint run --timeout=5m && go test -short -race ./... && go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./..."
 	@echo "$(GREEN)CI Docker OK$(RESET)"
 
 pre-commit: fmt vet test ## Pre-commit hook
@@ -208,5 +215,5 @@ info: ## Info del proyecto
 	@echo "  Ambiente: $(APP_ENV)"
 	@echo "  Go: $$($(GOCMD) version)"
 
-.PHONY: help build run dev test test-coverage test-unit test-integration benchmark fmt vet lint audit deps tidy tools docker-build docker-run docker-stop docker-logs ci ci-local ci-docker pre-commit clean all info
+.PHONY: help build run dev test test-coverage test-unit test-integration benchmark fmt vet lint vuln audit deps tidy tools docker-build docker-run docker-stop docker-logs ci ci-local ci-docker pre-commit clean all info
 export OPENAI_API_KEY ?= sk-test-key

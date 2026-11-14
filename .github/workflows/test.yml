@@ -7,7 +7,8 @@ on:
     branches: [main, dev]
 
 env:
-  GO_VERSION: "1.25.0"
+  GO_VERSION: "1.27.4"
+  GOWORK: "off"
 
 jobs:
   # =====================================================
@@ -21,13 +22,13 @@ jobs:
     name: Tests with Coverage
     uses: EduGoGroup/edugo-infrastructure/.github/workflows/reusable-go-test.yml@main
     with:
-      go-version: "1.25"
+      go-version: "1.27.4"
       coverage-threshold: 0.0  # TODO: Aumentar a 33.0 cuando se implementen tests
       use-services: true  # RabbitMQ (worker esqueleto, plan 037 D-037.11: sin Postgres/Mongo)
     # LECCIONES APRENDIDAS APLICADAS:
     # ✅ NO subdirectorio (reusable-go-test.yml en raíz)
     # ✅ NO secrets GITHUB_TOKEN (nombre reservado)
-    # ✅ Compatible con Go 1.25
+    # ✅ Compatible con Go 1.27
     # Referencia: docs/cicd/SPRINT-4-LESSONS-LEARNED.md
 
   integration-tests:
@@ -37,10 +38,10 @@ jobs:
 
     steps:
       - name: Checkout código
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
 

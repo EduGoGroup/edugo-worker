@@ -21,7 +21,7 @@
 
 | Tecnología | Versión | Uso |
 |-----------|---------|-----|
-| Go | 1.25.0 | Lenguaje principal |
+| Go | 1.27.4 | Lenguaje principal |
 | RabbitMQ (amqp091-go) | v1.10.0 | Mensajería — consumo de eventos |
 | PostgreSQL (lib/pq + GORM) | v1.11.2 / v1.31.1 | Metadatos de materiales |
 | MongoDB (mongo-driver) | v2.5.0 | Contenido generado (resúmenes, quizzes) |
