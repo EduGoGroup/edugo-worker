@@ -1,0 +1,18 @@
+version: "2"
+
+# Config de lint de edugo-worker (plan 054, E3.6).
+# Mantiene el conjunto de linters por defecto de golangci-lint v2 (preset "standard",
+# que incluye staticcheck y unused). No baja reglas ni añade exclusiones.
+
+# El lint ve también los ficheros con `//go:build integration` (plan 054, S.4).
+run:
+  build-tags:
+    - integration
+  # Varios agentes o terminales pueden lintar a la vez sin bloquearse entre sí.
+  allow-parallel-runners: true
+
+# Sin recorte: por defecto golangci-lint enseña como mucho 3 hallazgos con el mismo texto y 50 por
+# linter, y eso esconde la cifra real (plan 054, S.4).
+issues:
+  max-same-issues: 0
+  max-issues-per-linter: 0

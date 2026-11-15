@@ -8,7 +8,10 @@ on:
     branches: [main] # Red de seguridad por si alguien hace push directo
 
 env:
-  GO_VERSION: "1.25.0"
+  GO_VERSION: "1.27.4"
+  GOVULNCHECK_VERSION: "v1.9.0"
+  # go.work local de EduBack no existe en CI, pero se fija para que ningún paso lo herede (plan 054).
+  GOWORK: "off"
   # GOPRIVATE a nivel de workflow: aplica a TODOS los pasos Go (download/tidy/vet/test/build).
   # Si solo se setea en el step de "git config insteadOf", el "go mod download" siguiente corre sin
   # GOPRIVATE y consulta el checksum DB / proxy, que puede servir un blob fantasma de un módulo
@@ -22,10 +25,10 @@ jobs:
 
     steps:
       - name: Checkout código
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -65,6 +68,12 @@ jobs:
       - name: Ejecutar tests con race detection
         run: go test -v -race ./...
 
+      # Sin continue-on-error: una vulnerabilidad alcanzable pone el job en rojo (plan 054, H.2).
+      - name: govulncheck
+        run: |
+          go install golang.org/x/vuln/cmd/govulncheck@${{ env.GOVULNCHECK_VERSION }}
+          "$(go env GOPATH)/bin/govulncheck" ./...
+
       - name: Verificar build
         run: go build -v ./...
 
@@ -82,7 +91,8 @@ jobs:
     name: Lint & Format Check
     uses: EduGoGroup/edugo-infrastructure/.github/workflows/reusable-go-lint.yml@main
     with:
-      go-version: "1.25"
+      go-version: "1.27.4"
+      golangci-lint-version: "v2.14.0"
       args: "--timeout=5m"
     # LECCIONES APRENDIDAS APLICADAS:
     # ✅ NO subdirectorio (reusable-go-lint.yml en raíz)
@@ -97,10 +107,10 @@ jobs:
 
     steps:
       - name: Checkout código
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true

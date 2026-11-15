@@ -94,7 +94,7 @@ Contexto de lo retirado antes del esqueleto:
 
 ## 📦 Requisitos
 
-- Go 1.25 o superior
+- Go 1.27.4 o superior
 - RabbitMQ 3.11+
 - Docker y Docker Compose (para desarrollo)
 
@@ -244,8 +244,10 @@ make run
 make build          # Compilar el proyecto
 make test           # Ejecutar tests
 make test-coverage  # Tests con reporte de cobertura
-make lint           # Ejecutar linter
-make format         # Formatear código
+make test-integration  # Tests de integración (gate local previo al PR; requiere Docker)
+make lint           # Ejecutar linter (falla si hay hallazgos o si falta golangci-lint)
+make fmt            # Formatear código
+make ci-local       # fmt + vet + lint + test-unit + govulncheck
 make clean          # Limpiar binarios
 ```
 
@@ -339,14 +341,18 @@ El proyecto usa GitHub Actions para CI/CD:
 ### Pipeline de PR
 
 ```yaml
-# .github/workflows/pr.yml
+# .github/workflows/ci.yml
 - Format Check (gofmt)
-- Linting (golangci-lint)
-- Unit Tests
-- Integration Tests
-- Coverage Report
 - go.mod/go.sum Validation
+- go vet
+- Tests (go test -race ./...)
+- govulncheck
+- Linting (golangci-lint)
+- Docker Build Test
 ```
+
+Los tests de integración **no corren en CI**: son un gate local obligatorio antes de cada PR
+(`RUN_INTEGRATION_TESTS=true GOWORK=off make test-integration`, con Docker).
 
 ### Validaciones
 
@@ -418,9 +424,8 @@ git commit -m "feat: descripción del cambio"
 
 3. Ejecutar validaciones locales:
 ```bash
-make format
-make lint
-make test
+make ci-local                                               # fmt, vet, lint, tests unitarios y govulncheck
+RUN_INTEGRATION_TESTS=true GOWORK=off make test-integration # obligatorio: la integración no corre en CI (requiere Docker)
 ```
 
 4. Push y crear PR:

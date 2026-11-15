@@ -23,7 +23,8 @@ permissions:
   packages: write
 
 env:
-  GO_VERSION: '1.25.0'
+  GO_VERSION: '1.27.4'
+  GOWORK: 'off'
   REGISTRY: ghcr.io
   IMAGE_NAME: ${{ github.repository }}
   # GOPRIVATE a nivel de workflow: aplica a TODOS los pasos Go (download/test/build).
@@ -50,7 +51,7 @@ jobs:
           private-key: ${{ secrets.APP_PRIVATE_KEY }}
 
       - name: Checkout código
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: main
           fetch-depth: 0
@@ -179,12 +180,12 @@ jobs:
 
     steps:
       - name: Checkout código en tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: v${{ inputs.version }}
 
       - name: Setup Go
-        uses: actions/setup-go@v6
+        uses: actions/setup-go@v7
         with:
           go-version: ${{ env.GO_VERSION }}
           cache: true
@@ -221,7 +222,7 @@ jobs:
 
     steps:
       - name: Checkout código en tag
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: v${{ inputs.version }}
 
@@ -288,7 +289,7 @@ jobs:
 
     steps:
       - name: Checkout código
-        uses: actions/checkout@v6
+        uses: actions/checkout@v7
         with:
           ref: v${{ inputs.version }}
           fetch-depth: 0
