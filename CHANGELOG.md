@@ -9,12 +9,14 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ### Changed
 
+- chore(054): saneamiento de rojos heredados (plan 054, ola S). `make lint` falla de verdad: sin `|| echo`, sale con error si falta `golangci-lint` y propaga su código de salida (S.3, MEJ-07). `.golangci.yml` con `run.build-tags: [integration]`, `allow-parallel-runners` y sin recorte de hallazgos (`max-same-issues: 0`, `max-issues-per-linter: 0`), y los 3 `errcheck` de `test/integration/setup.go` que destapó (S.4). `make test-integration` fuerza `GOWORK=off` y `RUN_INTEGRATION_TESTS=true`, corre con `-race` y falla si Docker no responde; queda documentado como gate local obligatorio antes de cada PR (S.6).
 - chore(054): homologación a Go 1.27.4 (plan 054, E3.6). Módulos de `edugo-shared` a la banda `v0.900.x` publicada en Go 1.27.4; `amqp091-go v1.16.0`, `prometheus/client_golang v1.25.0`, `client_model v0.6.3`, `ledongthuc/pdf` a la última y `testify v1.12.1`. golangci-lint `v2.14.0` con `.golangci.yml` (`version: "2"`) nuevo; `govulncheck v1.9.0` como paso de la CI y como `make vuln` (dentro de `ci-local` y `ci-docker`); `actions/checkout@v7` y `actions/setup-go@v7`; `GOWORK=off` en los workflows.
 - feat(notifications): el worker delega la entrega al Notification Gateway (plan 020 F2.3, D13). Nuevo `client.ServiceTokenProvider` (firma service JWT M2M HS256 con `auth.ServiceJWTManager` de edugo-shared, con caché) y `client.NotificationDispatchClient` (HTTP POST a `/api/v1/internal/notifications/dispatch` con `Authorization: Bearer <service-jwt>`). Los processors `assessment.assigned` (N alumnos → 1 dispatch con N recipients), `assessment.attempt_recorded` (docente) y `assessment.reviewed` (alumno) ahora resuelven destinatarios y delegan; un fallo de dispatch (5xx/timeout) se propaga para que RabbitMQ reintente (la idempotencia del gateway evita duplicados). Log `dispatch_requested`.
 - Config nueva `notification_gateway` (`base_url`, `timeout`, `service_jwt.{secret,issuer,audience,client_id,ttl}`).
 
 ### Removed
 
+- `.github/workflows/test.yml` («Tests with Coverage»): terminaba en `startup_failure` en cada PR (bug 0088) y duplicaba a `ci.yml` con un umbral de cobertura de `0.0` (plan 054, S.2).
 - `NotificationCreator` y todo SQL directo a `notifications.notifications` en el worker (migrado a edugo-api-platform en F2.2). El worker ya no escribe in-app ni tiene credenciales FCM/APNs.
 
 ### Tests

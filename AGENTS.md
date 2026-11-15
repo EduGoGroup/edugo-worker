@@ -48,7 +48,29 @@ Ya **no hay** `persistence/` (Postgres/Mongo retirados).
 
 `Makefile` (set propio del worker, distinto al de las APIs):
 - `make build` — binario en `bin/`. `make run` o `go run cmd/main.go`.
-- `make test` / `make test-coverage` / `make lint` / `make format`.
+- `make test` / `make test-coverage` / `make lint` / `make fmt`.
+- `make lint` **falla de verdad**: sale con error si `golangci-lint` no está instalado (`make tools`) o
+  si hay hallazgos. El `.golangci.yml` lleva `build-tags: [integration]`, así que también lintea
+  `test/integration/`.
+
+### Gates antes de cada PR (todos en verde, en local, sin pipe)
+
+1. `make ci-local` — `fmt`, `vet`, `lint`, `test-unit` y `vuln` (govulncheck).
+2. `GOWORK=off go build ./...` y `GOWORK=off go test -race ./...`.
+3. **Integración: gate local obligatorio.** No corre en CI (decisión del dueño, plan 054 S.6), así que
+   nadie más la va a correr por ti:
+
+   ```bash
+   RUN_INTEGRATION_TESTS=true GOWORK=off make test-integration
+   ```
+
+   Requiere Docker (testcontainers levanta RabbitMQ). El target ya fuerza `GOWORK=off` y
+   `RUN_INTEGRATION_TESTS=true`, y falla si Docker no responde. Si falla por un timeout con la máquina
+   cargada, se reintenta; si el fallo es real, se arregla antes del PR.
+
+La CI del PR es un solo workflow, `ci.yml` (tests con `-race`, govulncheck, lint y build de Docker).
+`test.yml` («Tests with Coverage») se borró en el plan 054 (S.2): duplicaba a `ci.yml` y terminaba en
+`startup_failure`.
 - Docker: `docker-compose up -d`. Config vía env (`RABBITMQ_URL`, `API_IDENTITY_*`, `LOG_*`,
   `OPENAI_API_KEY`). Ya **no** usa `POSTGRES_*` ni `MONGODB_*`.
 

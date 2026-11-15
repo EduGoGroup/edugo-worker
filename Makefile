@@ -36,6 +36,9 @@ RESET=\033[0m
 # Plan 037 (D-037.11): worker esqueleto sin Postgres ni Mongo; su única
 # dependencia es RabbitMQ (edugo-rabbitmq 5672). Con estos defaults,
 # `APP_ENV=local make run` arranca sin exportar nada a mano.
+# Plan 054: todos los targets compilan como la CI, sin heredar un go.work del árbol padre.
+export GOWORK := off
+
 export APP_ENV ?= local
 export RABBITMQ_URL ?= amqp://guest:guest@localhost:5672/
 
@@ -87,8 +90,13 @@ test-coverage: ## Tests con cobertura (HTML report)
 test-unit: ## Solo tests unitarios
 	@$(GOTEST) -v -short ./...
 
-test-integration: ## Tests de integración
-	@$(GOTEST) -v -tags=integration ./...
+# Gate local obligatorio antes de cada PR (plan 054, S.6): la integración no corre en CI.
+# Fuerza GOWORK=off y RUN_INTEGRATION_TESTS=true para que no dependa del entorno de quien lo lanza.
+test-integration: ## Tests de integración (gate local previo al PR; requiere Docker)
+	@docker info > /dev/null 2>&1 || { echo "$(RED)✗ Docker no está disponible: los tests de integración usan testcontainers$(RESET)"; exit 1; }
+	@echo "$(YELLOW)🧪 Ejecutando tests de integración (GOWORK=off, RUN_INTEGRATION_TESTS=true)...$(RESET)"
+	@RUN_INTEGRATION_TESTS=true $(GOTEST) -v -race -tags=integration ./...
+	@echo "$(GREEN)✓ Tests de integración completados$(RESET)"
 
 benchmark: ## Ejecutar benchmarks
 	@echo "$(YELLOW)⚡ Ejecutando benchmarks...$(RESET)"
@@ -108,13 +116,15 @@ vet: ## Análisis estático
 	@$(GOVET) ./...
 	@echo "$(GREEN)✓ Análisis estático completado$(RESET)"
 
-lint: ## Linter completo
+lint: ## Linter completo (falla si golangci-lint no está instalado o si hay hallazgos)
 	@echo "$(YELLOW)🔎 Ejecutando golangci-lint...$(RESET)"
-	@golangci-lint run --timeout=5m || echo "$(YELLOW)⚠️  Instalar con: make tools$(RESET)"
+	@command -v golangci-lint > /dev/null 2>&1 || { echo "$(RED)✗ golangci-lint no está instalado. Instalar con: make tools$(RESET)"; exit 1; }
+	@golangci-lint run --allow-parallel-runners --timeout=5m ./...
+	@echo "$(GREEN)✓ Lint sin hallazgos$(RESET)"
 
 vuln: ## Vulnerabilidades alcanzables con govulncheck ($(GOVULNCHECK_VERSION))
 	@echo "$(YELLOW)🛡️  Ejecutando govulncheck...$(RESET)"
-	@GOWORK=off go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
+	@go run golang.org/x/vuln/cmd/govulncheck@$(GOVULNCHECK_VERSION) ./...
 	@echo "$(GREEN)✓ Sin vulnerabilidades alcanzables$(RESET)"
 
 audit: ## Auditoría de calidad completa

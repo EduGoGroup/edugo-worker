@@ -273,10 +273,10 @@ El worker se conecta a la red `edugo-network` donde corren PostgreSQL, MongoDB y
 | `make test` | Ejecutar todos los tests con race detector |
 | `make test-coverage` | Tests + reporte HTML de cobertura |
 | `make test-unit` | Solo tests unitarios (short mode) |
-| `make test-integration` | Solo tests de integración (tag: integration) |
+| `make test-integration` | Tests con el tag `integration` (fuerza `GOWORK=off` y `RUN_INTEGRATION_TESTS=true`; requiere Docker). Gate local previo al PR |
 | `make fmt` | Formatear código con gofmt |
 | `make vet` | Análisis estático con go vet |
-| `make lint` | Linter completo con golangci-lint |
+| `make lint` | Linter completo con golangci-lint (falla si hay hallazgos o si no está instalado) |
 | `make audit` | Auditoría: verify + format + vet + tests |
 | `make deps` | Descargar dependencias |
 | `make tidy` | Limpiar go.mod |

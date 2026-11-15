@@ -7,7 +7,6 @@ Esta tabla muestra **qué workflows se ejecutan en cada tipo de branch** para ev
 | Workflow | feature/* | main | PR a main/dev | Tags v* | Manual |
 |----------|-----------|------|---------------|---------|--------|
 | **ci.yml** | ❌ | ✅ | ✅ | ❌ | ❌ |
-| **test.yml** | ❌ | ❌ | ✅ | ❌ | ✅ |
 | **manual-release.yml** | ❌ | ❌ | ❌ | ❌ | ✅ (RECOMENDADO) |
 | **docker-only.yml** | ❌ | ❌ | ❌ | ❌ | ✅ |
 | **release.yml** | ❌ | ❌ | ❌ | ✅ | ❌ |
@@ -23,7 +22,6 @@ git push origin feature/mi-feature
 # Crear PR desde feature/* → CI completo
 gh pr create --base main --head feature/mi-feature
 # ✅ ci.yml (tests, linter, security)
-# ✅ test.yml (cobertura)
 # ✅ Copilot code review
 
 # Merge PR a main → Solo CI
@@ -180,29 +178,13 @@ git push origin main  # ← AQUÍ se ejecuta
 
 ---
 
-### 2️⃣ **test.yml** - Tests con Cobertura
+### 2️⃣ **test.yml** - BORRADO (plan 054, S.2)
 
-**Trigger:**
-- ✅ Manual (workflow_dispatch desde GitHub UI)
-- ✅ Pull Requests a `main` o `develop`
-
-**Ejecuta:**
-- ✅ Tests unitarios con cobertura detallada
-- ✅ Generación de reporte HTML
-- ✅ Upload a Codecov
-- ✅ Comentario en PR con porcentaje de cobertura
-- ✅ Tests de integración con PostgreSQL y MongoDB (opcional)
-
-**Cuándo se ejecuta:**
-```bash
-# Manual desde GitHub UI:
-# Actions → Tests with Coverage → Run workflow
-
-# O automáticamente en PRs
-gh pr create  # ← AQUÍ se ejecuta
-```
-
-**Duración estimada:** 4-5 minutos
+`test.yml` («Tests with Coverage») se borró el 2026-11-14. Terminaba en `startup_failure` en cada PR
+(bug 0088) y, aun arreglado, duplicaba a `ci.yml`: corría `go test -short -race` con umbral de cobertura
+`0.0`, cuando `ci.yml` ya corre `go test -race ./...` completo. La cobertura se mide en local con
+`make test-coverage`, y la integración es un **gate local obligatorio** antes de cada PR
+(`make test-integration`, con Docker): no corre en CI por decisión del dueño.
 
 ---
 
@@ -336,7 +318,7 @@ git push origin v1.0.0  # ← AQUÍ se ejecuta
 ┌─────────────────────────────────────────────────────────────┐
 │  2. Crear Pull Request                                      │
 │     - gh pr create                                          │
-│     - CI automático (ci.yml + test.yml)                     │
+│     - CI automático (ci.yml)                                │
 │     - Revisar resultados y cobertura                        │
 │     - Aprobar y mergear                                     │
 │     ✅ VALIDA ANTES DE MERGE                                │
@@ -402,7 +384,7 @@ docker pull ghcr.io/edugogroup/edugo-api-mobile:production-20251031-143000
 | Escenario | Workflows Ejecutados | Minutos Estimados |
 |-----------|---------------------|-------------------|
 | Push a branch feature | 0 (no ejecuta nada) | 0 min |
-| Crear PR | ci.yml + test.yml | ~8 min |
+| Crear PR | ci.yml | ~4 min |
 | Merge a main | ci.yml + build-and-push.yml | ~12 min |
 | Crear release (tag) | release.yml | ~10 min |
 
@@ -429,7 +411,7 @@ gofmt -w .
 git commit -m "feat: nueva funcionalidad"
 git push origin feature/nueva-funcionalidad
 
-# 4. Crear PR (ejecuta ci.yml + test.yml automáticamente)
+# 4. Crear PR (ejecuta ci.yml automáticamente)
 gh pr create --title "Nueva funcionalidad" --body "..."
 
 # 5. Esperar aprobación y merge
@@ -519,7 +501,6 @@ Para forzar el uso de PRs y garantizar calidad:
    - ✅ Require approvals: 1
    - ✅ Require status checks to pass:
      - `Tests and Validation`
-     - `Tests with Coverage`
    - ✅ Require branches to be up to date
    - ✅ Do not allow bypassing the above settings
 
@@ -627,7 +608,7 @@ Si vas a replicar estos workflows en otros proyectos:
 - [ ] Actualizar `IMAGE_NAME` si es necesario
 - [ ] Verificar que existe Swagger (o comentar esa sección)
 - [ ] Configurar branch protection en GitHub
-- [ ] Hacer un PR de prueba para validar ci.yml y test.yml
+- [ ] Hacer un PR de prueba para validar ci.yml
 - [ ] Crear un tag de prueba para validar release.yml
 - [ ] Documentar workflows específicos del proyecto
 

@@ -33,9 +33,9 @@ make test-coverage
 make test-unit
 # Equivale a: go test -v -short ./...
 
-# Tests de integracion (requiere Docker)
+# Tests de integracion (requiere Docker). Gate local obligatorio antes de cada PR: no corren en CI.
 make test-integration
-# Equivale a: go test -v -tags=integration ./...
+# Equivale a: GOWORK=off RUN_INTEGRATION_TESTS=true go test -v -race -tags=integration ./...
 
 # Benchmarks
 make benchmark
