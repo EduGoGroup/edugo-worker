@@ -108,7 +108,7 @@ type distStats struct {
 	Max    float64 `json:"max"`
 }
 
-// modelResult es todo lo medido para un modelo, serializado a results-<modelo>.json.
+// modelResult es todo lo medido para un modelo; se guarda como una corrida nueva.
 type modelResult struct {
 	Model        string       `json:"model"`
 	Pairs        int          `json:"pairs"`
@@ -122,9 +122,11 @@ type modelResult struct {
 	Cosines      []pairCosine `json:"cosines"`
 }
 
-// runEmbed carga la batería, corre cada modelo secuencial y reporta tabla + JSON, además de
-// escribir results-<modelo>.json. Sale con código != 0 si un modelo no responde.
-func runEmbed(ollamaURL, modelsCSV, pairsPath, outDir string, timeout time.Duration) {
+// runEmbed carga la batería, corre cada modelo secuencial y reporta tabla + JSON. Cada
+// modelo se guarda como una corrida nueva del historial (o, con -embed-out-dir, como
+// results-<modelo>.json en esa carpeta, sin pisar uno que ya exista). Sale con código
+// != 0 si un modelo no responde: sin modelo no hay medida.
+func runEmbed(ollamaURL, modelsCSV, pairsPath, outDir, runsDir string, timeout time.Duration) {
 	pairs, err := loadEmbedPairs(pairsPath)
 	if err != nil {
 		fatalf("cargando batería %q: %v", pairsPath, err)
@@ -132,9 +134,6 @@ func runEmbed(ollamaURL, modelsCSV, pairsPath, outDir string, timeout time.Durat
 	models := splitCSV(modelsCSV)
 	if len(models) == 0 {
 		fatalf("no hay modelos para el modo embed (pasa -embed-models)")
-	}
-	if strings.TrimSpace(outDir) == "" {
-		outDir = filepath.Dir(pairsPath)
 	}
 
 	nDup, nNoDup := countLabels(pairs)
@@ -144,13 +143,16 @@ func runEmbed(ollamaURL, modelsCSV, pairsPath, outDir string, timeout time.Durat
 
 	results := make([]modelResult, 0, len(models))
 	for _, model := range models {
+		info := newRunInfo("embed", "ollama", model, modelInfo{})
 		res, err := runEmbedModel(ollamaURL, model, pairs, timeout)
 		if err != nil {
 			fatalf("modelo %q: %v", model, err)
 		}
 		printEmbedModel(res)
-		if err := writeModelResult(outDir, res); err != nil {
-			fmt.Printf("  aviso: no se pudo escribir results-%s.json: %v\n", sanitizeModel(model), err)
+		if strings.TrimSpace(outDir) == "" {
+			saveRun(runsDir, info, res)
+		} else if err := writeModelResult(outDir, res); err != nil {
+			fatalf("escribiendo results-%s.json: %v", sanitizeModel(model), err)
 		} else {
 			fmt.Printf("  → %s\n", filepath.Join(outDir, "results-"+sanitizeModel(model)+".json"))
 		}
@@ -395,14 +397,21 @@ func printEmbedComparison(results []modelResult) {
 	}
 }
 
-// writeModelResult escribe results-<modelo>.json en outDir.
+// writeModelResult escribe results-<modelo>.json en outDir como fichero NUEVO: si ya
+// existe, no lo pisa.
 func writeModelResult(outDir string, r modelResult) error {
 	b, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return err
 	}
 	path := filepath.Join(outDir, "results-"+sanitizeModel(r.Model)+".json")
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return fmt.Errorf("no se pisa un resultado que ya existe: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	_, err = f.Write(append(b, '\n'))
+	return err
 }
 
 // --- helpers ---

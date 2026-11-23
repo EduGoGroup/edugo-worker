@@ -10,23 +10,20 @@ import (
 )
 
 // runOpenEndedPrep corre la batería open_ended con prep (F4c). Dos tipos de caso:
-//   - enrich: mide el prompt GLOBAL con vs sin prep (F4a). El caso obligatorio es el
-//     que motivó esto: el alumno SÍ incluye Venezuela y el prep lo lista en main_ideas
-//     — se comprueba si el prep evita el falso «omite Venezuela» que qwen 1.7b alucinó
-//     en 040 F4-UI (se corre también sin prep para contrastar).
-//   - criteria: mide el carril por criterios (F4b) contra el provider real, con conteo
-//     DURO de llamadas (una por criterio) y el veredicto/score agregados en Go.
+//   - enrich: mide el prompt GLOBAL con vs sin prep (F4a). El caso es el que motivó
+//     esto: el alumno SÍ incluye Venezuela y el prep lo lista en main_ideas; se corre
+//     también sin prep para contrastar.
+//   - criteria: mide el carril por criterios (F4b) contra el provider real, con el
+//     conteo de llamadas (una por criterio) y el veredicto/score agregados en Go.
 //
-// Devuelve true si algún caso no-flaky falló.
-func runOpenEndedPrep(base llm.LLMProvider, timeout time.Duration) bool {
+// Una corrida por caso; se mide, no se juzga (ADR 0048).
+func runOpenEndedPrep(base llm.LLMProvider, timeout time.Duration) []reviewPrepRun {
 	fmt.Printf("== llm-harness (review-prep · carril open_ended con prep F4a/F4b/F4c) ==\n")
 	fmt.Printf("provider : %s\n\n", base.Name())
 
-	hardFail := false
-	hardFail = runOpenEndedEnrich(base, timeout) || hardFail
+	runs := runOpenEndedEnrich(base, timeout)
 	fmt.Printf("\n")
-	hardFail = runOpenEndedCriteria(base, timeout) || hardFail
-	return hardFail
+	return append(runs, runOpenEndedCriteria(base, timeout)...)
 }
 
 // --- F4a: enriquecimiento del prompt global (con vs sin prep) ---
@@ -39,7 +36,7 @@ var venezuelaPrep = &llm.ReviewPrep{
 	ValidVariants:  []string{"la Gran Colombia la formaron Ecuador, Venezuela y Colombia"},
 }
 
-func runOpenEndedEnrich(base llm.LLMProvider, timeout time.Duration) bool {
+func runOpenEndedEnrich(base llm.LLMProvider, timeout time.Duration) []reviewPrepRun {
 	fmt.Printf("-- F4a: prompt global open_ended con vs sin prep (caso Venezuela) --\n")
 
 	req := llm.ReviewRequest{
@@ -50,50 +47,42 @@ func runOpenEndedEnrich(base llm.LLMProvider, timeout time.Duration) bool {
 		Language:       "es",
 	}
 
-	// Sin prep (contraste; su veredicto es informativo, no cuenta contra la meta).
-	sinPrep := runOneReview(base, req, timeout)
-	fmt.Printf("  sin prep : verdict=%s score=%.2f  feedback: %s\n",
-		sinPrep.Verdict, sinPrep.Score, truncate(sinPrep.Feedback, 100))
-
-	// Con prep: el alumno SÍ nombra Venezuela y el prep la lista → debe ser correct.
-	req.Prep = venezuelaPrep
-	conPrep := runOneReview(base, req, timeout)
-	fmt.Printf("  con prep : verdict=%s score=%.2f  feedback: %s\n",
-		conPrep.Verdict, conPrep.Score, truncate(conPrep.Feedback, 100))
-
-	// El veredicto de un 1.7b es flaky: el caso mide el prompt, no garantiza el modelo.
-	if conPrep.Verdict == llm.VerdictCorrect {
-		fmt.Printf("  PASS  con-prep-venezuela [verdict known-flaky]: el prep sostuvo correct\n")
-	} else {
-		fmt.Printf("  FLAKY con-prep-venezuela [verdict known-flaky]: el modelo no dio correct (verdict %s); "+
-			"el prompt lleva la info de Venezuela, la corrección real usa un modelo mejor (D-042.8)\n", conPrep.Verdict)
+	runs := make([]reviewPrepRun, 0, 2)
+	for _, variant := range []struct {
+		name string
+		prep *llm.ReviewPrep
+	}{{"sin-prep-venezuela", nil}, {"con-prep-venezuela", venezuelaPrep}} {
+		req.Prep = variant.prep
+		start := time.Now()
+		res, err := runOneReview(base, req, timeout)
+		r := reviewPrepRun{Battery: "open_ended_enrich", Name: variant.name, Verdict: string(res.Verdict),
+			Score: res.Score, Calls: 1, WantCalls: 1, ElapsedMS: time.Since(start).Milliseconds()}
+		// El alumno nombra los tres países: lo esperado es correct, con o sin prep.
+		measurePrepCase(&r, llm.VerdictCorrect, err)
+		runs = append(runs, r)
+		fmt.Printf("  %-8s %-20s verdict=%s score=%.2f  feedback: %s\n",
+			r.Outcome, variant.name, res.Verdict, res.Score, truncate(res.Feedback, 100))
 	}
-	// Nunca es fallo duro: es una medición comparativa del prompt con modelo chico.
-	return false
+	return runs
 }
 
 // runOneReview corre un ReviewAnswer aislado (para el contraste con/sin prep).
-func runOneReview(p llm.LLMProvider, req llm.ReviewRequest, timeout time.Duration) llm.ReviewResult {
+func runOneReview(p llm.LLMProvider, req llm.ReviewRequest, timeout time.Duration) (llm.ReviewResult, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
 	defer cancel()
-	res, err := p.ReviewAnswer(ctx, req)
-	if err != nil {
-		return llm.ReviewResult{Verdict: "error", Feedback: err.Error()}
-	}
-	return res
+	return p.ReviewAnswer(ctx, req)
 }
 
 // --- F4b: carril por criterios (conteo duro de llamadas) ---
 
 type oeCriteriaCase struct {
-	name         string
-	in           openended.GradeInput
-	wantVerdict  llm.Verdict
-	wantCalls    int
-	scoreMin     float64
-	scoreMax     float64
-	verdictFlaky bool
-	note         string
+	name        string
+	in          openended.GradeInput
+	wantVerdict llm.Verdict
+	wantCalls   int
+	scoreMin    float64
+	scoreMax    float64
+	note        string
 }
 
 var oeCriteriaCases = []oeCriteriaCase{
@@ -111,19 +100,18 @@ var oeCriteriaCases = []oeCriteriaCase{
 			},
 			Language: "es",
 		},
-		wantVerdict:  llm.VerdictPartial,
-		wantCalls:    3,
-		scoreMin:     0.3,
-		scoreMax:     0.7,
-		verdictFlaky: true,
-		note:         "alumno cumple 2 de 3; conteo de llamadas duro (=3), verdict partial depende del modelo",
+		wantVerdict: llm.VerdictPartial,
+		wantCalls:   3,
+		scoreMin:    0.3,
+		scoreMax:    0.7,
+		note:        "alumno cumple 2 de 3; se esperan 3 llamadas (determinista) y verdict partial",
 	},
 }
 
-func runOpenEndedCriteria(base llm.LLMProvider, timeout time.Duration) bool {
+func runOpenEndedCriteria(base llm.LLMProvider, timeout time.Duration) []reviewPrepRun {
 	fmt.Printf("-- F4b: carril por criterios (una llamada binaria por criterio) --\n")
-	hardFail := false
 
+	runs := make([]reviewPrepRun, 0, len(oeCriteriaCases))
 	for _, tc := range oeCriteriaCases {
 		prov := &countingProvider{LLMProvider: base}
 		ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -132,49 +120,21 @@ func runOpenEndedCriteria(base llm.LLMProvider, timeout time.Duration) bool {
 		elapsed := time.Since(start)
 		cancel()
 
-		flakyTag := ""
-		if tc.verdictFlaky {
-			flakyTag = " [verdict known-flaky]"
+		r := reviewPrepRun{Battery: "open_ended_criteria", Name: tc.name, Verdict: string(res.Verdict), Score: res.Score,
+			Calls: prov.criterionCalls, WantCalls: tc.wantCalls, ElapsedMS: elapsed.Milliseconds()}
+		measurePrepCase(&r, tc.wantVerdict, err)
+		if r.Outcome == "matches" && (res.Score < tc.scoreMin || res.Score > tc.scoreMax) {
+			r.Outcome, r.Reason = "differs", fmt.Sprintf("score %.2f fuera de [%.2f,%.2f]", res.Score, tc.scoreMin, tc.scoreMax)
 		}
-		if err != nil {
-			fmt.Printf("  FAIL  %-28s (%s)%s\n        error: %v\n", tc.name, elapsed.Round(time.Millisecond), flakyTag, err)
-			hardFail = true
-			continue
-		}
+		runs = append(runs, r)
 
-		callsOK := prov.criterionCalls == tc.wantCalls
-		verdictOK := res.Verdict == tc.wantVerdict
-		scoreOK := res.Score >= tc.scoreMin && res.Score <= tc.scoreMax
-
-		status := "PASS"
-		if !callsOK || (!verdictOK && !tc.verdictFlaky) {
-			status = "FAIL"
-		}
-		fmt.Printf("  %-5s %-28s (%s)%s\n", status, tc.name, elapsed.Round(time.Millisecond), flakyTag)
+		fmt.Printf("  %-8s %-28s (%s)\n", r.Outcome, tc.name, elapsed.Round(time.Millisecond))
 		fmt.Printf("        verdict=%s score=%.2f llamadas=%d  esperado: verdict=%s llamadas=%d score∈[%.2f,%.2f]\n",
 			res.Verdict, res.Score, prov.criterionCalls, tc.wantVerdict, tc.wantCalls, tc.scoreMin, tc.scoreMax)
-		fmt.Printf("        feedback: %s\n        nota    : %s\n", truncate(res.Feedback, 120), tc.note)
-
-		if !callsOK {
-			fmt.Printf("        motivo FAIL: llamadas %d != esperado %d (determinista, duro)\n", prov.criterionCalls, tc.wantCalls)
-			hardFail = true
-			continue
+		if r.Reason != "" {
+			fmt.Printf("        motivo  : %s\n", r.Reason)
 		}
-		if !verdictOK {
-			if tc.verdictFlaky {
-				fmt.Printf("        nota flaky : el modelo evaluó distinto los criterios esta corrida (verdict %s)\n", res.Verdict)
-			} else {
-				fmt.Printf("        motivo FAIL: verdict %s != esperado %s\n", res.Verdict, tc.wantVerdict)
-				hardFail = true
-				continue
-			}
-		}
-		// El score sí lo verificamos como coherencia interna del anclaje cuando el
-		// veredicto salió como se esperaba (agregación determinista en Go).
-		if verdictOK && !scoreOK {
-			fmt.Printf("        motivo FAIL: score %.2f fuera de [%.2f,%.2f] (anclaje determinista)\n", res.Score, tc.scoreMin, tc.scoreMax)
-			hardFail = true
-		}
+		fmt.Printf("        nota    : %s\n", tc.note)
 	}
-	return hardFail
+	return runs
 }

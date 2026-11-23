@@ -184,19 +184,45 @@ LLM_API_MODEL=claude-sonnet-5
 > secretos (nunca en la imagen ni en el repo), igual que el `service-jwt-secret`
 > del plan 020. Las base URLs apuntan a los servicios internos de Cloud Run.
 
-### Harness de providers LLM (D-039.8)
+### Harness de providers LLM (D-039.8, ADR 0048)
 
-`make llm-harness ARGS="..."` (o `go run ./cmd/llm-harness ...`) toma un material
-de muestra, corre `GenerateAssessment` con el provider elegido y **valida el JSON
-contra las reglas del contrato `assessment_import` v1** (plan 038), reportando
-pass/fail y tiempos. Sirve para elegir el modelo local **midiendo** (design 039 §6)
-y como regresión de prompts para el plan 041.
+`make llm-harness ARGS="..."` (o `go run ./cmd/llm-harness ...`) pasa casos por el
+modelo real y **mide, no juzga** (ADR 0048 del ecosistema):
+
+- **Una corrida por caso.** No hay reintentos ni casos apartados: una salida vacía o
+  inválida es un dato (`inválidas: n`).
+- **No hay PASS/FAIL por lo que escribe el modelo.** El código de salida solo es != 0
+  si el arnés no pudo correr (sin modelo, sin banco, sin poder guardar).
+- **Cada corrida se guarda** como fichero nuevo en `cmd/llm-harness/testdata/runs/`,
+  con la fecha UTC en el nombre, el modelo y su digest, y el commit del worker. Nunca
+  pisa una anterior.
+- **El modelo** sale de `-model` o de `LLM_LOCAL_MODEL`. Sin modelo dicho no arranca.
+  Antes de medir comprueba que Ollama responde y que el modelo está instalado. No
+  descarga nada.
+
+Modos: `generate` (contrato 038), `review`, `prep`, `review-prep`, `material`,
+`embed`, `relevance` y `bank`. **`material` es la excepción**: no repite ni sale con
+1 por contenido, pero aún imprime OK/FAIL por comprobación y no guarda su corrida.
+
+**El modo `bank`** (AR-INF.1) pasa el banco etiquetado de learning por el carril de
+corrección real (`processor.ReviewAnswerLane`). Solo pasan los casos que la parte
+determinista dejó pendientes, que son los que en producción llegan al modelo. El
+informe de esos casos lo escribe la prueba de learning:
 
 ```bash
-# Contra un Ollama local (no instala nada; si no hay Ollama, reporta el error):
-make llm-harness ARGS="-provider ollama -model qwen2.5:7b -questions 3"
+# 1. En edugo-api-learning: el informe determinista (fuera de git).
+ANSWER_BANK_REPORT=/tmp/bank-det.json GOWORK=off go test -count=1 -run TestAnswerBank ./internal/core/domain/
 
-# Contra la API (Anthropic):
+# 2. Aquí: el banco por el modelo local, a temperatura 0.
+LLM_LOCAL_MODEL=gemma4:e2b-it-qat make llm-harness ARGS="-mode bank \
+  -bank ../edugo-api-learning/internal/core/domain/testdata/answer_bank.json \
+  -deterministic /tmp/bank-det.json"
+```
+
+Otros ejemplos:
+
+```bash
+make llm-harness ARGS="-mode review -provider ollama -model qwen2.5:7b"
 make llm-harness ARGS="-provider api -api-provider anthropic -api-key $LLM_API_KEY -api-model claude-sonnet-5 -material ./material.txt"
 ```
 
