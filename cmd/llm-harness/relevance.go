@@ -22,8 +22,9 @@ package main
 // se reintenta (ADR 0048: una corrida por caso) y se cuenta como "malformed" sin inventar
 // score. En producción esa candidata sobrevive; se reporta el conteo aparte para no maquillar.
 //
-// No instala nada ni asume Ollama corriendo: si el backend no responde, el error de la
-// llamada se propaga como malformed del caso (no aborta la corrida). Un caso por llamada,
+// No instala nada ni asume Ollama corriendo: con el provider local, la comprobación previa
+// del arnés (runlog.go) para si Ollama no responde o el modelo no está. Ya medida, un error
+// de una llamada cuenta como malformed del caso (no aborta la corrida). Un caso por llamada,
 // secuencial, temperatura 0 (la aplica el provider por default: greedy determinista).
 
 import (

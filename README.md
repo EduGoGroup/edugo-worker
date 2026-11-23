@@ -201,7 +201,8 @@ modelo real y **mide, no juzga** (ADR 0048 del ecosistema):
   descarga nada.
 
 Modos: `generate` (contrato 038), `review`, `prep`, `review-prep`, `material`,
-`embed`, `relevance` y `bank`.
+`embed`, `relevance` y `bank`. **`material` es la excepción**: no repite ni sale con
+1 por contenido, pero aún imprime OK/FAIL por comprobación y no guarda su corrida.
 
 **El modo `bank`** (AR-INF.1) pasa el banco etiquetado de learning por el carril de
 corrección real (`processor.ReviewAnswerLane`). Solo pasan los casos que la parte

@@ -1,12 +1,14 @@
-// Command llm-harness es el entregable D-039.8 (extendido en 040 T2c): con el
-// provider elegido por flag corre uno de dos modos y reporta pass/fail y tiempos:
+// Command llm-harness es el entregable D-039.8 (extendido en 040 T2c y en la
+// AR-INF.1): con el provider elegido por flag corre un modo y reporta lo medido y
+// los tiempos:
 //
 //   - mode=generate (default, D-039.8): toma un material de muestra, corre
 //     GenerateAssessment y valida el JSON contra las reglas del contrato 038.
 //
 //   - mode=review (040 T2c): corre ReviewAnswer contra una batería de casos de
 //     muestra en español (correcto, incorrecto, parcial, vacío/sin sentido,
-//     parafraseo, prompt-injection) y evalúa verdict/score esperados PASS/FAIL.
+//     parafraseo, prompt-injection) y cuenta si verdict/score coinciden con lo
+//     esperado.
 //
 //   - mode=embed (044 F1b): calibra el dedupe por embeddings. Vectoriza una batería
 //     de pares dup/no_dup en español, calcula el coseno de cada par y reporta los
@@ -139,6 +141,10 @@ func main() {
 	// responde y que el modelo está instalado.
 	modelName := *apiModel
 	var mi modelInfo
+	if *mode == "bank" && *provider == "api" && !flagSet("api-model") {
+		// El banco no sale a una API externa con un modelo que nadie eligió.
+		fatalf("el modo bank con -provider api pide -api-model dicho")
+	}
 	if *provider == "local" || *provider == "ollama" {
 		modelName = *ollamaModel
 		if strings.TrimSpace(modelName) == "" {
@@ -298,6 +304,17 @@ func prettyOrRaw(raw json.RawMessage) string {
 		return string(raw)
 	}
 	return string(buf)
+}
+
+// flagSet dice si un flag se pasó en la línea de comandos (no su valor por defecto).
+func flagSet(name string) bool {
+	set := false
+	flag.Visit(func(f *flag.Flag) {
+		if f.Name == name {
+			set = true
+		}
+	})
+	return set
 }
 
 func fatalf(format string, args ...any) {

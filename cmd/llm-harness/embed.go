@@ -143,13 +143,14 @@ func runEmbed(ollamaURL, modelsCSV, pairsPath, outDir, runsDir string, timeout t
 
 	results := make([]modelResult, 0, len(models))
 	for _, model := range models {
+		info := newRunInfo("embed", "ollama", model, modelInfo{})
 		res, err := runEmbedModel(ollamaURL, model, pairs, timeout)
 		if err != nil {
 			fatalf("modelo %q: %v", model, err)
 		}
 		printEmbedModel(res)
 		if strings.TrimSpace(outDir) == "" {
-			saveRun(runsDir, newRunInfo("embed", "ollama", model, modelInfo{}), res)
+			saveRun(runsDir, info, res)
 		} else if err := writeModelResult(outDir, res); err != nil {
 			fatalf("escribiendo results-%s.json: %v", sanitizeModel(model), err)
 		} else {

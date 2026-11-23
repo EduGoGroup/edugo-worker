@@ -21,7 +21,8 @@ import (
 // de un modo que llama al modelo escribe UN fichero nuevo en defaultRunsDir, con la
 // fecha en UTC en el nombre, y nunca pisa uno que ya exista. Dentro van el modelo y
 // su versión, el commit del worker (la huella de los prompts, que son código) y si
-// el árbol estaba sucio.
+// el árbol estaba sucio. La excepción es el modo material: material.go quedó fuera
+// de la AR-INF.1 y no guarda su corrida.
 
 // defaultRunsDir es la carpeta del historial, relativa a la raíz del worker (donde
 // corre `make llm-harness`). Está en git: el «antes» de un cambio de prompt no se

@@ -131,7 +131,9 @@ func runBank(p llm.LLMProvider, info runInfo, bankPath, detPath, runsDir string,
 		if !ok {
 			fatalf("el caso %s no está en el informe determinista", c.ID)
 		}
-		if o == deterministicToModel {
+		// Pasan las que learning dejó pendientes y todas las largas, que en
+		// producción llegan siempre al modelo (decisión 4).
+		if o == deterministicToModel || c.Kind == "long" {
 			toModel = append(toModel, c)
 		}
 	}
