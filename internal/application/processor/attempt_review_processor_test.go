@@ -1208,3 +1208,42 @@ func TestClaimConflictCause(t *testing.T) {
 		}
 	}
 }
+
+// cancellingProvider cancela el contexto del mensaje en la primera respuesta, como un
+// apagado del worker a mitad de la revisión, y devuelve el error del contexto.
+type cancellingProvider struct {
+	mockLLMProvider
+	cancel context.CancelFunc
+}
+
+func (c *cancellingProvider) ReviewAnswer(ctx context.Context, _ llm.ReviewRequest) (llm.ReviewResult, error) {
+	c.calls++
+	c.cancel()
+	return llm.ReviewResult{}, ctx.Err()
+}
+
+// Con el mensaje cancelado a mitad, el bucle no sigue llamando al modelo por las que
+// quedan: corta, devuelve error y libera con un contexto vivo.
+func TestAttemptReview_CancelledMidReview_StopsAndReleases(t *testing.T) {
+	learning := newStatefulLearning(
+		openEndedWithText("a1", 10), openEndedWithText("a2", 10), openEndedWithText("a3", 10))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	provider := &cancellingProvider{cancel: cancel}
+	p := newProcessor(directSettings(), learning, provider)
+
+	err := p.Process(ctx, validEventPayload(t))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("esperaba un error de contexto cancelado, hubo: %v", err)
+	}
+	if provider.calls != 1 {
+		t.Fatalf("tras la cancelación no debe llamar más al modelo, hubo %d llamadas", provider.calls)
+	}
+	if learning.releaseCalls != 1 || learning.releaseCtxErrs[0] != nil || learning.claimed {
+		t.Fatalf("debe liberar 1 vez con contexto vivo: releases=%d err=%v tomado=%v",
+			learning.releaseCalls, learning.releaseCtxErrs, learning.claimed)
+	}
+	if learning.finalizeCalls != 0 {
+		t.Fatalf("no debe finalizar, hubo %d", learning.finalizeCalls)
+	}
+}
