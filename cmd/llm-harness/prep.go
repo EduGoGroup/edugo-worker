@@ -3,22 +3,14 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
 	"github.com/EduGoGroup/edugo-worker/internal/questionprep"
 )
 
-// maxPrepAttempts es el tope de reintentos por caso ante un artefacto DEGENERADO
-// (JSON vacío/no válido contra el contrato v1). Mismo motivo que el modo review:
-// qwen3:1.7b con format:"json" devuelve de forma intermitente un `{}` que no valida.
-// El reintento aísla esa lotería del modelo chico; NO reintenta un prep VÁLIDO que
-// discrepe de lo esperado (eso sí mide el prompt).
-const maxPrepAttempts = 6
-
-// prepCase es un caso de la batería del modo prep: una petición de preparación más la
-// expectativa contra la que se juzga PASS/FAIL. Todo prep debe validar contra el
+// prepCase es un caso de la batería del modo prep: una petición de preparación más lo
+// que se espera de ella; se mide si coincide, no se juzga (ADR 0048). Todo prep debe validar contra el
 // contrato v1 (D-042.2); encima se comprueban aserciones semánticas por caso.
 type prepCase struct {
 	name string
@@ -26,10 +18,6 @@ type prepCase struct {
 
 	// check evalúa el prep YA validado contra el contrato. Devuelve (ok, motivo).
 	check func(p questionprep.Prep) (bool, string)
-
-	// flaky marca casos duros para un modelo chico: su FAIL no cuenta contra la meta.
-	flaky     bool
-	flakyNote string
 }
 
 // prepCases cubre los tipos exigidos por F2d: la Gran Colombia (list, 3 ítems, sin
@@ -69,8 +57,6 @@ var prepCases = []prepCase{
 			}
 			return true, ""
 		},
-		flaky:     true,
-		flakyNote: "clasificar number + aislar la unidad exige comprensión; duro para 1.7B",
 	},
 	{
 		name: "short-answer-term",
@@ -105,101 +91,63 @@ var prepCases = []prepCase{
 			}
 			return true, ""
 		},
-		flaky:     true,
-		flakyNote: "derivar criterios verificables de una rúbrica es la tarea más exigente; duro para 1.7B",
 	},
 }
 
-// runPrep corre la batería del modo prep contra el provider y reporta N/M. Los casos
-// known-flaky que fallan no cuentan contra el total efectivo. Sale con código != 0 si
-// algún caso NO-flaky falla.
-func runPrep(p llm.LLMProvider, timeout time.Duration) {
+// prepRun es lo medido de un caso del modo prep.
+type prepRun struct {
+	Name      string `json:"name"`
+	Outcome   string `json:"outcome"` // matches | differs | invalid | error
+	Reason    string `json:"reason,omitempty"`
+	Summary   string `json:"summary,omitempty"`
+	ElapsedMS int64  `json:"elapsed_ms"`
+}
+
+// runPrep corre la batería del modo prep contra el provider, una llamada por caso.
+// Un artefacto que no valida contra el contrato v1 es una salida inválida (un
+// dato), no un motivo para repetir ni para salir con código != 0 (ADR 0048).
+func runPrep(p llm.LLMProvider, info runInfo, runsDir string, timeout time.Duration) {
 	fmt.Printf("== llm-harness (prep) ==\n")
 	fmt.Printf("provider : %s\n", p.Name())
 	fmt.Printf("casos    : %d\n\n", len(prepCases))
 
-	pass, effectiveTotal := 0, 0
-	hardFail := false
-
+	counts := map[string]int{}
+	runs := make([]prepRun, 0, len(prepCases))
 	for _, tc := range prepCases {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		start := time.Now()
-		var prep *questionprep.Prep
-		var err error
-		var valErr error
-		attempts := 0
-		for attempts < maxPrepAttempts {
-			attempts++
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			raw, perr := p.PrepareQuestion(ctx, tc.req)
-			cancel()
-			if perr != nil {
-				err = perr
-				continue
-			}
-			err = nil
-			prep, valErr = questionprep.Validate(raw, tc.req.QuestionType)
-			// Reintenta solo ante artefacto degenerado (no valida); un prep válido que
-			// discrepe de la aserción semántica NO se reintenta (mide el prompt).
-			if valErr == nil {
-				break
-			}
-		}
+		raw, err := p.PrepareQuestion(ctx, tc.req)
 		elapsed := time.Since(start)
+		cancel()
 
-		retryTag := ""
-		if attempts > 1 {
-			retryTag = fmt.Sprintf(" [%d intentos]", attempts)
-		}
-		flakyTag := ""
-		if tc.flaky {
-			flakyTag = " [known-flaky]"
-		} else {
-			effectiveTotal++
-		}
-
+		r := prepRun{Name: tc.name, ElapsedMS: elapsed.Milliseconds()}
 		if err != nil {
-			fmt.Printf("FAIL  %-34s (%s)%s%s\n", tc.name, elapsed.Round(time.Millisecond), flakyTag, retryTag)
-			fmt.Printf("        error: %v\n", err)
-			if !tc.flaky {
-				hardFail = true
-			}
-			continue
-		}
-		if valErr != nil {
-			fmt.Printf("FAIL  %-34s (%s)%s%s\n", tc.name, elapsed.Round(time.Millisecond), flakyTag, retryTag)
-			fmt.Printf("        contrato inválido: %v\n", valErr)
-			if !tc.flaky {
-				hardFail = true
-			}
-			continue
-		}
-
-		ok, reason := tc.check(*prep)
-		status := "PASS"
-		if !ok {
-			status = "FAIL"
-		}
-		fmt.Printf("%-5s %-34s (%s)%s%s\n", status, tc.name, elapsed.Round(time.Millisecond), flakyTag, retryTag)
-		fmt.Printf("        %s\n", summarizePrep(*prep))
-		if !ok {
-			fmt.Printf("        motivo FAIL: %s\n", reason)
-			if tc.flaky {
-				fmt.Printf("        nota flaky : %s\n", tc.flakyNote)
+			r.Outcome, r.Reason = "error", err.Error()
+		} else if prep, valErr := questionprep.Validate(raw, tc.req.QuestionType); valErr != nil {
+			r.Outcome, r.Reason = "invalid", "contrato inválido: "+valErr.Error()
+		} else {
+			r.Summary = summarizePrep(*prep)
+			if ok, reason := tc.check(*prep); ok {
+				r.Outcome = "matches"
 			} else {
-				hardFail = true
+				r.Outcome, r.Reason = "differs", reason
 			}
 		}
-		if ok && !tc.flaky {
-			pass++
-		} else if ok && tc.flaky {
-			fmt.Printf("        nota       : caso known-flaky PASÓ esta corrida\n")
+		counts[r.Outcome]++
+		runs = append(runs, r)
+
+		fmt.Printf("%-8s %-34s (%s)\n", r.Outcome, tc.name, elapsed.Round(time.Millisecond))
+		if r.Summary != "" {
+			fmt.Printf("        %s\n", r.Summary)
+		}
+		if r.Reason != "" {
+			fmt.Printf("        motivo: %s\n", r.Reason)
 		}
 	}
 
-	fmt.Printf("\nRESULTADO : %d/%d casos no-flaky en PASS (los known-flaky no cuentan contra la meta)\n", pass, effectiveTotal)
-	if hardFail {
-		os.Exit(1)
-	}
+	fmt.Printf("\nRESULTADO : %d casos · coinciden %d · difieren %d · inválidas %d · errores %d (una corrida por caso)\n",
+		len(prepCases), counts["matches"], counts["differs"], counts["invalid"], counts["error"])
+	saveRun(runsDir, info, runs)
 }
 
 // summarizePrep imprime una línea compacta del artefacto para inspección.

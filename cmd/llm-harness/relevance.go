@@ -18,9 +18,9 @@ package main
 //   - falsos vivos    : unanswerable que SOBREVIVEN (score ≥ umbral) — basura que pasa.
 //   - falsos descartes : central/peripheral que MUEREN (score < umbral) — señal que se pierde.
 //
-// Una salida malformada NUNCA descarta la candidata (conservador, ParseRelevanceResult): se
-// reintenta una vez y, si persiste, se cuenta como "malformed" sin inventar score. En
-// producción esa candidata sobrevive; se reporta el conteo aparte para no maquillar.
+// Una salida malformada NUNCA descarta la candidata (conservador, ParseRelevanceResult): no
+// se reintenta (ADR 0048: una corrida por caso) y se cuenta como "malformed" sin inventar
+// score. En producción esa candidata sobrevive; se reporta el conteo aparte para no maquillar.
 //
 // No instala nada ni asume Ollama corriendo: si el backend no responde, el error de la
 // llamada se propaga como malformed del caso (no aborta la corrida). Un caso por llamada,
@@ -31,7 +31,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 	"time"
@@ -71,9 +70,8 @@ type relevanceScore struct {
 	Label     string  `json:"label"`
 	Score     float64 `json:"score"`
 	Rationale string  `json:"rationale"`
-	Malformed bool    `json:"malformed,omitempty"` // el modelo no devolvió un score válido tras 1 reintento
-	Retried   bool    `json:"retried,omitempty"`   // hizo falta el reintento (aunque después saliera bien)
-	Err       string  `json:"error,omitempty"`     // último error si quedó malformed
+	Malformed bool    `json:"malformed,omitempty"` // el modelo no devolvió un score válido
+	Err       string  `json:"error,omitempty"`     // el error, si quedó malformed
 }
 
 // labelDist es la distribución de scores de una familia (solo casos con score válido).
@@ -100,7 +98,7 @@ type thresholdEval struct {
 	FalseDropTotal      int     `json:"false_drop_total"`      // central+peripheral que mueren
 }
 
-// relevanceReport es todo lo medido, serializado a results-<modelo>.json.
+// relevanceReport es todo lo medido; se guarda como una corrida nueva del historial.
 type relevanceReport struct {
 	Model      string           `json:"model"`
 	Provider   string           `json:"provider"`
@@ -116,10 +114,10 @@ type relevanceReport struct {
 var labelOrder = []string{"central", "peripheral", "unanswerable"}
 
 // runRelevance corre el modo relevancia: carga la batería, puntúa cada caso, reporta la
-// distribución por familia + el análisis de umbral y escribe results-<modelo>.json. No sale
+// distribución por familia + el análisis de umbral y lo guarda como corrida nueva. No sale
 // con código != 0 por errores de un caso (se cuentan como malformed): solo aborta si la
 // batería no se puede cargar o el provider no sabe puntuar relevancia.
-func runRelevance(p llm.LLMProvider, model, casesPath, outPath string, timeout time.Duration) {
+func runRelevance(p llm.LLMProvider, info runInfo, runsDir, casesPath, outPath string, timeout time.Duration) {
 	scorer, ok := p.(relevanceScorer)
 	if !ok {
 		fatalf("el provider %s no implementa ScoreRelevance (modo relevance requiere ollama|api)", p.Name())
@@ -153,43 +151,37 @@ func runRelevance(p llm.LLMProvider, model, casesPath, outPath string, timeout t
 	}
 	elapsed := time.Since(start)
 
-	report := buildRelevanceReport(p, model, scores, elapsed)
+	report := buildRelevanceReport(p, info.Model, scores, elapsed)
 	printRelevanceReport(report)
 
+	// Por defecto, una corrida nueva en el historial. Con -relevance-out se escribe
+	// en esa ruta, pero nunca encima de un fichero que ya exista.
 	if strings.TrimSpace(outPath) == "" {
-		outPath = filepath.Join(filepath.Dir(casesPath), "results-"+relevanceSlug(model)+".json")
+		saveRun(runsDir, info, report)
+		return
 	}
 	if err := writeRelevanceReport(outPath, report); err != nil {
-		fmt.Printf("  aviso: no se pudo escribir %s: %v\n", outPath, err)
-	} else {
-		fmt.Printf("\n→ %s\n", outPath)
+		fatalf("escribiendo %s: %v", outPath, err)
 	}
+	fmt.Printf("\n→ %s\n", outPath)
 }
 
-// scoreRelevanceCase puntúa un caso con 1 reintento ante error (malformed/timeout/conexión).
-// No inventa score: si el segundo intento también falla, deja Malformed=true con el error.
+// scoreRelevanceCase puntúa un caso con UNA llamada (ADR 0048). No inventa score: si la
+// llamada falla, deja Malformed=true con el error.
 func scoreRelevanceCase(scorer relevanceScorer, c relevanceCase, timeout time.Duration) relevanceScore {
 	req := llm.RelevanceRequest{QuestionText: c.Question, MainIdeas: c.Ideas, Language: "es"}
 	s := relevanceScore{ID: c.ID, Label: c.Label}
 
-	var lastErr error
-	for attempt := 0; attempt < 2; attempt++ {
-		ctx, cancel := context.WithTimeout(context.Background(), timeout)
-		res, err := scorer.ScoreRelevance(ctx, req)
-		cancel()
-		if err == nil {
-			s.Score = res.Score
-			s.Rationale = res.Rationale
-			s.Retried = attempt > 0
-			return s
-		}
-		lastErr = err
-		if attempt == 0 {
-			s.Retried = true
-		}
+	ctx, cancel := context.WithTimeout(context.Background(), timeout)
+	res, err := scorer.ScoreRelevance(ctx, req)
+	cancel()
+	if err != nil {
+		s.Malformed = true
+		s.Err = err.Error()
+		return s
 	}
-	s.Malformed = true
-	s.Err = lastErr.Error()
+	s.Score = res.Score
+	s.Rationale = res.Rationale
 	return s
 }
 
@@ -303,13 +295,20 @@ func printRelevanceReport(r relevanceReport) {
 	}
 }
 
-// writeRelevanceReport escribe el reporte a JSON indentado.
+// writeRelevanceReport escribe el reporte a JSON indentado en un fichero NUEVO: si ya
+// existe, no lo pisa.
 func writeRelevanceReport(path string, r relevanceReport) error {
 	b, err := json.MarshalIndent(r, "", "  ")
 	if err != nil {
 		return err
 	}
-	return os.WriteFile(path, append(b, '\n'), 0o644)
+	f, err := os.OpenFile(path, os.O_WRONLY|os.O_CREATE|os.O_EXCL, 0o644)
+	if err != nil {
+		return fmt.Errorf("no se pisa un resultado que ya existe: %w", err)
+	}
+	defer func() { _ = f.Close() }()
+	_, err = f.Write(append(b, '\n'))
+	return err
 }
 
 // --- helpers ---
@@ -340,8 +339,7 @@ func mean(vals []float64) float64 {
 }
 
 // relevanceSlug convierte el nombre de modelo en un slug con guiones para el nombre de
-// archivo (ej. "gemma4:e4b" → "gemma4-e4b"), consistente con el results-gemma4-e4b.json
-// esperado por el plan.
+// archivo (ej. "gemma4:e4b" → "gemma4-e4b"). Lo usa también el historial (runlog.go).
 func relevanceSlug(model string) string {
 	repl := strings.NewReplacer(":", "-", "/", "-", "_", "-")
 	return repl.Replace(model)
