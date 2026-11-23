@@ -304,8 +304,8 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 	// Alguna respuesta quedó sin propuesta: no se finaliza y se devuelve el error
 	// para que el consumer reintente (el defer libera el candado).
 	if len(answerErrs) > 0 {
-		return fmt.Errorf("%d de %d respuestas sin propuesta en attempt %s: %w",
-			len(answerErrs), len(pending.Answers), attemptID, errors.Join(answerErrs...))
+		return fmt.Errorf("revisión incompleta de attempt %s (%d pendientes al empezar): %w",
+			attemptID, len(pending.Answers), errors.Join(answerErrs...))
 	}
 
 	// Todas las pendientes quedaron revisadas.
