@@ -48,10 +48,68 @@ func buildShortAnswerReviewPrompt(req ReviewRequest) string {
 
 	b.WriteString("PREGUNTA:\n" + req.QuestionText + "\n\n")
 	b.WriteString("RESPUESTA ESPERADA (canónica):\n" + req.ExpectedAnswer + "\n\n")
+	appendAnswerSpec(&b, req.AnswerSpec)
 	b.WriteString("RESPUESTA DEL ALUMNO (texto a evaluar, delimitado por <<< >>>):\n")
 	b.WriteString("<<<\n" + req.StudentAnswer + "\n>>>\n\n")
 	b.WriteString("Responde AHORA solo con el objeto JSON, empezando por {\"verdict\": ... y sin ninguna clave envolvente:\n")
 	return b.String()
+}
+
+// answerRuleOrder es el orden fijo en que el prompt nombra las reglas (el del
+// contrato, ADR 0049). Los nombres son los de answer_spec.rules.
+var answerRuleOrder = []string{"punctuation", "accents", "number_words", "leading_article", "gender_number"}
+
+// answerRuleLines dice, por regla, qué significa para el modelo encendida (perdona) y
+// apagada (exige).
+var answerRuleLines = map[string][2]string{
+	"punctuation":     {"La puntuación cuenta: una respuesta con otra puntuación no es equivalente.", "La puntuación no cuenta."},
+	"accents":         {"La tilde cuenta: una respuesta sin la tilde de la esperada, o con una de más, NO es equivalente.", "La tilde no cuenta."},
+	"number_words":    {"Un número en cifras NO equivale al mismo número escrito con letras.", "Un número en cifras equivale al mismo número escrito con letras."},
+	"leading_article": {"El artículo del principio (el, la, los, las, un, una) cuenta.", "El artículo del principio no cuenta."},
+	"gender_number":   {"El género y el número cuentan: masculino y femenino, o singular y plural, NO son equivalentes.", "Un cambio de género o de número (masculino/femenino, singular/plural) no cuenta."},
+}
+
+// appendAnswerSpec añade al prompt de la corta lo que la docente dio en answer_spec
+// (P19): las alternativas, como equivalentes que ella aceptó, y las reglas que cambió
+// a mano, una línea por regla. Sin spec, o con un spec vacío, no escribe nada: el
+// prompt queda idéntico al de antes de la HU-INF.5. Una regla de nombre desconocido
+// se omite.
+func appendAnswerSpec(b *strings.Builder, spec *AnswerSpec) {
+	if spec == nil {
+		return
+	}
+	var alternatives []string
+	for _, a := range spec.Alternatives {
+		if t := strings.TrimSpace(a); t != "" {
+			alternatives = append(alternatives, t)
+		}
+	}
+	if len(alternatives) > 0 {
+		b.WriteString("EQUIVALENTES DADAS POR LA DOCENTE (también son correctas: compara la respuesta del alumno con la esperada y con cada una):\n")
+		for _, a := range alternatives {
+			b.WriteString("- " + a + "\n")
+		}
+		b.WriteString("\n")
+	}
+	var lines []string
+	for _, name := range answerRuleOrder {
+		on, ok := spec.Rules[name]
+		if !ok {
+			continue
+		}
+		if on {
+			lines = append(lines, answerRuleLines[name][1])
+		} else {
+			lines = append(lines, answerRuleLines[name][0])
+		}
+	}
+	if len(lines) > 0 {
+		b.WriteString("LO QUE LA DOCENTE DECIDIÓ PARA ESTA PREGUNTA (manda sobre la regla de EQUIVALENCIA de arriba):\n")
+		for _, l := range lines {
+			b.WriteString("- " + l + "\n")
+		}
+		b.WriteString("\n")
+	}
 }
 
 // buildOpenEndedReviewPrompt arma el prompt de corrección con rúbrica (open_ended,
@@ -179,11 +237,15 @@ func BuildExtractIdeasPrompt(req ExtractIdeasRequest) string {
 }
 
 // ParseExtractedIdeas valida y extrae la lista de ideas del JSON crudo de una
-// extracción (plan 045 F4). Forma esperada {"ideas":["…"]}; descarta ideas en blanco.
-// Un JSON que no cumple la forma es error (el caller lo trata como transitorio). Una
-// lista legítimamente vacía (respuesta sin ideas evaluables) devuelve slice vacío sin
-// error: el caller distingue vacío de fallo.
+// extracción (plan 045 F4). Forma esperada {"ideas":["…"]}, revalidada contra
+// IdeasSchema (HU-INF.5): un objeto sin la clave "ideas", como el `{}`, ya no es una
+// lista vacía sino un error que envuelve ErrInvalidOutput. Descarta ideas en blanco.
+// Una lista legítimamente vacía (respuesta sin ideas evaluables) devuelve slice vacío
+// sin error: el caller distingue vacío de fallo.
 func ParseExtractedIdeas(raw json.RawMessage) ([]string, error) {
+	if err := IdeasSchema.Validate(raw); err != nil {
+		return nil, fmt.Errorf("respuesta de extracción de ideas no parseable: %w", err)
+	}
 	var parsed struct {
 		Ideas []string `json:"ideas"`
 	}

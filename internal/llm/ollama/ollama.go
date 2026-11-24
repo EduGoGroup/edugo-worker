@@ -60,13 +60,15 @@ func New(cfg Config) *Provider {
 // Name identifica al provider.
 func (p *Provider) Name() string { return "ollama:" + p.model }
 
-// generateRequest es el body de POST /api/generate. format:"json" fuerza a
-// Ollama a emitir JSON válido (reduce alucinaciones de formato).
+// generateRequest es el body de POST /api/generate. Format es "json" (fuerza a
+// Ollama a emitir JSON válido) o, en las llamadas del carril de revisión, el JSON
+// Schema de la salida de esa llamada (HU-INF.5): Ollama restringe la forma al
+// generar. Medido con Ollama 0.34.4 (P9.1).
 type generateRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
-	Stream bool   `json:"stream"`
-	Format string `json:"format,omitempty"`
+	Model  string          `json:"model"`
+	Prompt string          `json:"prompt"`
+	Stream bool            `json:"stream"`
+	Format json.RawMessage `json:"format,omitempty"`
 	// Think desactiva el "thinking" de los modelos que lo soportan (qwen3, etc.).
 	// Con format:"json" el razonamiento se corta y deja el objeto vacío `{}`
 	// (verdict/score/feedback en cero): una review IA engañosa. Forzar think:false
@@ -101,22 +103,19 @@ func (p *Provider) GenerateAssessment(ctx context.Context, material llm.Material
 	return llm.ExtractJSON(out)
 }
 
-// ReviewAnswer pide al modelo la corrección de una respuesta.
+// jsonFormat es el modo JSON sin esquema de Ollama, el de las llamadas que no son del
+// carril de revisión (generación, preparación, material, relevancia).
+var jsonFormat = json.RawMessage(`"json"`)
+
+// ReviewAnswer pide al modelo la corrección de una respuesta, con el esquema de su
+// tipo de pregunta en format. El resultado lleva el crudo: lo revalida quien llama.
 func (p *Provider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest) (llm.ReviewResult, error) {
-	prompt := llm.BuildReviewPrompt(req)
-	out, err := p.generate(ctx, prompt)
+	schema := llm.VerdictSchema(llm.ReviewVerdicts(req.QuestionType)).JSON()
+	out, err := p.generateFormat(ctx, llm.BuildReviewPrompt(req), p.temperatureFor(req.Temperature), schema)
 	if err != nil {
 		return llm.ReviewResult{}, err
 	}
-	rawJSON, err := llm.ExtractJSON(out)
-	if err != nil {
-		return llm.ReviewResult{}, err
-	}
-	var result llm.ReviewResult
-	if err := json.Unmarshal(rawJSON, &result); err != nil {
-		return llm.ReviewResult{}, fmt.Errorf("respuesta de corrección no parseable: %w", err)
-	}
-	return result, nil
+	return llm.DecodeVerdictOutput(out, "corrección")
 }
 
 // PrepareQuestion pide al modelo el artefacto de preparación (JSON crudo del
@@ -132,42 +131,27 @@ func (p *Provider) PrepareQuestion(ctx context.Context, req llm.PrepRequest) (js
 	return llm.ExtractJSON(out)
 }
 
-// JudgePairEquivalence pide la equivalencia binaria de un par (plan 042 F3c). Mismo
-// camino que ReviewAnswer: el resultado es un ReviewResult (verdict/score/feedback).
+// JudgePairEquivalence pide la equivalencia binaria de un par (plan 042 F3c), con el
+// esquema binario en format. Mismo camino que ReviewAnswer. El esquema le alcanza
+// también al juez del dedupe, que usa esta llamada: solo le restringe la forma.
 func (p *Provider) JudgePairEquivalence(ctx context.Context, req llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
-	prompt := llm.BuildPairEquivalencePrompt(req)
-	out, err := p.generate(ctx, prompt)
+	schema := llm.VerdictSchema(llm.BinaryVerdicts).JSON()
+	out, err := p.generateFormat(ctx, llm.BuildPairEquivalencePrompt(req), p.temperatureFor(req.Temperature), schema)
 	if err != nil {
 		return llm.ReviewResult{}, err
 	}
-	rawJSON, err := llm.ExtractJSON(out)
-	if err != nil {
-		return llm.ReviewResult{}, err
-	}
-	var result llm.ReviewResult
-	if err := json.Unmarshal(rawJSON, &result); err != nil {
-		return llm.ReviewResult{}, fmt.Errorf("respuesta de equivalencia no parseable: %w", err)
-	}
-	return result, nil
+	return llm.DecodeVerdictOutput(out, "equivalencia")
 }
 
-// CheckCriterion pide el cumplimiento binario de un criterio (plan 042 F4b). Mismo
-// camino que ReviewAnswer: el resultado es un ReviewResult (verdict/score/feedback).
+// CheckCriterion pide el cumplimiento binario de un criterio (plan 042 F4b), con el
+// esquema binario en format. Mismo camino que ReviewAnswer.
 func (p *Provider) CheckCriterion(ctx context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
-	prompt := llm.BuildCriterionCheckPrompt(req)
-	out, err := p.generate(ctx, prompt)
+	schema := llm.VerdictSchema(llm.BinaryVerdicts).JSON()
+	out, err := p.generateFormat(ctx, llm.BuildCriterionCheckPrompt(req), p.temperatureFor(req.Temperature), schema)
 	if err != nil {
 		return llm.ReviewResult{}, err
 	}
-	rawJSON, err := llm.ExtractJSON(out)
-	if err != nil {
-		return llm.ReviewResult{}, err
-	}
-	var result llm.ReviewResult
-	if err := json.Unmarshal(rawJSON, &result); err != nil {
-		return llm.ReviewResult{}, fmt.Errorf("respuesta de criterio no parseable: %w", err)
-	}
-	return result, nil
+	return llm.DecodeVerdictOutput(out, "criterio")
 }
 
 // ScoreRelevance puntúa la relevancia 0..1 de una candidata contra las ideas del job
@@ -189,19 +173,18 @@ func (p *Provider) ScoreRelevance(ctx context.Context, req llm.RelevanceRequest)
 	return llm.ParseRelevanceResult(rawJSON)
 }
 
-// ExtractIdeas descompone la respuesta del alumno en ideas atómicas (plan 045 F4).
-// Mismo camino que las demás llamadas: build prompt → generar → ExtractJSON → validar
-// la forma {"ideas":[…]}. Una extracción que no parsea es fallo transitorio (el caller
-// decide el fallback a la respuesta cruda).
+// ExtractIdeas descompone la respuesta del alumno en ideas atómicas (plan 045 F4),
+// con IdeasSchema en format. Build prompt → generar → ExtractJSON → revalidar la forma
+// {"ideas":[…]} (ParseExtractedIdeas). Una extracción que no parsea es un error de
+// calidad; el caller decide el fallback a la respuesta cruda y lo marca.
 func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest) ([]string, error) {
-	prompt := llm.BuildExtractIdeasPrompt(req)
-	out, err := p.generate(ctx, prompt)
+	out, err := p.generateFormat(ctx, llm.BuildExtractIdeasPrompt(req), p.temperature, llm.IdeasSchema.JSON())
 	if err != nil {
 		return nil, err
 	}
 	rawJSON, err := llm.ExtractJSON(out)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: respuesta de extracción de ideas no parseable: %v", llm.ErrLLMQuality, err)
 	}
 	return llm.ParseExtractedIdeas(rawJSON)
 }
@@ -288,11 +271,26 @@ func (p *Provider) generate(ctx context.Context, prompt string) (string, error) 
 // devuelve el texto crudo del modelo. La usa DigestChunk para aplicar el jitter del
 // reintento por calidad sin cambiar el default determinista del resto de llamadas.
 func (p *Provider) generateWithTemperature(ctx context.Context, prompt string, temperature float64) (string, error) {
+	return p.generateFormat(ctx, prompt, temperature, jsonFormat)
+}
+
+// temperatureFor devuelve la temperatura de una llamada: la de la petición si viene
+// (el reintento de una salida inválida) o la del proveedor.
+func (p *Provider) temperatureFor(override *float64) float64 {
+	if override != nil {
+		return *override
+	}
+	return p.temperature
+}
+
+// generateFormat ejecuta POST /api/generate con una temperatura y un format
+// explícitos ("json" o un JSON Schema) y devuelve el texto crudo del modelo.
+func (p *Provider) generateFormat(ctx context.Context, prompt string, temperature float64, format json.RawMessage) (string, error) {
 	reqBody := generateRequest{
 		Model:   p.model,
 		Prompt:  prompt,
 		Stream:  false,
-		Format:  "json",
+		Format:  format,
 		Think:   false,
 		Options: &generateOptions{Temperature: temperature},
 	}
