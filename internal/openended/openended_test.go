@@ -292,7 +292,7 @@ func TestGrade_ExtraccionError_NoRompeYCaeARaw(t *testing.T) {
 
 // HU-INF.5: un criterio con salida inválida se reintenta UNA vez con otra temperatura;
 // si la segunda vale, se usa.
-func TestGrade_CriterioInvalido_SeReintentaUnaVez(t *testing.T) {
+func TestGrade_InvalidCriterion_RetriedOnce(t *testing.T) {
 	m := &mockProvider{critOuts: []llm.ReviewResult{{Verdict: "partial"}, {Verdict: llm.VerdictCorrect, Score: 1}}}
 	res, err := Grade(context.Background(), m, fotosintesis([]string{"menciona la luz"}))
 	if err != nil {
@@ -308,7 +308,7 @@ func TestGrade_CriterioInvalido_SeReintentaUnaVez(t *testing.T) {
 
 // HU-INF.5: si sigue inválida tras el reintento, la revisión es un error, nunca un
 // «no cumple».
-func TestGrade_CriterioInvalidoDosVeces_EsError(t *testing.T) {
+func TestGrade_InvalidCriterionTwice_IsError(t *testing.T) {
 	m := &mockProvider{critOuts: []llm.ReviewResult{{Verdict: ""}}}
 	_, err := Grade(context.Background(), m, fotosintesis([]string{"uno", "dos"}))
 	if !errors.Is(err, llm.ErrInvalidOutput) {
@@ -320,7 +320,7 @@ func TestGrade_CriterioInvalidoDosVeces_EsError(t *testing.T) {
 }
 
 // Un error de transporte en el criterio se propaga igual, sin reintento propio.
-func TestGrade_CriterioErrorDeTransporte_SinReintento(t *testing.T) {
+func TestGrade_CriterionTransportError_NoRetry(t *testing.T) {
 	boom := errors.New("connection refused")
 	m := &mockProvider{critError: boom}
 	_, err := Grade(context.Background(), m, fotosintesis([]string{"uno"}))
@@ -331,7 +331,7 @@ func TestGrade_CriterioErrorDeTransporte_SinReintento(t *testing.T) {
 
 // HU-INF.5 (decisión 6): la extracción de ideas que falla no detiene la revisión, y el
 // resultado lo marca, distinto de «no había ideas».
-func TestGrade_MarcaDeLaExtraccion(t *testing.T) {
+func TestGrade_IdeasExtractionMark(t *testing.T) {
 	crit := []string{"menciona la luz"}
 	met := map[string]bool{"menciona la luz": true}
 	cases := []struct {

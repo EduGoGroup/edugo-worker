@@ -192,8 +192,8 @@ func TestGrade_TodoDeterminista_SinLlamadas(t *testing.T) {
 	}
 }
 
-// aztecas es una entrada que escala exactamente un par al modelo.
-func aztecas() GradeInput {
+// aztecsInput es una entrada que escala exactamente un par al modelo.
+func aztecsInput() GradeInput {
 	return GradeInput{
 		QuestionText:  "¿Cuál es el país de los aztecas?",
 		StudentAnswer: "pais azteca",
@@ -204,9 +204,9 @@ func aztecas() GradeInput {
 
 // HU-INF.5: un par con salida inválida se reintenta UNA vez con otra temperatura; si
 // la segunda vale, el carril sigue con ella.
-func TestGrade_ParInvalido_SeReintentaUnaVez(t *testing.T) {
+func TestGrade_InvalidPair_RetriedOnce(t *testing.T) {
 	prov := &mockProvider{pairOuts: []llm.ReviewResult{{Verdict: "maybe"}, {Verdict: "CORRECT", Score: 1}}}
-	res, err := Grade(context.Background(), prov, aztecas())
+	res, err := Grade(context.Background(), prov, aztecsInput())
 	if err != nil {
 		t.Fatalf("el reintento válido no debe fallar: %v", err)
 	}
@@ -220,9 +220,9 @@ func TestGrade_ParInvalido_SeReintentaUnaVez(t *testing.T) {
 
 // HU-INF.5: si la salida del par sigue inválida tras el reintento, es un error, nunca
 // un «no» (antes, un veredicto vacío contaba como ítem ausente).
-func TestGrade_ParInvalidoDosVeces_EsError(t *testing.T) {
+func TestGrade_InvalidPairTwice_IsError(t *testing.T) {
 	prov := &mockProvider{pairOuts: []llm.ReviewResult{{Verdict: ""}}}
-	_, err := Grade(context.Background(), prov, aztecas())
+	_, err := Grade(context.Background(), prov, aztecsInput())
 	if !errors.Is(err, llm.ErrInvalidOutput) {
 		t.Fatalf("se esperaba un error que envuelva ErrInvalidOutput, salió %v", err)
 	}
@@ -232,9 +232,9 @@ func TestGrade_ParInvalidoDosVeces_EsError(t *testing.T) {
 }
 
 // Un error de transporte en el par se propaga igual que antes, sin reintento propio.
-func TestGrade_ErrorDeTransporte_SinReintento(t *testing.T) {
+func TestGrade_PairTransportError_NoRetry(t *testing.T) {
 	prov := &mockProvider{pairErr: context.DeadlineExceeded}
-	_, err := Grade(context.Background(), prov, aztecas())
+	_, err := Grade(context.Background(), prov, aztecsInput())
 	if !errors.Is(err, context.DeadlineExceeded) || prov.pairCalls != 1 {
 		t.Fatalf("se esperaba el error tal cual y una llamada: %v (%d)", err, prov.pairCalls)
 	}
