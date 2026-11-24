@@ -874,9 +874,10 @@ func TestAttemptReviewProcessor_OpenEnded_CriteriosEnBlanco_NoCeroSilencioso(t *
 	if len(learning.reviewCalls) != 1 {
 		t.Fatalf("esperaba 1 review posteada, hubo %d", len(learning.reviewCalls))
 	}
-	// El puntaje NO es 0 silencioso: viene del juicio global (0.8 → 8 de 10).
-	if got := learning.reviewCalls[0].PointsAwarded; got < 7.99 || got > 8.01 {
-		t.Fatalf("esperaba ~8.0 puntos del flujo global, hubo %.2f (¿0 silencioso?)", got)
+	// El puntaje NO es 0 silencioso: viene del juicio global. Desde la HU-INF.5 (P8)
+	// el número sale del veredicto, no del score del modelo: «correct» con 0.8 → 10 de 10.
+	if got := learning.reviewCalls[0].PointsAwarded; got < 9.99 || got > 10.01 {
+		t.Fatalf("esperaba 10 puntos del flujo global (veredicto correct), hubo %.2f (¿0 silencioso?)", got)
 	}
 }
 

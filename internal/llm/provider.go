@@ -73,6 +73,23 @@ type ReviewRequest struct {
 	// variantes válidas. Sin él, el prompt es el actual (fallback). No aplica al
 	// carril de criterios (F4b lo reemplaza por completo).
 	Prep *ReviewPrep
+
+	// AnswerSpec, si != nil, son las alternativas y las reglas que la docente dio a la
+	// corta (answer_spec, ADR 0049). Solo lo lee el prompt global de short_answer (P19
+	// de R-054). nil = el prompt de siempre, carácter a carácter.
+	AnswerSpec *AnswerSpec
+
+	// Temperature, si != nil, fuerza la temperatura SOLO en esta llamada. La usa el
+	// único reintento de una salida inválida (CallVerdict). nil = la del proveedor.
+	Temperature *float64
+}
+
+// AnswerSpec es la parte de answer_spec que llega al prompt: las alternativas que la
+// docente acepta además de la esperada y las reglas que cambió a mano (en el contrato,
+// rules lleva solo lo cambiado; una regla encendida perdona, una apagada exige).
+type AnswerSpec struct {
+	Alternatives []string
+	Rules        map[string]bool
 }
 
 // ReviewPrep son las pistas del artefacto llm_prep (open_ended) que enriquecen el
@@ -105,7 +122,26 @@ type ReviewResult struct {
 	Verdict  Verdict `json:"verdict"`
 	Score    float64 `json:"score"`
 	Feedback string  `json:"feedback"`
+
+	// Raw es el objeto JSON que devolvió el modelo, para revalidarlo en quien llama
+	// (ValidateVerdictOutput). Vacío en lo que compone Go o en un doble de prueba.
+	Raw json.RawMessage `json:"-"`
+
+	// Ideas dice qué pasó con la extracción de ideas del carril de criterios
+	// (openended). Vacío en los demás carriles.
+	Ideas IdeasOutcome `json:"-"`
 }
+
+// IdeasOutcome es el desenlace de la extracción de ideas del carril de criterios. Es
+// una ayuda que no da la nota: su fallo no detiene la revisión, pero deja de ser
+// invisible (decisión 6).
+type IdeasOutcome string
+
+const (
+	IdeasUsed   IdeasOutcome = "used"   // hubo ideas y se usaron
+	IdeasEmpty  IdeasOutcome = "empty"  // la extracción dio una lista vacía
+	IdeasFailed IdeasOutcome = "failed" // la extracción dio error (no parsea o fuera de esquema)
+)
 
 // PrepRequest es la petición de PREPARACIÓN de una pregunta para el LLM (plan 042
 // D-042.4): a partir de la canónica del profesor se produce el artefacto llm_prep
@@ -144,6 +180,9 @@ type PairEquivalenceRequest struct {
 	Candidate string
 	// Language del feedback (default "es").
 	Language string
+	// Temperature, si != nil, fuerza la temperatura SOLO en esta llamada (el reintento
+	// de una salida inválida). nil = la del proveedor.
+	Temperature *float64
 }
 
 // CriterionCheckRequest es la petición BINARIA de cumplimiento de UN criterio (plan
@@ -166,6 +205,9 @@ type CriterionCheckRequest struct {
 	ExtractedIdeas []string
 	// Language del feedback (default "es").
 	Language string
+	// Temperature, si != nil, fuerza la temperatura SOLO en esta llamada (el reintento
+	// de una salida inválida). nil = la del proveedor.
+	Temperature *float64
 }
 
 // ExtractIdeasRequest es la petición de EXTRACCIÓN DE IDEAS de la respuesta del alumno

@@ -3,6 +3,7 @@ package shortanswer
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"testing"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
@@ -17,6 +18,10 @@ type mockProvider struct {
 	alwaysCorrect bool
 	pairCalls     int
 	pairErr       error
+	// pairOuts, si no está vacío, fija la salida llamada a llamada (la última se repite);
+	// pairTemps guarda la temperatura que pidió cada llamada (HU-INF.5).
+	pairOuts  []llm.ReviewResult
+	pairTemps []*float64
 }
 
 func (m *mockProvider) GenerateAssessment(_ context.Context, _ llm.MaterialInput, _ llm.GenerationParams) (json.RawMessage, error) {
@@ -28,10 +33,14 @@ func (m *mockProvider) ReviewAnswer(_ context.Context, _ llm.ReviewRequest) (llm
 func (m *mockProvider) PrepareQuestion(_ context.Context, _ llm.PrepRequest) (json.RawMessage, error) {
 	return nil, nil
 }
-func (m *mockProvider) JudgePairEquivalence(_ context.Context, _ llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
+func (m *mockProvider) JudgePairEquivalence(_ context.Context, req llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
 	m.pairCalls++
+	m.pairTemps = append(m.pairTemps, req.Temperature)
 	if m.pairErr != nil {
 		return llm.ReviewResult{}, m.pairErr
+	}
+	if len(m.pairOuts) > 0 {
+		return m.pairOuts[min(m.pairCalls, len(m.pairOuts))-1], nil
 	}
 	if m.alwaysCorrect {
 		return llm.ReviewResult{Verdict: llm.VerdictCorrect, Score: 1.0}, nil
@@ -180,5 +189,53 @@ func TestGrade_TodoDeterminista_SinLlamadas(t *testing.T) {
 	}
 	if prov.pairCalls != 0 {
 		t.Fatalf("esperaba 0 llamadas de par (todo determinista), hubo %d", prov.pairCalls)
+	}
+}
+
+// aztecsInput es una entrada que escala exactamente un par al modelo.
+func aztecsInput() GradeInput {
+	return GradeInput{
+		QuestionText:  "¿Cuál es el país de los aztecas?",
+		StudentAnswer: "pais azteca",
+		Items:         []string{"mexico"},
+		ItemsVerbatim: []string{"México"},
+	}
+}
+
+// HU-INF.5: un par con salida inválida se reintenta UNA vez con otra temperatura; si
+// la segunda vale, el carril sigue con ella.
+func TestGrade_InvalidPair_RetriedOnce(t *testing.T) {
+	prov := &mockProvider{pairOuts: []llm.ReviewResult{{Verdict: "maybe"}, {Verdict: "CORRECT", Score: 1}}}
+	res, err := Grade(context.Background(), prov, aztecsInput())
+	if err != nil {
+		t.Fatalf("el reintento válido no debe fallar: %v", err)
+	}
+	if res.Verdict != llm.VerdictCorrect {
+		t.Fatalf("la segunda salida (correct) decide, salió %q", res.Verdict)
+	}
+	if prov.pairCalls != 2 || prov.pairTemps[0] != nil || prov.pairTemps[1] == nil || *prov.pairTemps[1] != llm.InvalidOutputRetryTemperature {
+		t.Fatalf("se esperaban 2 llamadas, la segunda a %.1f; llamadas=%d", llm.InvalidOutputRetryTemperature, prov.pairCalls)
+	}
+}
+
+// HU-INF.5: si la salida del par sigue inválida tras el reintento, es un error, nunca
+// un «no» (antes, un veredicto vacío contaba como ítem ausente).
+func TestGrade_InvalidPairTwice_IsError(t *testing.T) {
+	prov := &mockProvider{pairOuts: []llm.ReviewResult{{Verdict: ""}}}
+	_, err := Grade(context.Background(), prov, aztecsInput())
+	if !errors.Is(err, llm.ErrInvalidOutput) {
+		t.Fatalf("se esperaba un error que envuelva ErrInvalidOutput, salió %v", err)
+	}
+	if prov.pairCalls != 2 {
+		t.Fatalf("un solo reintento: se esperaban 2 llamadas, hubo %d", prov.pairCalls)
+	}
+}
+
+// Un error de transporte en el par se propaga igual que antes, sin reintento propio.
+func TestGrade_PairTransportError_NoRetry(t *testing.T) {
+	prov := &mockProvider{pairErr: context.DeadlineExceeded}
+	_, err := Grade(context.Background(), prov, aztecsInput())
+	if !errors.Is(err, context.DeadlineExceeded) || prov.pairCalls != 1 {
+		t.Fatalf("se esperaba el error tal cual y una llamada: %v (%d)", err, prov.pairCalls)
 	}
 }

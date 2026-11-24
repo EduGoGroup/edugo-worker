@@ -89,3 +89,43 @@ func TestNew_UnsupportedProvider(t *testing.T) {
 		t.Fatal("esperaba error por proveedor no soportado")
 	}
 }
+
+// El de pago no manda esquema (la versión de API del worker no consta como
+// compatible con la salida estructurada, decisión 1 de la HU-INF.5) ni temperatura;
+// el resultado lleva el crudo para que quien llama lo revalide.
+func TestAnthropic_ReviewCalls_NoSchemaAndRaw(t *testing.T) {
+	var bodies []map[string]any
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		var body map[string]any
+		_ = json.NewDecoder(r.Body).Decode(&body)
+		bodies = append(bodies, body)
+		resp := anthropicResponse{Content: []anthropicContentBlock{{Type: "text", Text: `{"verdict":"correct","score":1,"feedback":"ok"}`}}}
+		_ = json.NewEncoder(w).Encode(resp)
+	}))
+	defer srv.Close()
+	p, err := New(Config{Provider: ProviderAnthropic, APIKey: "k", Model: "claude-x", BaseURL: srv.URL})
+	if err != nil {
+		t.Fatal(err)
+	}
+	retry := llm.InvalidOutputRetryTemperature
+	res, err := p.ReviewAnswer(context.Background(), llm.ReviewRequest{Temperature: &retry})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(res.Raw) == 0 {
+		t.Fatal("el resultado debe llevar el crudo")
+	}
+	if _, err := p.JudgePairEquivalence(context.Background(), llm.PairEquivalenceRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.CheckCriterion(context.Background(), llm.CriterionCheckRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	for i, body := range bodies {
+		for _, key := range []string{"output_config", "output_format", "temperature"} {
+			if _, ok := body[key]; ok {
+				t.Errorf("petición %d: no debe llevar %s", i, key)
+			}
+		}
+	}
+}

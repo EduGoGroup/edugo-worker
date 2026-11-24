@@ -157,6 +157,10 @@ func TestReviewAnswerLane_Errors(t *testing.T) {
 		if got.Result.Score != 0.3 || got.Points != 0 {
 			t.Fatalf("se esperaba el resultado crudo sin puntos; score=%.2f puntos=%.2f", got.Result.Score, got.Points)
 		}
+		// HU-INF.5: la salida inválida se reintenta una vez antes de ser un error.
+		if f.reviewCalls != 2 {
+			t.Fatalf("se esperaban 2 llamadas (un reintento), hubo %d", f.reviewCalls)
+		}
 	})
 
 	t.Run("parcial en una corta", func(t *testing.T) {
@@ -175,4 +179,184 @@ func TestReviewAnswerLane_Errors(t *testing.T) {
 			t.Fatalf("se esperaba el error del proveedor tal cual, salió %v", err)
 		}
 	})
+}
+
+// seqReviewProvider fija la salida del juicio global llamada a llamada (la última se
+// repite) y guarda la temperatura de cada una (HU-INF.5).
+type seqReviewProvider struct {
+	laneFakeProvider
+	outs  []llm.ReviewResult
+	temps []*float64
+}
+
+func (f *seqReviewProvider) ReviewAnswer(_ context.Context, req llm.ReviewRequest) (llm.ReviewResult, error) {
+	f.reviewCalls++
+	f.lastReview = req
+	f.temps = append(f.temps, req.Temperature)
+	return f.outs[min(f.reviewCalls, len(f.outs))-1], nil
+}
+
+// HU-INF.5: salida vacía y salida fuera de esquema son un error tras un reintento,
+// sin propuesta; si el reintento vale, sigue.
+func TestReviewAnswerLane_InvalidOutput(t *testing.T) {
+	cases := []struct {
+		name string
+		out  llm.ReviewResult
+	}{
+		{"salida vacía", llm.ReviewResult{}},
+		{"fuera de esquema: falta score", llm.ReviewResult{Verdict: llm.VerdictCorrect, Raw: json.RawMessage(`{"verdict":"correct","feedback":"x"}`)}},
+		{"fuera de esquema: score como cadena", llm.ReviewResult{Verdict: llm.VerdictCorrect, Raw: json.RawMessage(`{"verdict":"correct","score":"1","feedback":"x"}`)}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := &seqReviewProvider{outs: []llm.ReviewResult{c.out}}
+			got, err := ReviewAnswerLane(context.Background(), f, laneAnswer(llm.QuestionTypeShortAnswer, "x", ""), newTestLogger())
+			if !errors.Is(err, ErrInvalidVerdict) || !errors.Is(err, llm.ErrInvalidOutput) {
+				t.Fatalf("se esperaba ErrInvalidVerdict y ErrInvalidOutput, salió %v", err)
+			}
+			if got.Points != 0 || f.reviewCalls != 2 {
+				t.Fatalf("sin propuesta y con un reintento: puntos=%.2f llamadas=%d", got.Points, f.reviewCalls)
+			}
+			if f.temps[0] != nil || f.temps[1] == nil || *f.temps[1] != llm.InvalidOutputRetryTemperature {
+				t.Fatalf("la primera a la temperatura del proveedor y el reintento a %.1f", llm.InvalidOutputRetryTemperature)
+			}
+		})
+	}
+
+	t.Run("el reintento vale", func(t *testing.T) {
+		f := &seqReviewProvider{outs: []llm.ReviewResult{{Verdict: "maybe"}, {Verdict: llm.VerdictCorrect, Score: 0.2}}}
+		got, err := ReviewAnswerLane(context.Background(), f, laneAnswer(llm.QuestionTypeShortAnswer, "x", ""), newTestLogger())
+		if err != nil || got.Points != 4 {
+			t.Fatalf("la segunda salida decide: err=%v puntos=%.2f", err, got.Points)
+		}
+	})
+}
+
+// HU-INF.5 (P8): en los carriles globales el número sale del veredicto; el score del
+// modelo se ignora. Un veredicto en mayúsculas vale.
+func TestReviewAnswerLane_NumberFromVerdict(t *testing.T) {
+	cases := []struct {
+		name         string
+		questionType string
+		verdict      llm.Verdict
+		score        float64
+		want         float64
+	}{
+		{"correcta con 0,3: todos los puntos", llm.QuestionTypeShortAnswer, llm.VerdictCorrect, 0.3, 4},
+		{"incorrecta con 0,9: cero", llm.QuestionTypeShortAnswer, llm.VerdictIncorrect, 0.9, 0},
+		{"parcial en una larga global: la mitad", llm.QuestionTypeOpenEnded, llm.VerdictPartial, 0.9, 2},
+		{"correcta con 0,1 en una larga: todos", llm.QuestionTypeOpenEnded, llm.VerdictCorrect, 0.1, 4},
+		{"veredicto en mayúsculas", llm.QuestionTypeShortAnswer, "CORRECT", 0, 4},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			f := &laneFakeProvider{reviewVerdict: c.verdict, reviewScore: c.score}
+			got, err := ReviewAnswerLane(context.Background(), f, laneAnswer(c.questionType, "respuesta", ""), newTestLogger())
+			if err != nil {
+				t.Fatalf("error inesperado: %v", err)
+			}
+			if got.Points != c.want || f.reviewCalls != 1 {
+				t.Fatalf("se esperaban %.2f puntos en una llamada, salieron %.2f en %d", c.want, got.Points, f.reviewCalls)
+			}
+		})
+	}
+
+	t.Run("los criterios conservan su fórmula", func(t *testing.T) {
+		f := &laneFakeProvider{}
+		got, err := ReviewAnswerLane(context.Background(), &halfCriteria{laneFakeProvider: f}, laneAnswer(llm.QuestionTypeOpenEnded, "respuesta larga", laneCriteriaPrep), newTestLogger())
+		if err != nil {
+			t.Fatal(err)
+		}
+		// 1 de 2 criterios: 0,3 + 0,4·0,5 = 0,5 → 2 de 4.
+		if got.Result.Verdict != llm.VerdictPartial || got.Points != 2 {
+			t.Fatalf("se esperaba parcial con 2 puntos, salió %s con %.2f", got.Result.Verdict, got.Points)
+		}
+	})
+}
+
+// halfCriteria cumple el primer criterio y no el segundo.
+type halfCriteria struct{ *laneFakeProvider }
+
+func (h *halfCriteria) CheckCriterion(_ context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
+	h.criterionCalls++
+	if req.Criterion == "criterio uno" {
+		return llm.ReviewResult{Verdict: llm.VerdictCorrect, Score: 1}, nil
+	}
+	return llm.ReviewResult{Verdict: llm.VerdictIncorrect}, nil
+}
+
+// HU-INF.5 (decisiones 3 y 4): una respuesta en blanco no llama al proveedor, en
+// ningún carril: incorrecta, cero puntos y el comentario fijo.
+func TestReviewAnswerLane_BlankAnswer_NoProviderCalls(t *testing.T) {
+	lanes := []struct {
+		name, questionType, prep string
+	}{
+		{"corta global", llm.QuestionTypeShortAnswer, ""},
+		{"corta con lista", llm.QuestionTypeShortAnswer, laneListPrep},
+		{"corta con otro content_kind", llm.QuestionTypeShortAnswer, laneTermPrep},
+		{"larga con criterios", llm.QuestionTypeOpenEnded, laneCriteriaPrep},
+		{"larga con ideas", llm.QuestionTypeOpenEnded, laneIdeasPrep},
+		{"larga global", llm.QuestionTypeOpenEnded, ""},
+	}
+	for _, lane := range lanes {
+		for _, blank := range []string{"", "   ", "...", " - ", "?"} {
+			t.Run(lane.name+" «"+blank+"»", func(t *testing.T) {
+				f := &laneFakeProvider{reviewVerdict: llm.VerdictCorrect, reviewScore: 1, criterionVerdict: llm.VerdictCorrect}
+				got, err := ReviewAnswerLane(context.Background(), f, laneAnswer(lane.questionType, blank, lane.prep), newTestLogger())
+				if err != nil {
+					t.Fatalf("error inesperado: %v", err)
+				}
+				if calls := f.reviewCalls + f.pairCalls + f.criterionCalls + f.extractCalls; calls != 0 {
+					t.Fatalf("una respuesta en blanco no llama al modelo, hubo %d llamadas", calls)
+				}
+				if got.Result.Verdict != llm.VerdictIncorrect || got.Points != 0 || !got.BlankByRule || got.Result.Feedback != "Respuesta en blanco." {
+					t.Fatalf("se esperaba incorrecta por regla con 0 puntos, salió %+v", got)
+				}
+			})
+		}
+	}
+
+	t.Run("«no sé» no está en blanco", func(t *testing.T) {
+		f := &laneFakeProvider{reviewVerdict: llm.VerdictIncorrect}
+		got, err := ReviewAnswerLane(context.Background(), f, laneAnswer(llm.QuestionTypeShortAnswer, "no sé", ""), newTestLogger())
+		if err != nil || got.BlankByRule || f.reviewCalls != 1 {
+			t.Fatalf("«no sé» va al modelo: err=%v regla=%v llamadas=%d", err, got.BlankByRule, f.reviewCalls)
+		}
+	})
+}
+
+// HU-INF.5 (P19): el answer_spec llega al prompt global de la corta, no al de la larga.
+func TestReviewAnswerLane_AnswerSpecReachesShortPrompt(t *testing.T) {
+	spec := json.RawMessage(`{"version":1,"alternatives":[{"text":"Lima"},{"text":"  "}],"rules":{"accents":false}}`)
+
+	short := laneAnswer(llm.QuestionTypeShortAnswer, "lima", "")
+	short.AnswerSpec = spec
+	f := &laneFakeProvider{reviewVerdict: llm.VerdictCorrect}
+	if _, err := ReviewAnswerLane(context.Background(), f, short, newTestLogger()); err != nil {
+		t.Fatal(err)
+	}
+	got := f.lastReview.AnswerSpec
+	if got == nil || len(got.Alternatives) != 1 || got.Alternatives[0] != "Lima" || got.Rules["accents"] {
+		t.Fatalf("se esperaba el spec con una alternativa y accents=false, salió %+v", got)
+	}
+
+	open := laneAnswer(llm.QuestionTypeOpenEnded, "larga", "")
+	open.AnswerSpec = spec
+	f = &laneFakeProvider{reviewVerdict: llm.VerdictCorrect}
+	if _, err := ReviewAnswerLane(context.Background(), f, open, newTestLogger()); err != nil {
+		t.Fatal(err)
+	}
+	if f.lastReview.AnswerSpec != nil {
+		t.Fatalf("la larga no lleva answer_spec, salió %+v", f.lastReview.AnswerSpec)
+	}
+
+	broken := laneAnswer(llm.QuestionTypeShortAnswer, "lima", "")
+	broken.AnswerSpec = json.RawMessage(`{"alternatives":"no"}`)
+	f = &laneFakeProvider{reviewVerdict: llm.VerdictCorrect}
+	if _, err := ReviewAnswerLane(context.Background(), f, broken, newTestLogger()); err != nil {
+		t.Fatal(err)
+	}
+	if f.lastReview.AnswerSpec != nil {
+		t.Fatal("un answer_spec que no parsea se ignora")
+	}
 }

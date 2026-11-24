@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"log/slog"
+	"math"
 	"os"
 	"strings"
 	"time"
@@ -27,7 +28,8 @@ import (
 // pendientes (el informe de -deterministic): son los que en producción le llegan.
 
 // bankCase es un caso del banco (internal/core/domain/testdata/answer_bank.json de
-// edugo-api-learning). answer_spec no se lee: hoy ningún carril la usa.
+// edugo-api-learning). answer_spec viaja al carril tal cual, como lo serviría el GET
+// de pendientes de learning (HU-INF.5).
 type bankCase struct {
 	ID       string          `json:"id"`
 	Kind     string          `json:"kind"`
@@ -39,6 +41,8 @@ type bankCase struct {
 	Label    string          `json:"label"`
 	Rubric   string          `json:"rubric,omitempty"`
 	LLMPrep  json.RawMessage `json:"llm_prep,omitempty"`
+	// AnswerSpec son las alternativas y reglas de la docente (ADR 0049).
+	AnswerSpec json.RawMessage `json:"answer_spec,omitempty"`
 }
 
 // deterministicReport es el informe que escribe la prueba de learning con
@@ -81,6 +85,15 @@ type bankCaseRun struct {
 	SubCalls    int     `json:"sub_calls"`
 	SubInvalid  int     `json:"sub_invalid"`
 	IdeasFailed bool    `json:"ideas_failed,omitempty"`
+	// Columnas de la HU-INF.5.
+	Calls        int      `json:"calls"`                   // llamadas al proveedor, de cualquier tipo
+	EmptyByRule  bool     `json:"empty_by_rule,omitempty"` // en blanco, resuelta por regla (BlankByRule)
+	NoCalls      bool     `json:"no_calls,omitempty"`      // resuelta sin ninguna llamada al modelo
+	Retries      int      `json:"retries"`                 // reintentos por salida inválida (llamadas con temperatura propia)
+	IdeasError   bool     `json:"ideas_error,omitempty"`   // la extracción de ideas dio error
+	IdeasEmpty   bool     `json:"ideas_empty,omitempty"`   // la extracción de ideas dio una lista vacía
+	ModelScore   *float64 `json:"model_score,omitempty"`   // el score del juicio global del modelo, si lo hubo
+	ScoreDiffers bool     `json:"score_differs,omitempty"` // el score del modelo, escalado, no es los puntos de Go
 }
 
 // bankRunData es lo que se guarda en el historial.
@@ -183,6 +196,7 @@ func runBankCase(base llm.LLMProvider, c bankCase, log logger.Logger, timeout ti
 		StudentAnswer:  c.Student,
 		Points:         1,
 		LLMPrep:        c.LLMPrep,
+		AnswerSpec:     c.AnswerSpec,
 	}
 	audit := &auditProvider{LLMProvider: base}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -195,7 +209,16 @@ func runBankCase(base llm.LLMProvider, c bankCase, log logger.Logger, timeout ti
 		ID: c.ID, Kind: c.Kind, Category: c.Category, Group: c.Group, Label: c.Label,
 		Verdict: string(res.Result.Verdict), Score: res.Result.Score, Points: res.Points,
 		ElapsedMS: elapsed.Milliseconds(), SubCalls: audit.subCalls, SubInvalid: audit.subInvalid,
-		IdeasFailed: audit.ideasFailed,
+		IdeasFailed: audit.ideasError || audit.ideasEmpty,
+		Calls:       audit.calls, IdeasError: audit.ideasError, IdeasEmpty: audit.ideasEmpty,
+		ModelScore: audit.modelScore, Retries: audit.retries,
+		EmptyByRule: res.BlankByRule,
+	}
+	if err == nil && audit.calls == 0 {
+		r.NoCalls = true
+	}
+	if err == nil && audit.modelScore != nil && math.Round(*audit.modelScore*ans.Points*100)/100 != res.Points {
+		r.ScoreDiffers = true
 	}
 	if err != nil {
 		r.Error = err.Error()
@@ -225,38 +248,66 @@ func classifyLaneError(err error) string {
 	return bankProviderError
 }
 
-// auditProvider cuenta las sub-llamadas de los carriles de lista (pares) y de
-// criterios. Un sub-veredicto fuera de correct|incorrect hoy cuenta como «no» sin
-// dejar rastro (shortanswer y openended solo miran si es correct): aquí se cuenta
-// aparte, que es lo que la HU-INF.5 necesita ver.
+// auditProvider cuenta las llamadas al proveedor: las sub-llamadas de los carriles
+// de lista (pares) y de criterios, la extracción de ideas y el juicio global. Un
+// sub-veredicto fuera de correct|incorrect se cuenta aparte, y del juicio global se
+// guarda el score que dio el modelo, para compararlo con los puntos que salieron.
 type auditProvider struct {
 	llm.LLMProvider
-	subCalls    int
-	subInvalid  int
-	ideasFailed bool
+	calls      int
+	retries    int
+	subCalls   int
+	subInvalid int
+	ideasError bool
+	ideasEmpty bool
+	modelScore *float64
+}
+
+func (a *auditProvider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest) (llm.ReviewResult, error) {
+	a.calls++
+	if req.Temperature != nil {
+		a.retries++
+	}
+	res, err := a.LLMProvider.ReviewAnswer(ctx, req)
+	if err == nil {
+		score := res.Score
+		a.modelScore = &score
+	}
+	return res, err
 }
 
 func (a *auditProvider) JudgePairEquivalence(ctx context.Context, req llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
+	if req.Temperature != nil {
+		a.retries++
+	}
 	res, err := a.LLMProvider.JudgePairEquivalence(ctx, req)
 	a.countSub(res, err)
 	return res, err
 }
 
 func (a *auditProvider) CheckCriterion(ctx context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
+	if req.Temperature != nil {
+		a.retries++
+	}
 	res, err := a.LLMProvider.CheckCriterion(ctx, req)
 	a.countSub(res, err)
 	return res, err
 }
 
 func (a *auditProvider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest) ([]string, error) {
+	a.calls++
 	ideas, err := a.LLMProvider.ExtractIdeas(ctx, req)
-	if err != nil || len(ideas) == 0 {
-		a.ideasFailed = true
+	switch {
+	case err != nil:
+		a.ideasError = true
+	case len(ideas) == 0:
+		a.ideasEmpty = true
 	}
 	return ideas, err
 }
 
 func (a *auditProvider) countSub(res llm.ReviewResult, err error) {
+	a.calls++
 	a.subCalls++
 	if err == nil && res.Verdict != llm.VerdictCorrect && res.Verdict != llm.VerdictIncorrect {
 		a.subInvalid++
@@ -282,6 +333,12 @@ type bankRunRow struct {
 	ProviderError int    `json:"provider_errors"`
 	SubCalls      int    `json:"sub_calls"`
 	SubInvalid    int    `json:"sub_invalid"`
+	EmptyByRule   int    `json:"empty_by_rule"`
+	NoCalls       int    `json:"no_calls"`
+	Retries       int    `json:"retries"`
+	IdeasError    int    `json:"ideas_error"`
+	IdeasEmpty    int    `json:"ideas_empty"`
+	ScoreDiffers  int    `json:"score_differs"`
 }
 
 // bankTable agrupa los casos por categoría, en el orden en que aparecen.
@@ -298,6 +355,12 @@ func bankTable(runs []bankCaseRun) []bankRunRow {
 		row.Arrive++
 		row.SubCalls += r.SubCalls
 		row.SubInvalid += r.SubInvalid
+		row.EmptyByRule += b2i(r.EmptyByRule)
+		row.NoCalls += b2i(r.NoCalls)
+		row.Retries += r.Retries
+		row.IdeasError += b2i(r.IdeasError)
+		row.IdeasEmpty += b2i(r.IdeasEmpty)
+		row.ScoreDiffers += b2i(r.ScoreDiffers)
 		switch r.Outcome {
 		case bankHit:
 			row.Hits++
@@ -323,12 +386,13 @@ func bankRunMarkdown(info runInfo, bankSum string, bankCases int, table []bankRu
 	fmt.Fprintf(&b, "Modelo: %s (digest %s, Ollama %s), temperatura %.0f. Worker %s (árbol sucio: %v).\n",
 		info.Model, orDash(info.ModelDigest), orDash(info.OllamaVersion), info.Temperature, info.WorkerCommit, info.WorkerDirty)
 	fmt.Fprintf(&b, "Banco: sha256 %s, %d casos.\n\n", bankSum, bankCases)
-	b.WriteString("| Tipo | Categoría | Llegan | Aciertos | Falsos aciertos | Falsos rechazos | Inválidas | Errores del proveedor | Sub-llamadas | Sub-veredictos inválidos |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| Tipo | Categoría | Llegan | Aciertos | Falsos aciertos | Falsos rechazos | Inválidas | Errores del proveedor | Sub-llamadas | Sub-veredictos inválidos | Vacías por regla | Sin llamadas | Reintentos | Ideas con error | Ideas vacías | Score del modelo ≠ puntos |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	var t bankRunRow
 	for _, r := range table {
-		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %d | %d | %d | %d |\n",
-			r.Kind, r.Category, r.Arrive, r.Hits, r.FalseHits, r.FalseMisses, r.Invalid, r.ProviderError, r.SubCalls, r.SubInvalid)
+		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
+			r.Kind, r.Category, r.Arrive, r.Hits, r.FalseHits, r.FalseMisses, r.Invalid, r.ProviderError, r.SubCalls, r.SubInvalid,
+			r.EmptyByRule, r.NoCalls, r.Retries, r.IdeasError, r.IdeasEmpty, r.ScoreDiffers)
 		t.Arrive += r.Arrive
 		t.Hits += r.Hits
 		t.FalseHits += r.FalseHits
@@ -337,8 +401,22 @@ func bankRunMarkdown(info runInfo, bankSum string, bankCases int, table []bankRu
 		t.ProviderError += r.ProviderError
 		t.SubCalls += r.SubCalls
 		t.SubInvalid += r.SubInvalid
+		t.EmptyByRule += r.EmptyByRule
+		t.NoCalls += r.NoCalls
+		t.Retries += r.Retries
+		t.IdeasError += r.IdeasError
+		t.IdeasEmpty += r.IdeasEmpty
+		t.ScoreDiffers += r.ScoreDiffers
 	}
-	fmt.Fprintf(&b, "| **total** | | %d | %d | %d | %d | %d | %d | %d | %d |\n",
-		t.Arrive, t.Hits, t.FalseHits, t.FalseMisses, t.Invalid, t.ProviderError, t.SubCalls, t.SubInvalid)
+	fmt.Fprintf(&b, "| **total** | | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
+		t.Arrive, t.Hits, t.FalseHits, t.FalseMisses, t.Invalid, t.ProviderError, t.SubCalls, t.SubInvalid,
+		t.EmptyByRule, t.NoCalls, t.Retries, t.IdeasError, t.IdeasEmpty, t.ScoreDiffers)
 	return b.String()
+}
+
+func b2i(b bool) int {
+	if b {
+		return 1
+	}
+	return 0
 }
