@@ -87,7 +87,9 @@ type bankCaseRun struct {
 	IdeasFailed bool    `json:"ideas_failed,omitempty"`
 	// Columnas de la HU-INF.5.
 	Calls        int      `json:"calls"`                   // llamadas al proveedor, de cualquier tipo
-	EmptyByRule  bool     `json:"empty_by_rule,omitempty"` // resuelta sin ninguna llamada
+	EmptyByRule  bool     `json:"empty_by_rule,omitempty"` // en blanco, resuelta por regla (BlankByRule)
+	NoCalls      bool     `json:"no_calls,omitempty"`      // resuelta sin ninguna llamada al modelo
+	Retries      int      `json:"retries"`                 // reintentos por salida inválida (llamadas con temperatura propia)
 	IdeasError   bool     `json:"ideas_error,omitempty"`   // la extracción de ideas dio error
 	IdeasEmpty   bool     `json:"ideas_empty,omitempty"`   // la extracción de ideas dio una lista vacía
 	ModelScore   *float64 `json:"model_score,omitempty"`   // el score del juicio global del modelo, si lo hubo
@@ -194,6 +196,7 @@ func runBankCase(base llm.LLMProvider, c bankCase, log logger.Logger, timeout ti
 		StudentAnswer:  c.Student,
 		Points:         1,
 		LLMPrep:        c.LLMPrep,
+		AnswerSpec:     c.AnswerSpec,
 	}
 	audit := &auditProvider{LLMProvider: base}
 	ctx, cancel := context.WithTimeout(context.Background(), timeout)
@@ -208,10 +211,11 @@ func runBankCase(base llm.LLMProvider, c bankCase, log logger.Logger, timeout ti
 		ElapsedMS: elapsed.Milliseconds(), SubCalls: audit.subCalls, SubInvalid: audit.subInvalid,
 		IdeasFailed: audit.ideasError || audit.ideasEmpty,
 		Calls:       audit.calls, IdeasError: audit.ideasError, IdeasEmpty: audit.ideasEmpty,
-		ModelScore: audit.modelScore,
+		ModelScore: audit.modelScore, Retries: audit.retries,
+		EmptyByRule: res.BlankByRule,
 	}
 	if err == nil && audit.calls == 0 {
-		r.EmptyByRule = true
+		r.NoCalls = true
 	}
 	if err == nil && audit.modelScore != nil && math.Round(*audit.modelScore*ans.Points*100)/100 != res.Points {
 		r.ScoreDiffers = true
@@ -251,6 +255,7 @@ func classifyLaneError(err error) string {
 type auditProvider struct {
 	llm.LLMProvider
 	calls      int
+	retries    int
 	subCalls   int
 	subInvalid int
 	ideasError bool
@@ -260,6 +265,9 @@ type auditProvider struct {
 
 func (a *auditProvider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest) (llm.ReviewResult, error) {
 	a.calls++
+	if req.Temperature != nil {
+		a.retries++
+	}
 	res, err := a.LLMProvider.ReviewAnswer(ctx, req)
 	if err == nil {
 		score := res.Score
@@ -269,12 +277,18 @@ func (a *auditProvider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest)
 }
 
 func (a *auditProvider) JudgePairEquivalence(ctx context.Context, req llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
+	if req.Temperature != nil {
+		a.retries++
+	}
 	res, err := a.LLMProvider.JudgePairEquivalence(ctx, req)
 	a.countSub(res, err)
 	return res, err
 }
 
 func (a *auditProvider) CheckCriterion(ctx context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
+	if req.Temperature != nil {
+		a.retries++
+	}
 	res, err := a.LLMProvider.CheckCriterion(ctx, req)
 	a.countSub(res, err)
 	return res, err
@@ -320,6 +334,8 @@ type bankRunRow struct {
 	SubCalls      int    `json:"sub_calls"`
 	SubInvalid    int    `json:"sub_invalid"`
 	EmptyByRule   int    `json:"empty_by_rule"`
+	NoCalls       int    `json:"no_calls"`
+	Retries       int    `json:"retries"`
 	IdeasError    int    `json:"ideas_error"`
 	IdeasEmpty    int    `json:"ideas_empty"`
 	ScoreDiffers  int    `json:"score_differs"`
@@ -340,6 +356,8 @@ func bankTable(runs []bankCaseRun) []bankRunRow {
 		row.SubCalls += r.SubCalls
 		row.SubInvalid += r.SubInvalid
 		row.EmptyByRule += b2i(r.EmptyByRule)
+		row.NoCalls += b2i(r.NoCalls)
+		row.Retries += r.Retries
 		row.IdeasError += b2i(r.IdeasError)
 		row.IdeasEmpty += b2i(r.IdeasEmpty)
 		row.ScoreDiffers += b2i(r.ScoreDiffers)
@@ -368,13 +386,13 @@ func bankRunMarkdown(info runInfo, bankSum string, bankCases int, table []bankRu
 	fmt.Fprintf(&b, "Modelo: %s (digest %s, Ollama %s), temperatura %.0f. Worker %s (árbol sucio: %v).\n",
 		info.Model, orDash(info.ModelDigest), orDash(info.OllamaVersion), info.Temperature, info.WorkerCommit, info.WorkerDirty)
 	fmt.Fprintf(&b, "Banco: sha256 %s, %d casos.\n\n", bankSum, bankCases)
-	b.WriteString("| Tipo | Categoría | Llegan | Aciertos | Falsos aciertos | Falsos rechazos | Inválidas | Errores del proveedor | Sub-llamadas | Sub-veredictos inválidos | Vacías por regla | Ideas con error | Ideas vacías | Score del modelo ≠ puntos |\n")
-	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
+	b.WriteString("| Tipo | Categoría | Llegan | Aciertos | Falsos aciertos | Falsos rechazos | Inválidas | Errores del proveedor | Sub-llamadas | Sub-veredictos inválidos | Vacías por regla | Sin llamadas | Reintentos | Ideas con error | Ideas vacías | Score del modelo ≠ puntos |\n")
+	b.WriteString("|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|---|\n")
 	var t bankRunRow
 	for _, r := range table {
-		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
+		fmt.Fprintf(&b, "| %s | %s | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
 			r.Kind, r.Category, r.Arrive, r.Hits, r.FalseHits, r.FalseMisses, r.Invalid, r.ProviderError, r.SubCalls, r.SubInvalid,
-			r.EmptyByRule, r.IdeasError, r.IdeasEmpty, r.ScoreDiffers)
+			r.EmptyByRule, r.NoCalls, r.Retries, r.IdeasError, r.IdeasEmpty, r.ScoreDiffers)
 		t.Arrive += r.Arrive
 		t.Hits += r.Hits
 		t.FalseHits += r.FalseHits
@@ -384,13 +402,15 @@ func bankRunMarkdown(info runInfo, bankSum string, bankCases int, table []bankRu
 		t.SubCalls += r.SubCalls
 		t.SubInvalid += r.SubInvalid
 		t.EmptyByRule += r.EmptyByRule
+		t.NoCalls += r.NoCalls
+		t.Retries += r.Retries
 		t.IdeasError += r.IdeasError
 		t.IdeasEmpty += r.IdeasEmpty
 		t.ScoreDiffers += r.ScoreDiffers
 	}
-	fmt.Fprintf(&b, "| **total** | | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
+	fmt.Fprintf(&b, "| **total** | | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d | %d |\n",
 		t.Arrive, t.Hits, t.FalseHits, t.FalseMisses, t.Invalid, t.ProviderError, t.SubCalls, t.SubInvalid,
-		t.EmptyByRule, t.IdeasError, t.IdeasEmpty, t.ScoreDiffers)
+		t.EmptyByRule, t.NoCalls, t.Retries, t.IdeasError, t.IdeasEmpty, t.ScoreDiffers)
 	return b.String()
 }
 

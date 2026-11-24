@@ -14,12 +14,15 @@ import (
 type ReviewLaneResult struct {
 	Result llm.ReviewResult
 	Points float64
+	// BlankByRule: la respuesta estaba en blanco y se resolvió por regla, sin modelo.
+	BlankByRule bool
 }
 
 // ReviewAnswerLane hace, para una respuesta, lo que el bucle de Process hace antes
-// de escribir: elige el carril según el prep (reviewOne), llama al modelo, valida
-// el veredicto (validateVerdict) y escala los puntos (scaledPoints). No escribe
-// nada, no toma el candado y no lee settings.
+// de escribir, por el mismo sitio (reviewAnswer): resuelve la respuesta en blanco
+// por regla, elige el carril según el prep (reviewOne), llama al modelo, revalida
+// el veredicto y deriva los puntos. No escribe nada, no toma el candado y no lee
+// settings.
 //
 // Es la entrada exportada que usa el arnés del worker para medir el carril real
 // con el banco etiquetado (AR-INF.1, decisión 3): llama al código de producción,
@@ -27,20 +30,14 @@ type ReviewLaneResult struct {
 // procesador con logger. El bucle de producción no la usa y no cambia.
 //
 // Errores:
-//   - un error del proveedor (red, timeout, salida que no parsea) se devuelve tal
-//     cual, con el resultado vacío;
-//   - un veredicto inválido para el tipo de pregunta devuelve un error que envuelve
-//     ErrInvalidVerdict, junto con el resultado crudo del modelo, para que quien
-//     mide lo pueda contar aparte.
+//   - un error del proveedor (red, timeout) se devuelve tal cual;
+//   - una salida inválida en el juicio global (que no parsea o fuera de esquema),
+//     tras su único reintento, devuelve un error que envuelve ErrInvalidVerdict,
+//     junto con el último resultado crudo del modelo, para que quien mide lo pueda
+//     contar aparte;
+//   - una sub-llamada (par o criterio) que sigue inválida tras su reintento devuelve
+//     un error que envuelve llm.ErrInvalidOutput.
 func ReviewAnswerLane(ctx context.Context, provider llm.LLMProvider, ans m2m.PendingAnswer, log logger.Logger) (ReviewLaneResult, error) {
 	p := &AttemptReviewProcessor{logger: log}
-
-	result, err := p.reviewOne(ctx, provider, ans)
-	if err != nil {
-		return ReviewLaneResult{}, err
-	}
-	if err := validateVerdict(ans.QuestionType, result.Verdict); err != nil {
-		return ReviewLaneResult{Result: result}, err
-	}
-	return ReviewLaneResult{Result: result, Points: scaledPoints(result.Score, ans.Points)}, nil
+	return p.reviewAnswer(ctx, provider, ans)
 }

@@ -213,11 +213,29 @@ informe de esos casos lo escribe la prueba de learning:
 # 1. En edugo-api-learning: el informe determinista (fuera de git).
 ANSWER_BANK_REPORT=/tmp/bank-det.json GOWORK=off go test -count=1 -run TestAnswerBank ./internal/core/domain/
 
-# 2. Aquí: el banco por el modelo local, a temperatura 0.
-LLM_LOCAL_MODEL=gemma4:e2b-it-qat make llm-harness ARGS="-mode bank \
-  -bank ../edugo-api-learning/internal/core/domain/testdata/answer_bank.json \
-  -deterministic /tmp/bank-det.json"
+# 2. Aquí: el banco por el modelo local, a temperatura 0, una corrida por modelo.
+for m in gemma4:e2b-it-qat gemma4:e4b; do
+  make llm-harness ARGS="-mode bank -provider ollama -model $m -timeout 300s \
+    -bank ../edugo-api-learning/internal/core/domain/testdata/answer_bank.json \
+    -deterministic /tmp/bank-det.json"
+done
 ```
+
+Desde la HU-INF.5 el «antes» y el «después» se miden con los dos modelos, `gemma4:e2b-it-qat`
+y `gemma4:e4b` (el de `LLM_LOCAL_MODEL`), con `-timeout 300s` por caso (no los 120 s de
+producción). El banco lee el `answer_spec` de cada caso, como lo sirve el `GET` de pendientes.
+La tabla separa las vacías resueltas por regla (sin modelo) de las que no hicieron ninguna
+llamada (una lista resuelta sin modelo), cuenta los reintentos de una salida inválida, las
+extracciones de ideas con error y vacías, y los casos en que el `score` del modelo no es el
+número que propone Go: en los carriles globales el número sale del veredicto.
+
+**Lo que cierra la salida del modelo** (HU-INF.5). Las llamadas del carril de revisión (el
+juicio global, el par, el criterio y la extracción de ideas) mandan a Ollama el JSON Schema de su
+salida en `format`, y Go lo revalida siempre (`internal/llm/schema.go`). El proveedor de pago no
+manda esquema: la versión de API del worker no consta como compatible. Una salida inválida se
+reintenta una vez a temperatura 0,3 y, si sigue mal, es un error: la respuesta queda sin
+propuesta para la docente. Una respuesta sin letras ni números se cierra como incorrecta sin
+llamar al modelo.
 
 Otros ejemplos:
 

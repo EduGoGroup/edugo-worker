@@ -255,34 +255,22 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 			break
 		}
 
-		result, err := p.reviewOne(ctx, provider, ans)
+		// reviewAnswer resuelve la vacía por regla, elige el carril, revalida el
+		// veredicto y deriva los puntos (HU-INF.5). Un fallo del LLM o una salida que
+		// sigue inválida tras su reintento (ErrInvalidVerdict) es de esta respuesta:
+		// NO se postea una review IA «propuesta» —la answer queda para el profesor—,
+		// se sigue con las demás y el error se devuelve al final.
+		lane, err := p.reviewAnswer(ctx, provider, ans)
 		if err != nil {
-			// Fallo del LLM: transitorio y de esta respuesta. Se sigue con las demás;
-			// el error se devuelve al final y la reentrega solo vuelve sobre esta.
-			p.logger.Warn("fallo del LLM en una respuesta, se sigue con las demás",
-				"attempt_id", attemptID, "answer_id", ans.AnswerID, "motivo", err.Error())
+			p.logger.Warn("fallo del LLM o veredicto inválido en una respuesta, se sigue con las demás",
+				"attempt_id", attemptID, "answer_id", ans.AnswerID, "question_type", ans.QuestionType,
+				"veredicto_invalido", errors.Is(err, ErrInvalidVerdict), "provider", provider.Name(),
+				"motivo", err.Error())
 			answerErrs = append(answerErrs, fmt.Errorf("LLM revisando answer %s (attempt %s): %w", ans.AnswerID, attemptID, err))
 			continue
 		}
 
-		// Guardia anti-basura: si el verdict no es válido para el tipo de pregunta
-		// (p.ej. "" por un `{}` de qwen3), el LLM no emitió un juicio usable. Se trata
-		// igual que un fallo del provider (mismo carril de retry) y NO se postea una
-		// review IA de 0 puntos «propuesta» — la answer queda para el profesor.
-		if err := validateVerdict(ans.QuestionType, result.Verdict); err != nil {
-			p.logger.Warn("veredicto del LLM inválido, se descarta la propuesta (no se postea review IA)",
-				"attempt_id", attemptID,
-				"answer_id", ans.AnswerID,
-				"question_type", ans.QuestionType,
-				"verdict", string(result.Verdict),
-				"score", result.Score,
-				"provider", provider.Name(),
-			)
-			answerErrs = append(answerErrs, fmt.Errorf("revisando answer %s (attempt %s): %w", ans.AnswerID, attemptID, err))
-			continue
-		}
-
-		points := scaledPoints(result.Score, ans.Points)
+		result, points := lane.Result, lane.Points
 		if _, err := p.learning.PostAnswerReview(ctx, attemptID, ans.AnswerID, m2m.AnswerReviewRequest{
 			PointsAwarded: points,
 			Feedback:      result.Feedback,
@@ -297,6 +285,7 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 			"verdict", string(result.Verdict),
 			"score", result.Score,
 			"points_awarded", points,
+			"en_blanco_por_regla", lane.BlankByRule,
 			"provider", provider.Name(),
 		)
 	}
@@ -372,6 +361,10 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 		// punto 5) sin cambiar el contrato del POST review.
 		req.ExpectedAnswer = enrichExpectedWithPrep(ans.ExpectedAnswer, prep)
 	}
+	if ans.QuestionType == llm.QuestionTypeShortAnswer {
+		// P19 (HU-INF.5): el prompt global de la corta sabe qué aceptó y qué exigió la docente.
+		req.AnswerSpec = p.parseAnswerSpec(ans)
+	}
 
 	if ans.QuestionType == questionprep.QuestionTypeOpenEnded && prep != nil {
 		// F4b: con criterios reales (≥1 no vacío), el juicio global se reemplaza por una
@@ -401,7 +394,7 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 		}
 	}
 
-	return provider.ReviewAnswer(ctx, req)
+	return p.reviewGlobal(ctx, provider, req)
 }
 
 // parsePrep decodifica y valida el llm_prep que learning adjuntó a la answer contra

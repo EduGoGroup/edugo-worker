@@ -54,6 +54,11 @@ type PendingAnswer struct {
 	// (learning lo añade por answer); ausente (omitempty) cuando la pregunta no tiene
 	// prep. El carril de corrección degrada al flujo global sin él (D-042.10 §4).
 	LLMPrep json.RawMessage `json:"llm_prep,omitempty"`
+
+	// AnswerSpec son las alternativas y las reglas de la corta (answer_spec, ADR 0049),
+	// en su forma canónica. Ausente sin spec. Lo lee el prompt global de la corta
+	// (HU-INF.5); learning lo sirve desde la HU-INF.2.
+	AnswerSpec json.RawMessage `json:"answer_spec,omitempty"`
 }
 
 // PendingAnswersResponse es la respuesta de GET answers?review=pending. Answers
