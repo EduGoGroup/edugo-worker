@@ -25,6 +25,10 @@ func TestIsBlankAnswer(t *testing.T) {
 		{"no sé", "París", false},
 		{"nose", "París", false},
 		{"0", "París", false},
+		{"½", "0,5", false},
+		{"²", "x", false},
+		{"Ⅳ", "4", false},
+		{"", "½", true},
 		{"ñ", "París", false},
 		{"   x  ", "París", false},
 		// La esperada es un símbolo: la regla no se aplica.

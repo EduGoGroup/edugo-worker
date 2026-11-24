@@ -101,9 +101,12 @@ func referenceAnswer(ans m2m.PendingAnswer) string {
 	return ans.Rubric
 }
 
+// hasLetterOrDigit dice si s tiene alguna letra o algún número. Cuenta cualquier
+// número de Unicode (unicode.IsNumber), no solo los dígitos decimales: «½», «²» o
+// «Ⅳ» son una respuesta, no un blanco.
 func hasLetterOrDigit(s string) bool {
 	for _, r := range s {
-		if unicode.IsLetter(r) || unicode.IsDigit(r) {
+		if unicode.IsLetter(r) || unicode.IsNumber(r) {
 			return true
 		}
 	}
