@@ -10,7 +10,8 @@ package main
 //   - "judge_only": con un embedder fijo en la zona gris. Toda pareja que las letras
 //     no deciden llega al juez: mide al juez solo.
 //
-// Una corrida por pareja y por medida, sin repetir. Un error del juez es un dato.
+// Una corrida por pareja y por medida, sin repetir; el único reintento es el de la
+// propia pasada ante una salida inválida del juez. Un error del juez es un dato.
 
 import (
 	"context"

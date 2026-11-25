@@ -119,7 +119,9 @@ type item struct {
 // re-invocar sobre un job ya depurado no re-agrupa ni re-escribe. Nada se borra.
 //
 // Errores: propaga los del store/embedder/juez tal cual (el caller los clasifica —
-// ErrPipelineConflict, ErrLearningPermanent o transitorio— con su semántica del carril).
+// ErrPipelineConflict, ErrLearningPermanent o transitorio— con su semántica del carril),
+// salvo un fallo de CALIDAD del juez: ese se reintenta una vez y, si persiste, el par
+// queda sin decidir (PairsUndecided) y la pasada sigue.
 func (d *DedupePass) Run(ctx context.Context, jobID string) (DedupeReport, error) {
 	records, err := d.store.ListCandidates(ctx, jobID)
 	if err != nil {

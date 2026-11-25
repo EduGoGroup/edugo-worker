@@ -486,7 +486,7 @@ func TestDedupe_JudgeQualityThenOK_UsesRetryVerdict(t *testing.T) {
 	if rep.PairsLLM != 1 || rep.PairsUndecided != 0 || rep.LLMCalls != 2 || rep.DroppedDup != 1 {
 		t.Fatalf("reporte inesperado: %+v", rep)
 	}
-	if len(judge.temps) != 2 || judge.temps[1] == nil {
+	if len(judge.temps) != 2 || judge.temps[1] == nil || *judge.temps[1] != llm.InvalidOutputRetryTemperature {
 		t.Fatalf("se esperaban dos llamadas, la segunda con temperatura de reintento: %v", judge.temps)
 	}
 }

@@ -391,4 +391,15 @@ func TestGenerate_SeedOnlyOnMaterialRetry(t *testing.T) {
 			t.Errorf("petición %d: options %v (se espera solo temperature, como antes)", i, o)
 		}
 	}
+	// El cuerpo entero lleva las seis claves de siempre y ninguna más.
+	for i, b := range bodies[mark:] {
+		for _, key := range []string{"model", "prompt", "stream", "format", "think", "options"} {
+			if _, ok := b[key]; !ok {
+				t.Errorf("petición %d: falta la clave %q", i, key)
+			}
+		}
+		if len(b) != 6 {
+			t.Errorf("petición %d: el cuerpo trae %d claves, se esperan 6: %v", i, len(b), b)
+		}
+	}
 }
