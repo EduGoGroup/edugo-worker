@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
@@ -45,6 +46,9 @@ type Config struct {
 	// parpadea entre corridas (medido en 045: criterios open_ended que oscilaban
 	// correct/incorrect sin cambiar el input).
 	Temperature float64
+	// Limiter caps the inferences in flight against this Ollama (HU-IA.10). Every
+	// generation asks its turn right before the HTTP request opens; nil is "no cap".
+	Limiter *inferencecap.Limiter
 }
 
 // Provider es la implementación Ollama de llm.LLMProvider.
@@ -53,6 +57,7 @@ type Provider struct {
 	model       string
 	temperature float64
 	httpClient  *http.Client
+	limiter     *inferencecap.Limiter
 }
 
 // New construye el provider Ollama a partir de su config.
@@ -66,6 +71,7 @@ func New(cfg Config) *Provider {
 		model:       cfg.Model,
 		temperature: cfg.Temperature,
 		httpClient:  &http.Client{Timeout: timeout},
+		limiter:     cfg.Limiter,
 	}
 }
 
@@ -328,6 +334,14 @@ func (p *Provider) generateWith(ctx context.Context, prompt string, options gene
 		return "", fmt.Errorf("creating ollama request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+
+	// The turn is asked here, with the request built and not yet open: the client
+	// timeout only counts the inference, never the wait (HU-IA.10).
+	release, err := p.limiter.Acquire(ctx)
+	if err != nil {
+		return "", fmt.Errorf("ollama request not sent: %w", err)
+	}
+	defer release()
 
 	resp, err := p.httpClient.Do(httpReq)
 	if err != nil {

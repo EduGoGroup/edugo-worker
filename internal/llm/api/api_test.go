@@ -6,9 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 )
 
 func fakeAnthropic(t *testing.T, text string) *httptest.Server {
@@ -128,4 +132,65 @@ func TestAnthropic_ReviewCalls_NoSchemaAndRaw(t *testing.T) {
 			}
 		}
 	}
+}
+
+// The paid provider has its own cap: never more than N requests in flight. nil is no cap.
+func TestComplete_RespectsItsOwnCap(t *testing.T) {
+	const calls = 6
+	run := func(t *testing.T, limiter *inferencecap.Limiter, handler func(open int32)) int32 {
+		t.Helper()
+		var open, peak atomic.Int32
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			cur := open.Add(1)
+			defer open.Add(-1)
+			for {
+				old := peak.Load()
+				if cur <= old || peak.CompareAndSwap(old, cur) {
+					break
+				}
+			}
+			handler(cur)
+			_ = json.NewEncoder(w).Encode(anthropicResponse{Content: []anthropicContentBlock{
+				{Type: "text", Text: `{"verdict":"correct","score":1,"feedback":"ok"}`}}})
+		}))
+		defer srv.Close()
+		p, err := New(Config{Provider: ProviderAnthropic, APIKey: "k", Model: "m", BaseURL: srv.URL, Limiter: limiter})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wg sync.WaitGroup
+		for i := 0; i < calls; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if _, err := p.ReviewAnswer(context.Background(), llm.ReviewRequest{QuestionText: "q", StudentAnswer: "a"}); err != nil {
+					t.Errorf("ReviewAnswer: %v", err)
+				}
+			}()
+		}
+		wg.Wait()
+		return peak.Load()
+	}
+
+	t.Run("con tope de 2", func(t *testing.T) {
+		peak := run(t, inferencecap.New("api", 2, nil), func(int32) { time.Sleep(20 * time.Millisecond) })
+		if peak > 2 {
+			t.Fatalf("hubo %d peticiones en vuelo con tope de 2", peak)
+		}
+	})
+
+	t.Run("nil no limita", func(t *testing.T) {
+		// Every request waits until all of them are open: it only ends without a cap.
+		all := make(chan struct{})
+		var once sync.Once
+		peak := run(t, nil, func(open int32) {
+			if open == calls {
+				once.Do(func() { close(all) })
+			}
+			<-all
+		})
+		if peak != calls {
+			t.Fatalf("sin tope se esperaban %d a la vez, hubo %d", calls, peak)
+		}
+	})
 }
