@@ -21,8 +21,8 @@ import (
 // de un modo que llama al modelo escribe UN fichero nuevo en defaultRunsDir, con la
 // fecha en UTC en el nombre, y nunca pisa uno que ya exista. Dentro van el modelo y
 // su versión, el commit del worker (la huella de los prompts, que son código) y si
-// el árbol estaba sucio. La excepción es el modo material: material.go quedó fuera
-// de la AR-INF.1 y no guarda su corrida.
+// el árbol estaba sucio. Los modos del riel de material añaden el modelo de embeddings
+// y su digest.
 
 // defaultRunsDir es la carpeta del historial, relativa a la raíz del worker (donde
 // corre `make llm-harness`). Está en git: el «antes» de un cambio de prompt no se
@@ -31,16 +31,20 @@ const defaultRunsDir = "cmd/llm-harness/testdata/runs"
 
 // runInfo es la cabecera de toda corrida guardada.
 type runInfo struct {
-	Mode          string  `json:"mode"`
-	StartedAt     string  `json:"started_at"`
-	FinishedAt    string  `json:"finished_at"`
-	Provider      string  `json:"provider"`
-	Model         string  `json:"model"`
-	ModelDigest   string  `json:"model_digest,omitempty"`
-	OllamaVersion string  `json:"ollama_version,omitempty"`
-	Temperature   float64 `json:"temperature"`
-	WorkerCommit  string  `json:"worker_commit"`
-	WorkerDirty   bool    `json:"worker_dirty"`
+	Mode          string `json:"mode"`
+	StartedAt     string `json:"started_at"`
+	FinishedAt    string `json:"finished_at"`
+	Provider      string `json:"provider"`
+	Model         string `json:"model"`
+	ModelDigest   string `json:"model_digest,omitempty"`
+	OllamaVersion string `json:"ollama_version,omitempty"`
+	// EmbedModel y su digest: solo en los modos que además usan embeddings (el riel de
+	// material). La comprobación previa de ese modelo la hace el modo.
+	EmbedModel       string  `json:"embed_model,omitempty"`
+	EmbedModelDigest string  `json:"embed_model_digest,omitempty"`
+	Temperature      float64 `json:"temperature"`
+	WorkerCommit     string  `json:"worker_commit"`
+	WorkerDirty      bool    `json:"worker_dirty"`
 }
 
 // modelInfo es lo que la comprobación previa sabe del modelo local.
