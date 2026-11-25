@@ -3,23 +3,57 @@ package inferencecap
 import (
 	"context"
 	"errors"
+	"runtime"
 	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
 )
 
-const testWait = 5 * time.Second
+// testGuard only bounds a test that hangs; no assertion depends on it elapsing.
+const testGuard = 10 * time.Second
 
-// waitQueued blocks until the limiter has n callers queued.
-func waitQueued(t *testing.T, l *Limiter, n int) {
+// watched builds a limiter whose queue length changes arrive, in order, on a channel.
+func watched(name string, capacity int, observer Observer) (*Limiter, <-chan int) {
+	l := New(name, capacity, observer)
+	changes := make(chan int, 4096)
+	l.OnQueueChange(func(waiting int) { changes <- waiting })
+	return l, changes
+}
+
+// waitQueued blocks until the limiter reports n callers queued.
+func waitQueued(t *testing.T, changes <-chan int, n int) {
 	t.Helper()
-	deadline := time.Now().Add(testWait)
-	for l.Waiting() != n {
-		if time.Now().After(deadline) {
-			t.Fatalf("la fila no llegó a %d (tiene %d)", n, l.Waiting())
+	guard := time.After(testGuard)
+	for {
+		select {
+		case got := <-changes:
+			if got == n {
+				return
+			}
+		case <-guard:
+			t.Fatalf("la fila no llegó a %d", n)
 		}
-		time.Sleep(time.Millisecond)
+	}
+}
+
+// acquireOrFail takes a turn that must be free or about to be handed over.
+func acquireOrFail(t *testing.T, l *Limiter, when string) func() {
+	t.Helper()
+	got := make(chan func(), 1)
+	go func() {
+		release, err := l.Acquire(context.Background())
+		if err != nil {
+			t.Errorf("%s: Acquire: %v", when, err)
+		}
+		got <- release
+	}()
+	select {
+	case release := <-got:
+		return release
+	case <-time.After(testGuard):
+		t.Fatalf("%s: el turno se perdió", when)
+		return nil
 	}
 }
 
@@ -44,7 +78,7 @@ func TestLimiter_NeverMoreThanN(t *testing.T) {
 						break
 					}
 				}
-				time.Sleep(time.Millisecond)
+				runtime.Gosched() // lets the others run while the turn is held
 				inFlight.Add(-1)
 				release()
 				done.Add(1)
@@ -61,7 +95,7 @@ func TestLimiter_NeverMoreThanN(t *testing.T) {
 }
 
 func TestLimiter_FIFO(t *testing.T) {
-	l := New("local", 1, nil)
+	l, changes := watched("local", 1, nil)
 	first, err := l.Acquire(context.Background())
 	if err != nil {
 		t.Fatal(err)
@@ -83,7 +117,7 @@ func TestLimiter_FIFO(t *testing.T) {
 			mu.Unlock()
 			release()
 		}(i)
-		waitQueued(t, l, i+1) // each one is queued before the next asks
+		waitQueued(t, changes, i+1) // each one is queued before the next asks
 	}
 	first()
 	wg.Wait()
@@ -95,7 +129,7 @@ func TestLimiter_FIFO(t *testing.T) {
 }
 
 func TestLimiter_CancelledWaiterLeaves(t *testing.T) {
-	l := New("local", 1, nil)
+	l, changes := watched("local", 1, nil)
 	first, _ := l.Acquire(context.Background())
 
 	ctx, cancel := context.WithCancel(context.Background())
@@ -104,7 +138,7 @@ func TestLimiter_CancelledWaiterLeaves(t *testing.T) {
 		_, err := l.Acquire(ctx)
 		errCh <- err
 	}()
-	waitQueued(t, l, 1)
+	waitQueued(t, changes, 1)
 
 	next := make(chan func(), 1)
 	go func() {
@@ -114,19 +148,19 @@ func TestLimiter_CancelledWaiterLeaves(t *testing.T) {
 		}
 		next <- release
 	}()
-	waitQueued(t, l, 2)
+	waitQueued(t, changes, 2)
 
 	cancel()
 	if err := <-errCh; !errors.Is(err, context.Canceled) {
 		t.Fatalf("se esperaba un error que envuelva context.Canceled, llegó %v", err)
 	}
-	waitQueued(t, l, 1) // the cancelled one left, it took no turn
+	waitQueued(t, changes, 1) // the cancelled one left, it took no turn
 
 	first()
 	select {
 	case release := <-next:
 		release()
-	case <-time.After(testWait):
+	case <-time.After(testGuard):
 		t.Fatal("el siguiente no recibió el turno")
 	}
 
@@ -147,25 +181,19 @@ func TestLimiter_CancelledWaiterLeaves(t *testing.T) {
 			}
 			got <- release
 		}()
-		waitQueued(t, l, 1)
+		waitQueued(t, changes, 1)
 		go raceCancel()
 		held()
 		if release := <-got; release != nil {
 			release()
 		}
-		probeCtx, probeCancel := context.WithTimeout(context.Background(), testWait)
-		release, err := l.Acquire(probeCtx)
-		probeCancel()
-		if err != nil {
-			t.Fatalf("vuelta %d: el turno se perdió: %v", i, err)
-		}
-		release()
+		acquireOrFail(t, l, "tras cancelar justo al conceder")()
 	}
 }
 
 func TestLimiter_HoldCoversItsCalls(t *testing.T) {
 	var waits []Wait
-	l := New("local", 1, func(w Wait) { waits = append(waits, w) })
+	l, changes := watched("local", 1, func(w Wait) { waits = append(waits, w) })
 
 	held, releaseHold, err := l.Hold(context.Background())
 	if err != nil {
@@ -193,7 +221,7 @@ func TestLimiter_HoldCoversItsCalls(t *testing.T) {
 		}
 		other <- release
 	}()
-	waitQueued(t, l, 1)
+	waitQueued(t, changes, 1)
 	select {
 	case <-other:
 		t.Fatal("otro contexto pasó con el Hold tomado")
@@ -206,12 +234,13 @@ func TestLimiter_HoldCoversItsCalls(t *testing.T) {
 	case release := <-other:
 		release()
 		release()
-	case <-time.After(testWait):
+	case <-time.After(testGuard):
 		t.Fatal("al soltar el Hold, el otro no recibió turno")
 	}
-	if l.inFlight != 0 {
-		t.Fatalf("en vuelo %d al terminar", l.inFlight)
+	if l.Waiting() != 0 {
+		t.Fatalf("quedan %d en la fila al terminar", l.Waiting())
 	}
+	acquireOrFail(t, l, "al terminar")()
 
 	// A nil limiter is "no cap".
 	var none *Limiter
@@ -224,11 +253,17 @@ func TestLimiter_HoldCoversItsCalls(t *testing.T) {
 		t.Fatalf("Acquire sin tope: %v", err)
 	}
 	release()
+	if none.Name() != "" || none.Capacity() != 0 || none.Waiting() != 0 {
+		t.Fatal("un limitador nil no tiene nombre, tope ni fila")
+	}
+	if l.Name() != "local" || l.Capacity() != 1 {
+		t.Fatalf("nombre %q y tope %d", l.Name(), l.Capacity())
+	}
 }
 
 func TestLimiter_HoldIsPerLimiter(t *testing.T) {
 	local := New("local", 1, nil)
-	api := New("api", 1, nil)
+	api, apiChanges := watched("api", 1, nil)
 
 	held, releaseHold, err := local.Hold(context.Background())
 	if err != nil {
@@ -243,7 +278,7 @@ func TestLimiter_HoldIsPerLimiter(t *testing.T) {
 		_, err := api.Acquire(ctx)
 		errCh <- err
 	}()
-	waitQueued(t, api, 1) // the local mark does not open the api turn
+	waitQueued(t, apiChanges, 1) // the local mark does not open the api turn
 	cancel()
 	if err := <-errCh; !errors.Is(err, context.Canceled) {
 		t.Fatalf("se esperaba context.Canceled, llegó %v", err)

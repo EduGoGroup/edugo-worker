@@ -33,6 +33,8 @@ type Limiter struct {
 	mu       sync.Mutex
 	inFlight int
 	queue    []*waiter
+	// onQueue, when set, is told the queue length every time it changes.
+	onQueue func(waiting int)
 }
 
 type waiter struct {
@@ -49,6 +51,22 @@ func New(name string, capacity int, observer Observer) *Limiter {
 		capacity = 1
 	}
 	return &Limiter{name: name, capacity: capacity, observer: observer}
+}
+
+// OnQueueChange registers a hook that receives the number of queued callers every time
+// it changes. It runs with the limiter locked: it must not block nor call the limiter.
+// Set it before the limiter is shared.
+func (l *Limiter) OnQueueChange(fn func(waiting int)) {
+	l.mu.Lock()
+	defer l.mu.Unlock()
+	l.onQueue = fn
+}
+
+// queueChanged reports the queue length to the hook. Callers hold l.mu.
+func (l *Limiter) queueChanged() {
+	if l.onQueue != nil {
+		l.onQueue(len(l.queue))
+	}
 }
 
 // Name returns the limiter name; a nil limiter has none.
@@ -106,6 +124,7 @@ func (l *Limiter) acquire(ctx context.Context, message bool) (func(), error) {
 	}
 	w := &waiter{ready: make(chan struct{})}
 	l.queue = append(l.queue, w)
+	l.queueChanged()
 	l.mu.Unlock()
 
 	select {
@@ -144,6 +163,7 @@ func (l *Limiter) release() {
 	}
 	w := l.queue[0]
 	l.queue = l.queue[1:]
+	l.queueChanged()
 	w.granted = true
 	close(w.ready)
 }
@@ -153,6 +173,7 @@ func (l *Limiter) dequeue(w *waiter) {
 	for i, queued := range l.queue {
 		if queued == w {
 			l.queue = append(l.queue[:i], l.queue[i+1:]...)
+			l.queueChanged()
 			return
 		}
 	}

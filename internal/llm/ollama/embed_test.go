@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
-	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 )
 
 func TestEmbed_OK_Batch(t *testing.T) {
@@ -112,10 +111,10 @@ func TestEmbed_ContextCancelled(t *testing.T) {
 
 // An embedding batch and a generation share the local turn: they never meet in Ollama.
 func TestEmbed_SharesLocalTurn(t *testing.T) {
-	srv, peak, hits := slowOllama(t, 50*time.Millisecond)
-	limiter := inferencecap.New("local", 1, nil)
-	embedder := NewEmbedder(EmbedConfig{BaseURL: srv.URL, Model: "e", Limiter: limiter})
-	provider := New(Config{BaseURL: srv.URL, Model: "m", Limiter: limiter})
+	g := newGatedOllama(t)
+	limiter, changes := watchedLimiter(1)
+	embedder := NewEmbedder(EmbedConfig{BaseURL: g.srv.URL, Model: "e", Limiter: limiter})
+	provider := New(Config{BaseURL: g.srv.URL, Model: "m", Limiter: limiter})
 
 	var wg sync.WaitGroup
 	wg.Add(2)
@@ -131,8 +130,21 @@ func TestEmbed_SharesLocalTurn(t *testing.T) {
 			t.Errorf("ReviewAnswer: %v", err)
 		}
 	}()
+
+	// One of the two is being served and held there; the other one waits for the turn.
+	select {
+	case <-g.entered:
+	case <-time.After(testGuard):
+		t.Fatal("ninguna de las dos llegó al servidor")
+	}
+	waitQueued(t, changes, 1)
+	if g.hits.Load() != 1 {
+		t.Fatalf("llegaron %d peticiones con una sola en turno", g.hits.Load())
+	}
+	g.release <- struct{}{}
+	g.serve(t, 1)
 	wg.Wait()
-	if peak.Load() != 1 || hits.Load() != 2 {
-		t.Fatalf("el servidor vio %d a la vez en %d peticiones", peak.Load(), hits.Load())
+	if g.peak.Load() != 1 || g.hits.Load() != 2 {
+		t.Fatalf("el servidor vio %d a la vez en %d peticiones", g.peak.Load(), g.hits.Load())
 	}
 }

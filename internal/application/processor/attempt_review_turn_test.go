@@ -16,7 +16,17 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 )
 
-const turnTestWait = 5 * time.Second
+// turnTestGuard only bounds a test that hangs; no assertion depends on it elapsing.
+const turnTestGuard = 10 * time.Second
+
+// watchedLimiter builds a limiter of one turn whose queue length changes arrive, in
+// order, on a channel.
+func watchedLimiter() (*inferencecap.Limiter, <-chan int) {
+	limiter := inferencecap.New("local", 1, nil)
+	changes := make(chan int, 1024)
+	limiter.OnQueueChange(func(waiting int) { changes <- waiting })
+	return limiter, changes
+}
 
 // fixedSettings is a stateless settings double, safe for concurrent messages.
 type fixedSettings struct{ settings m2m.SchoolSettings }
@@ -93,33 +103,44 @@ func turnProcessor(learning LearningReviewClient, provider llm.LLMProvider, mode
 		WithInferenceTurns(map[string]*inferencecap.Limiter{"local": limiter})
 }
 
-// waitTurnQueue blocks until n callers wait for the limiter.
-func waitTurnQueue(t *testing.T, limiter *inferencecap.Limiter, n int) {
+// waitTurnQueue blocks until the limiter reports n callers waiting.
+func waitTurnQueue(t *testing.T, changes <-chan int, n int) {
 	t.Helper()
-	deadline := time.Now().Add(turnTestWait)
-	for limiter.Waiting() != n {
-		if time.Now().After(deadline) {
-			t.Fatalf("la fila del turno no llegó a %d (tiene %d)", n, limiter.Waiting())
+	guard := time.After(turnTestGuard)
+	for {
+		select {
+		case got := <-changes:
+			if got == n {
+				return
+			}
+		case <-guard:
+			t.Fatalf("la fila del turno no llegó a %d", n)
 		}
-		time.Sleep(time.Millisecond)
 	}
 }
 
-// requireFreeTurn fails unless the limiter grants a turn at once.
+// requireFreeTurn fails unless the limiter grants a turn.
 func requireFreeTurn(t *testing.T, limiter *inferencecap.Limiter, when string) {
 	t.Helper()
-	ctx, cancel := context.WithTimeout(context.Background(), turnTestWait)
-	defer cancel()
-	release, err := limiter.Acquire(ctx)
-	if err != nil {
-		t.Fatalf("%s: el turno no quedó libre: %v", when, err)
+	got := make(chan func(), 1)
+	go func() {
+		release, err := limiter.Acquire(context.Background())
+		if err != nil {
+			t.Errorf("%s: Acquire: %v", when, err)
+		}
+		got <- release
+	}()
+	select {
+	case release := <-got:
+		release()
+	case <-time.After(turnTestGuard):
+		t.Fatalf("%s: el turno no quedó libre", when)
 	}
-	release()
 }
 
 // CA-IA.14, fourth sentence: a review does not take the lock until it has its turn.
 func TestReview_NoClaimUntilTurn(t *testing.T) {
-	limiter := inferencecap.New("local", 1, nil)
+	limiter, changes := watchedLimiter()
 	learning := &turnLearning{answers: map[string][]m2m.PendingAnswer{"attempt-1": {pendingAnswer("a1", 10)}}}
 	provider := &mockLLMProvider{score: 1, verdict: llm.VerdictCorrect, feedback: "ok"}
 	p := turnProcessor(learning, provider, reviewModeLocal, limiter)
@@ -131,7 +152,7 @@ func TestReview_NoClaimUntilTurn(t *testing.T) {
 	done := make(chan error, 1)
 	go func() { done <- p.Process(context.Background(), reviewEventFor(t, "attempt-1")) }()
 
-	waitTurnQueue(t, limiter, 1)
+	waitTurnQueue(t, changes, 1)
 	if got := learning.claims.Load(); got != 0 {
 		t.Fatalf("Claim se llamó %d veces esperando turno", got)
 	}
@@ -142,7 +163,7 @@ func TestReview_NoClaimUntilTurn(t *testing.T) {
 		if err != nil {
 			t.Fatalf("Process: %v", err)
 		}
-	case <-time.After(turnTestWait):
+	case <-time.After(turnTestGuard):
 		t.Fatal("Process no terminó al soltar el turno")
 	}
 	if learning.claims.Load() != 1 || learning.finalizes.Load() != 1 || provider.calls != 1 {
@@ -185,7 +206,7 @@ func TestReview_TurnReleasedOnEveryExit(t *testing.T) {
 }
 
 func TestReview_CancelledWhileWaiting(t *testing.T) {
-	limiter := inferencecap.New("local", 1, nil)
+	limiter, changes := watchedLimiter()
 	learning := &turnLearning{answers: map[string][]m2m.PendingAnswer{"attempt-1": {pendingAnswer("a1", 10)}}}
 	p := turnProcessor(learning, &mockLLMProvider{verdict: llm.VerdictCorrect}, reviewModeLocal, limiter)
 
@@ -194,7 +215,7 @@ func TestReview_CancelledWhileWaiting(t *testing.T) {
 	ctx, cancel := context.WithCancel(context.Background())
 	done := make(chan error, 1)
 	go func() { done <- p.Process(ctx, reviewEventFor(t, "attempt-1")) }()
-	waitTurnQueue(t, limiter, 1)
+	waitTurnQueue(t, changes, 1)
 	cancel()
 
 	err := <-done
@@ -207,7 +228,7 @@ func TestReview_CancelledWhileWaiting(t *testing.T) {
 	if learning.claims.Load() != 0 {
 		t.Fatalf("Claim se llamó %d veces sin turno", learning.claims.Load())
 	}
-	waitTurnQueue(t, limiter, 0)
+	waitTurnQueue(t, changes, 0)
 }
 
 func TestReview_OffSchoolNeverWaits(t *testing.T) {
@@ -217,10 +238,15 @@ func TestReview_OffSchoolNeverWaits(t *testing.T) {
 
 	busy, _ := limiter.Acquire(context.Background())
 	defer busy()
-	ctx, cancel := context.WithTimeout(context.Background(), turnTestWait)
-	defer cancel()
-	if err := p.Process(ctx, reviewEventFor(t, "attempt-1")); err != nil {
-		t.Fatalf("con la revisión apagada se confirma sin pedir turno: %v", err)
+	done := make(chan error, 1)
+	go func() { done <- p.Process(context.Background(), reviewEventFor(t, "attempt-1")) }()
+	select {
+	case err := <-done:
+		if err != nil {
+			t.Fatalf("con la revisión apagada se confirma sin pedir turno: %v", err)
+		}
+	case <-time.After(turnTestGuard):
+		t.Fatal("con la revisión apagada, Process se quedó esperando turno")
 	}
 	if limiter.Waiting() != 0 || learning.claims.Load() != 0 {
 		t.Fatalf("revisión apagada: en fila=%d claims=%d", limiter.Waiting(), learning.claims.Load())

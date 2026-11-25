@@ -15,7 +15,6 @@ import (
 
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
-	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 	"github.com/EduGoGroup/edugo-worker/internal/llm/ollama"
 )
 
@@ -56,13 +55,12 @@ func TestFlow_ReviewsAndMaterialCallsShareOneTurn(t *testing.T) {
 		mu.Lock()
 		order = append(order, tag)
 		mu.Unlock()
-		time.Sleep(15 * time.Millisecond) // lets every other flow reach the queue
 		_ = json.NewEncoder(w).Encode(map[string]any{
 			"response": `{"verdict":"correct","score":1,"feedback":"ok"}`, "done": true})
 	}))
 	defer srv.Close()
 
-	limiter := inferencecap.New("local", 1, nil)
+	limiter, changes := watchedLimiter()
 	provider := ollama.New(ollama.Config{BaseURL: srv.URL, Model: "m", Timeout: 2 * time.Second, Limiter: limiter})
 
 	answersOf := func(marker string) []m2m.PendingAnswer {
@@ -77,6 +75,12 @@ func TestFlow_ReviewsAndMaterialCallsShareOneTurn(t *testing.T) {
 	learning := &turnLearning{answers: map[string][]m2m.PendingAnswer{
 		"attempt-a": answersOf("REV-A"), "attempt-b": answersOf("REV-B")}}
 	p := turnProcessor(learning, provider, reviewModeLocal, limiter)
+
+	// The test holds the only turn until every flow is waiting: all of them compete.
+	busy, err := limiter.Acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
 
 	var wg sync.WaitGroup
 	for _, attemptID := range []string{"attempt-a", "attempt-b"} {
@@ -98,6 +102,8 @@ func TestFlow_ReviewsAndMaterialCallsShareOneTurn(t *testing.T) {
 			}
 		}()
 	}
+	waitTurnQueue(t, changes, 2+looseCalls)
+	busy()
 	wg.Wait()
 
 	if peak.Load() != 1 {
