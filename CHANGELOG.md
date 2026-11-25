@@ -7,6 +7,10 @@ y este proyecto adhiere a [Semantic Versioning](https://semver.org/spec/v2.0.0.h
 
 ## [Unreleased]
 
+### Added
+
+- feat(llm): tope de inferencias simultáneas contra el modelo (HU-IA.10). Paquete nuevo `internal/llm/inferencecap`: un limitador por backend (`local`, generación y embeddings contra Ollama; `api`, el proveedor de pago), en orden de llegada. El turno se pide justo antes de abrir la petición HTTP en los tres puntos de salida (`generateWith`, `Embed` y `complete`), así que la espera queda fuera del timeout de la llamada. La revisión toma el turno de su modo para todo el mensaje **antes** del candado y lo suelta en toda salida; el material, la preparación y los embeddings lo piden por llamada. Config nueva `llm.local.max_in_flight` (`LLM_LOCAL_MAX_IN_FLIGHT`, por defecto 1) y `llm.api.max_in_flight` (`LLM_API_MAX_IN_FLIGHT`, por defecto 4); un valor negativo no arranca. Histograma `worker_inference_wait_seconds` por limitador y una línea de log por turno. `prefetch_count` no cambia. Guion nuevo `scripts/e2e/concurrency/run.py` (caso `C1`, con modelo: se mide, no es gate).
+
 ### Changed
 
 - chore(054): saneamiento de rojos heredados (plan 054, ola S). `make lint` falla de verdad: sin `|| echo`, sale con error si falta `golangci-lint` y propaga su código de salida (S.3, MEJ-07). `.golangci.yml` con `run.build-tags: [integration]`, `allow-parallel-runners` y sin recorte de hallazgos (`max-same-issues: 0`, `max-issues-per-linter: 0`), y los 3 `errcheck` de `test/integration/setup.go` que destapó (S.4). `make test-integration` fuerza `GOWORK=off` y `RUN_INTEGRATION_TESTS=true`, corre con `-race` y falla si Docker no responde; queda documentado como gate local obligatorio antes de cada PR (S.6).
