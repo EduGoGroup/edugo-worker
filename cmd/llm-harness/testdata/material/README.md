@@ -44,3 +44,26 @@ done
 
 > Nota de procedencia: el generador anterior `gen_pdf.go` (pdfcpu `api.Create`, solo
 > WinAnsi) se retiró junto con la dependencia pdfcpu en la deuda 038.
+
+## La medida del borrador (AR-IA.3)
+
+Los modos `material` y `material-pairs` del arnés leen de aquí sus datos, **congelados antes de la
+primera corrida** (su huella sha256 va en la cabecera de cada corrida):
+
+- `independencia_hispanoamerica.html`, `.pdf` y `.txt` — **el PDF largo**: «La independencia de
+  Hispanoamérica», unas 2.600 palabras en 8 secciones numeradas, escrito para esta medida (sin texto
+  de terceros). El `.pdf` sale del `.html` con Chrome sin cabecera (receta de arriba) y es
+  CID/Identity-H; el `.txt` es el mismo texto en plano, para leerlo. Con el troceo de producción da
+  9 trozos: supera el cupo de 20 preguntas. **No se regenera**: Chrome no da el mismo PDF byte a byte
+  y cambiaría la huella de la línea base.
+- `cases.json` — los casos del modo `material`: el PDF largo, con el título literal de cada sección,
+  y `fotosintesis.pdf` y `ciclo_del_agua.pdf` (los M2 y M1 de la corrida de punta a punta del
+  2026-11-24). Un título se busca en el texto **extraído**, con los espacios colapsados y las
+  ligaduras `ﬁ`/`ﬂ` deshechas; si no aparece, el arnés no corre.
+- `pairs.json` — 40 parejas de preguntas sobre el PDF largo para el modo `material-pairs`, cada
+  miembro con la forma completa de una candidata. Cuatro categorías de 10: `paraphrase` (la misma
+  pregunta dicha de otra forma, `dup`), `other_type` (la misma pregunta en otro tipo, `dup`),
+  `same_idea_other_question` (misma idea y pregunta distinta, o casi el mismo enunciado con otra
+  respuesta, `no_dup`) y `different_section` (`no_dup`). **Etiquetadas por construcción** por quien
+  las escribió; nadie las revisó (R-065). En `other_type` la etiqueta `dup` es criterio de quien las
+  escribió: una afirmación de verdadero o falso y la pregunta que la pide se cuentan como la misma.

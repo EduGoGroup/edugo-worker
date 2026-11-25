@@ -1,0 +1,888 @@
+{
+  "version": 1,
+  "source": "independencia_hispanoamerica.pdf",
+  "labels": [
+    "dup",
+    "no_dup"
+  ],
+  "categories": [
+    "paraphrase",
+    "other_type",
+    "same_idea_other_question",
+    "different_section"
+  ],
+  "pairs": [
+    {
+      "id": "par-01",
+      "category": "paraphrase",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué año fue expulsada la Compañía de Jesús de los territorios españoles?",
+        "correct_answer": "1767"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Cuándo expulsó la Corona española a los jesuitas de sus dominios?",
+        "correct_answer": "1767"
+      }
+    },
+    {
+      "id": "par-02",
+      "category": "paraphrase",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Cómo se llamaba el impuesto a las ventas que subieron las reformas borbónicas?",
+        "correct_answer": "alcabala"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué nombre recibía el tributo que gravaba las ventas en las colonias?",
+        "correct_answer": "alcabala"
+      }
+    },
+    {
+      "id": "par-03",
+      "category": "paraphrase",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Quién encabezó en 1780 el gran levantamiento indígena del Perú?",
+        "options": [
+          "Túpac Amaru II",
+          "Simón Bolívar",
+          "Miguel Hidalgo",
+          "Bernardo O'Higgins"
+        ],
+        "correct_answer": "Túpac Amaru II"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Qué líder dirigió la rebelión indígena que estalló en los Andes peruanos en 1780?",
+        "options": [
+          "Túpac Amaru II",
+          "José de San Martín",
+          "Vicente Guerrero",
+          "Antonio Nariño"
+        ],
+        "correct_answer": "Túpac Amaru II"
+      }
+    },
+    {
+      "id": "par-04",
+      "category": "paraphrase",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué ciudad obligó Napoleón a Fernando VII a renunciar al trono?",
+        "correct_answer": "Bayona"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Dónde tuvo lugar la abdicación forzada de Fernando VII ante Napoleón?",
+        "correct_answer": "Bayona"
+      }
+    },
+    {
+      "id": "par-05",
+      "category": "paraphrase",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "Los criollos eran los hijos de españoles nacidos en América.",
+        "correct_answer": "true"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "Se llamaba criollos a los descendientes de españoles que habían nacido en suelo americano.",
+        "correct_answer": "true"
+      }
+    },
+    {
+      "id": "par-06",
+      "category": "paraphrase",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "open_ended",
+        "question_text": "Explica por qué los historiadores hablan de «la máscara de Fernando» al referirse a las primeras juntas."
+      },
+      "b": {
+        "version": 1,
+        "question_type": "open_ended",
+        "question_text": "¿Qué quieren decir los historiadores con la expresión «la máscara de Fernando» y por qué la aplican a las juntas de 1810?"
+      }
+    },
+    {
+      "id": "par-07",
+      "category": "paraphrase",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Qué batalla puso fin al dominio español en América del Sur?",
+        "options": [
+          "Ayacucho",
+          "Boyacá",
+          "Chacabuco",
+          "Carabobo"
+        ],
+        "correct_answer": "Ayacucho"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Con qué batalla terminó definitivamente el poder de España en Sudamérica?",
+        "options": [
+          "Ayacucho",
+          "Maipú",
+          "Pichincha",
+          "Junín"
+        ],
+        "correct_answer": "Ayacucho"
+      }
+    },
+    {
+      "id": "par-08",
+      "category": "paraphrase",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué sacerdote dio el Grito de Dolores?",
+        "correct_answer": "Miguel Hidalgo"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Cómo se llamaba el cura que inició la rebelión de Nueva España con el Grito de Dolores?",
+        "correct_answer": "Miguel Hidalgo"
+      }
+    },
+    {
+      "id": "par-09",
+      "category": "paraphrase",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_select",
+        "question_text": "¿Qué garantías establecía el Plan de Iguala?",
+        "options": [
+          "La religión católica",
+          "La independencia",
+          "La unión entre americanos y europeos",
+          "La abolición de la esclavitud"
+        ],
+        "correct_answer": [
+          "La religión católica",
+          "La independencia",
+          "La unión entre americanos y europeos"
+        ]
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_select",
+        "question_text": "Selecciona las tres garantías que proclamó el Plan de Iguala.",
+        "options": [
+          "La unión entre americanos y europeos",
+          "La independencia",
+          "El libre comercio",
+          "La religión católica"
+        ],
+        "correct_answer": [
+          "La unión entre americanos y europeos",
+          "La independencia",
+          "La religión católica"
+        ]
+      }
+    },
+    {
+      "id": "par-10",
+      "category": "paraphrase",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué año se disolvió la Gran Colombia?",
+        "correct_answer": "1830"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Cuándo dejó de existir la República de Colombia creada por Bolívar, conocida como Gran Colombia?",
+        "correct_answer": "1830"
+      }
+    },
+    {
+      "id": "typ-01",
+      "category": "other_type",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "El virreinato del Río de la Plata tenía su capital en Buenos Aires.",
+        "correct_answer": "true"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Cuál era la capital del virreinato del Río de la Plata?",
+        "options": [
+          "Buenos Aires",
+          "Lima",
+          "Bogotá",
+          "Ciudad de México"
+        ],
+        "correct_answer": "Buenos Aires"
+      }
+    },
+    {
+      "id": "typ-02",
+      "category": "other_type",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué año logró Haití su independencia?",
+        "correct_answer": "1804"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿En qué año logró Haití su independencia?",
+        "options": [
+          "1776",
+          "1789",
+          "1804",
+          "1810"
+        ],
+        "correct_answer": "1804"
+      }
+    },
+    {
+      "id": "typ-03",
+      "category": "other_type",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "Napoleón puso en el trono de España a su hermano José Bonaparte.",
+        "correct_answer": "true"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿A quién puso Napoleón en el trono de España en 1808?",
+        "correct_answer": "José Bonaparte"
+      }
+    },
+    {
+      "id": "typ-04",
+      "category": "other_type",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Quién presidió la Primera Junta de Buenos Aires en 1810?",
+        "options": [
+          "Cornelio Saavedra",
+          "Vicente Emparan",
+          "José de San Martín",
+          "Francisco de Miranda"
+        ],
+        "correct_answer": "Cornelio Saavedra"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Quién presidió la Primera Junta formada en Buenos Aires en mayo de 1810?",
+        "correct_answer": "Cornelio Saavedra"
+      }
+    },
+    {
+      "id": "typ-05",
+      "category": "other_type",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "Venezuela fue el primer territorio en declarar su independencia, el 5 de julio de 1811.",
+        "correct_answer": "true"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Qué territorio fue el primero en declarar su independencia, en julio de 1811?",
+        "options": [
+          "Venezuela",
+          "Chile",
+          "Perú",
+          "Nueva España"
+        ],
+        "correct_answer": "Venezuela"
+      }
+    },
+    {
+      "id": "typ-06",
+      "category": "other_type",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué batalla ganó Bolívar el 7 de agosto de 1819?",
+        "correct_answer": "Boyacá"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "El 7 de agosto de 1819 Bolívar venció en la batalla de Boyacá.",
+        "correct_answer": "true"
+      }
+    },
+    {
+      "id": "typ-07",
+      "category": "other_type",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "open_ended",
+        "question_text": "Explica en qué consistía el plan continental de San Martín."
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿En qué consistía el plan continental de San Martín?",
+        "options": [
+          "Cruzar los Andes, liberar Chile y llegar por mar a Lima",
+          "Avanzar hacia Lima por el Alto Perú",
+          "Desembarcar en Venezuela con ayuda de Haití",
+          "Unir todas las juntas en un congreso en Panamá"
+        ],
+        "correct_answer": "Cruzar los Andes, liberar Chile y llegar por mar a Lima"
+      }
+    },
+    {
+      "id": "typ-08",
+      "category": "other_type",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_select",
+        "question_text": "¿Qué países surgieron de la disolución de la Gran Colombia?",
+        "options": [
+          "Venezuela",
+          "Colombia",
+          "Ecuador",
+          "Perú"
+        ],
+        "correct_answer": [
+          "Venezuela",
+          "Colombia",
+          "Ecuador"
+        ]
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué tres países surgieron al disolverse la Gran Colombia?",
+        "correct_answer": "Venezuela, Colombia y Ecuador"
+      }
+    },
+    {
+      "id": "typ-09",
+      "category": "other_type",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Qué islas conservó España en América hasta 1898?",
+        "options": [
+          "Cuba y Puerto Rico",
+          "Jamaica y Haití",
+          "Cuba y Jamaica",
+          "Puerto Rico y Trinidad"
+        ],
+        "correct_answer": "Cuba y Puerto Rico"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "España conservó las islas de Cuba y Puerto Rico hasta 1898.",
+        "correct_answer": "true"
+      }
+    },
+    {
+      "id": "typ-10",
+      "category": "other_type",
+      "label": "dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué documento presentó Morelos para pedir igualdad ante la ley y el fin de las castas?",
+        "correct_answer": "Sentimientos de la Nación"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿En qué documento pidió Morelos la igualdad ante la ley y el fin de las castas?",
+        "options": [
+          "Sentimientos de la Nación",
+          "Carta de Jamaica",
+          "Plan de Iguala",
+          "Constitución de Cádiz"
+        ],
+        "correct_answer": "Sentimientos de la Nación"
+      }
+    },
+    {
+      "id": "idea-01",
+      "category": "same_idea_other_question",
+      "label": "no_dup",
+      "note": "casi el mismo enunciado, otra respuesta",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Cuál era la capital del virreinato de Nueva España?",
+        "correct_answer": "Ciudad de México"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Cuál era la capital del virreinato de Nueva Granada?",
+        "correct_answer": "Bogotá"
+      }
+    },
+    {
+      "id": "idea-02",
+      "category": "same_idea_other_question",
+      "label": "no_dup",
+      "note": "casi el mismo enunciado, otra respuesta",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué año estalló la rebelión de Túpac Amaru II?",
+        "correct_answer": "1780"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué año fue derrotada la rebelión de Túpac Amaru II?",
+        "correct_answer": "1781"
+      }
+    },
+    {
+      "id": "idea-03",
+      "category": "same_idea_other_question",
+      "label": "no_dup",
+      "note": "misma idea, pregunta distinta",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Contra qué protestaban los comuneros del Socorro?",
+        "options": [
+          "Los nuevos impuestos al tabaco y al aguardiente",
+          "La expulsión de los jesuitas",
+          "La invasión de Napoleón",
+          "El trabajo forzado en las minas"
+        ],
+        "correct_answer": "Los nuevos impuestos al tabaco y al aguardiente"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué virreinato estalló la rebelión de los comuneros del Socorro?",
+        "correct_answer": "Nueva Granada"
+      }
+    },
+    {
+      "id": "idea-04",
+      "category": "same_idea_other_question",
+      "label": "no_dup",
+      "note": "casi el mismo enunciado, otra respuesta",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué año se declaró la independencia de Estados Unidos?",
+        "correct_answer": "1776"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué año comenzó la Revolución francesa?",
+        "correct_answer": "1789"
+      }
+    },
+    {
+      "id": "idea-05",
+      "category": "same_idea_other_question",
+      "label": "no_dup",
+      "note": "casi el mismo enunciado, otra respuesta",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué fecha de 1810 se formó la junta de Caracas?",
+        "correct_answer": "19 de abril"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué fecha de 1810 se formó la junta de Bogotá?",
+        "correct_answer": "20 de julio"
+      }
+    },
+    {
+      "id": "idea-06",
+      "category": "same_idea_other_question",
+      "label": "no_dup",
+      "note": "casi el mismo enunciado, otra respuesta",
+      "a": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "La batalla de Carabobo aseguró la independencia de Venezuela.",
+        "correct_answer": "true"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "La batalla de Pichincha aseguró la independencia de Venezuela.",
+        "correct_answer": "false"
+      }
+    },
+    {
+      "id": "idea-07",
+      "category": "same_idea_other_question",
+      "label": "no_dup",
+      "note": "misma idea, pregunta distinta",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Dónde escribió Bolívar la Carta de Jamaica?",
+        "correct_answer": "Jamaica"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "open_ended",
+        "question_text": "¿Qué proponía Bolívar en la Carta de Jamaica?"
+      }
+    },
+    {
+      "id": "idea-08",
+      "category": "same_idea_other_question",
+      "label": "no_dup",
+      "note": "misma idea, pregunta distinta",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué batalla ganó el Ejército de los Andes el 12 de febrero de 1817?",
+        "correct_answer": "Chacabuco"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué batalla aseguró la independencia de Chile el 5 de abril de 1818?",
+        "correct_answer": "Maipú"
+      }
+    },
+    {
+      "id": "idea-09",
+      "category": "same_idea_other_question",
+      "label": "no_dup",
+      "note": "casi el mismo enunciado, otra respuesta",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué año fue fusilado Miguel Hidalgo?",
+        "correct_answer": "1811"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué año fue fusilado José María Morelos?",
+        "correct_answer": "1815"
+      }
+    },
+    {
+      "id": "idea-10",
+      "category": "same_idea_other_question",
+      "label": "no_dup",
+      "note": "casi el mismo enunciado, otra respuesta",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Qué querían los federalistas en las nuevas repúblicas?",
+        "options": [
+          "Autonomía para las provincias",
+          "Un gobierno fuerte en la capital",
+          "El regreso del rey",
+          "La unión con Gran Bretaña"
+        ],
+        "correct_answer": "Autonomía para las provincias"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Qué querían los centralistas en las nuevas repúblicas?",
+        "options": [
+          "Autonomía para las provincias",
+          "Un gobierno fuerte en la capital",
+          "El regreso del rey",
+          "La unión con Gran Bretaña"
+        ],
+        "correct_answer": "Un gobierno fuerte en la capital"
+      }
+    },
+    {
+      "id": "sec-01",
+      "category": "different_section",
+      "label": "no_dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿De qué mineral dependía la economía de las colonias, extraído sobre todo en Potosí y Zacatecas?",
+        "correct_answer": "plata"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué marino británico mandó la escuadra de la expedición libertadora del Perú?",
+        "correct_answer": "Thomas Cochrane"
+      }
+    },
+    {
+      "id": "sec-02",
+      "category": "different_section",
+      "label": "no_dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Qué grupo ocupaba los cargos más altos del gobierno colonial?",
+        "options": [
+          "Los peninsulares",
+          "Los criollos",
+          "Los mestizos",
+          "Los indígenas"
+        ],
+        "correct_answer": "Los peninsulares"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Cómo se llamaba a los jefes militares que disputaron el poder tras la independencia?",
+        "options": [
+          "Caudillos",
+          "Corregidores",
+          "Intendentes",
+          "Virreyes"
+        ],
+        "correct_answer": "Caudillos"
+      }
+    },
+    {
+      "id": "sec-03",
+      "category": "different_section",
+      "label": "no_dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "Antonio Nariño tradujo e imprimió en Bogotá la Declaración de los Derechos del Hombre y del Ciudadano.",
+        "correct_answer": "true"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "Fray Luis Beltrán dirigió el taller donde se fabricaron cañones para el Ejército de los Andes.",
+        "correct_answer": "true"
+      }
+    },
+    {
+      "id": "sec-04",
+      "category": "different_section",
+      "label": "no_dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Quién es considerado el precursor de la independencia?",
+        "correct_answer": "Francisco de Miranda"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Quién fue nombrado Director Supremo de Chile tras la batalla de Chacabuco?",
+        "correct_answer": "Bernardo O'Higgins"
+      }
+    },
+    {
+      "id": "sec-05",
+      "category": "different_section",
+      "label": "no_dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "open_ended",
+        "question_text": "Explica por qué las reformas borbónicas provocaron malestar entre los criollos."
+      },
+      "b": {
+        "version": 1,
+        "question_type": "open_ended",
+        "question_text": "Explica por qué fracasó el proyecto de unidad que impulsaba Bolívar."
+      }
+    },
+    {
+      "id": "sec-06",
+      "category": "different_section",
+      "label": "no_dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué general mandaba el ejército que Fernando VII envió a América en 1814?",
+        "correct_answer": "Pablo Morillo"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué presidente de Haití dio barcos y armas a Bolívar?",
+        "correct_answer": "Alexandre Pétion"
+      }
+    },
+    {
+      "id": "sec-07",
+      "category": "different_section",
+      "label": "no_dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Qué ocurrió en Caracas en marzo de 1812?",
+        "options": [
+          "Un terremoto destruyó la ciudad",
+          "Se firmó la independencia",
+          "Desembarcó Miranda",
+          "Se reunió un congreso"
+        ],
+        "correct_answer": "Un terremoto destruyó la ciudad"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_choice",
+        "question_text": "¿Qué ocurrió en Guayaquil en julio de 1822?",
+        "options": [
+          "Se reunieron Bolívar y San Martín",
+          "Se libró la batalla de Pichincha",
+          "Se proclamó la independencia del Perú",
+          "Se disolvió la Gran Colombia"
+        ],
+        "correct_answer": "Se reunieron Bolívar y San Martín"
+      }
+    },
+    {
+      "id": "sec-08",
+      "category": "different_section",
+      "label": "no_dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿En qué congreso declararon su independencia las Provincias Unidas del Río de la Plata?",
+        "correct_answer": "Congreso de Tucumán"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "short_answer",
+        "question_text": "¿Qué congreso convocó Morelos en 1813?",
+        "correct_answer": "Congreso de Chilpancingo"
+      }
+    },
+    {
+      "id": "sec-09",
+      "category": "different_section",
+      "label": "no_dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "multiple_select",
+        "question_text": "¿Cuáles de estos puertos americanos estaban autorizados para comerciar con España?",
+        "options": [
+          "Veracruz",
+          "Cartagena",
+          "El Callao",
+          "Valparaíso"
+        ],
+        "correct_answer": [
+          "Veracruz",
+          "Cartagena",
+          "El Callao"
+        ]
+      },
+      "b": {
+        "version": 1,
+        "question_type": "multiple_select",
+        "question_text": "¿Qué territorios formaban la Gran Colombia?",
+        "options": [
+          "Venezuela",
+          "Nueva Granada",
+          "Quito",
+          "Chile"
+        ],
+        "correct_answer": [
+          "Venezuela",
+          "Nueva Granada",
+          "Quito"
+        ]
+      }
+    },
+    {
+      "id": "sec-10",
+      "category": "different_section",
+      "label": "no_dup",
+      "note": "",
+      "a": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "Agustín de Iturbide se coronó emperador de México en 1822.",
+        "correct_answer": "true"
+      },
+      "b": {
+        "version": 1,
+        "question_type": "true_false",
+        "question_text": "El Congreso de Panamá de 1826 logró crear una confederación duradera de las nuevas repúblicas.",
+        "correct_answer": "false"
+      }
+    }
+  ]
+}

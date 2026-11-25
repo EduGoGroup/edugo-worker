@@ -1,0 +1,30 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "id": "independencia",
+      "pdf": "independencia_hispanoamerica.pdf",
+      "title": "La independencia de Hispanoamérica",
+      "sections": [
+        "1. El mundo colonial a finales del siglo XVIII",
+        "2. Las causas internas del descontento",
+        "3. Las causas externas y la crisis de 1808",
+        "4. Las primeras juntas de gobierno",
+        "5. La guerra en el norte: Bolívar y la Gran Colombia",
+        "6. La guerra en el sur: San Martín y el cruce de los Andes",
+        "7. México y Centroamérica: de Hidalgo a Iturbide",
+        "8. Las consecuencias de la independencia"
+      ]
+    },
+    {
+      "id": "fotosintesis",
+      "pdf": "fotosintesis.pdf",
+      "title": "La fotosíntesis"
+    },
+    {
+      "id": "ciclo_del_agua",
+      "pdf": "ciclo_del_agua.pdf",
+      "title": "El ciclo del agua"
+    }
+  ]
+}
