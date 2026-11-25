@@ -22,6 +22,8 @@ github.com/EduGoGroup/edugo-shared/messaging/events v0.900.4 h1:EU3Pm3aTXx9u7xJ+
 github.com/EduGoGroup/edugo-shared/messaging/events v0.900.4/go.mod h1:Xm8esD8MLlYMa+nJ+EDa2Szc3WmFYpbQXU1VSkur/ys=
 github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.1 h1:zpds/iKd13wk9W3XZXKvO4zqMv3Nc08n6l8v5E2JRks=
 github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.1/go.mod h1:M4DnEBQWKn3WbB+Zdtc+6xLt7zA6gFfuo+uzMY2KUJo=
+github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.2 h1:BDVFgfGT7V5WHrh9dGEJxV7aL4/znw325R/R6+mOl+8=
+github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.2/go.mod h1:M4DnEBQWKn3WbB+Zdtc+6xLt7zA6gFfuo+uzMY2KUJo=
 github.com/EduGoGroup/edugo-shared/metrics v0.900.0 h1:u1gG/A5hwDInaVutNKYuLZ85YuHBxR5+5K1ffx8Oic8=
 github.com/EduGoGroup/edugo-shared/metrics v0.900.0/go.mod h1:k/bWAFzl+pReM6tYNkHPR+PuamCKPTSjpQOgfbnuB/c=
 github.com/EduGoGroup/edugo-shared/resilience/circuitbreaker v0.900.0 h1:7NtRuxPhkONTjru+yKewodEfER8YCBZrV3KeijuIPzY=

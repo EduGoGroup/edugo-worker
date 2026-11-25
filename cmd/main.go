@@ -94,6 +94,9 @@ func main() {
 
 	dlqCfg := cfg.GetDLQConfigWithDefaults().ToShared()
 
+	// Los tres consumers pasan por bootstrap.WithFailureHooks: lo permanente va a la cola
+	// muerta sin reintentos, y cada reintento y cada envío dejan una línea de log.
+
 	consumerCfg := rabbit.ConsumerConfig{
 		Name:          "edugo-worker",
 		AutoAck:       false,
@@ -101,7 +104,7 @@ func main() {
 		DLQ:           dlqCfg,
 	}
 
-	consumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, consumerCfg).(*rabbit.RabbitMQConsumer)
+	consumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, bootstrap.WithFailureHooks(consumerCfg, resources.Logger)).(*rabbit.RabbitMQConsumer)
 	if !ok {
 		log.Fatal("failed to create RabbitMQ consumer: unexpected type")
 	}
@@ -118,7 +121,7 @@ func main() {
 		PrefetchCount: prefetchCount,
 		DLQ:           prepDLQCfg,
 	}
-	prepConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, prepConsumerCfg).(*rabbit.RabbitMQConsumer)
+	prepConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, bootstrap.WithFailureHooks(prepConsumerCfg, resources.Logger)).(*rabbit.RabbitMQConsumer)
 	if !ok {
 		log.Fatal("failed to create RabbitMQ prep consumer: unexpected type")
 	}
@@ -134,7 +137,7 @@ func main() {
 		PrefetchCount: prefetchCount,
 		DLQ:           materialDLQCfg,
 	}
-	materialConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, materialConsumerCfg).(*rabbit.RabbitMQConsumer)
+	materialConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, bootstrap.WithFailureHooks(materialConsumerCfg, resources.Logger)).(*rabbit.RabbitMQConsumer)
 	if !ok {
 		log.Fatal("failed to create RabbitMQ material consumer: unexpected type")
 	}

@@ -90,13 +90,14 @@ En un caso con modelo, las afirmaciones en rojo y las esperas agotadas se cuenta
 
 ## Las variantes sin modelo
 
-Afirman **la conducta de hoy**; la HU que arregle cada defecto cambia el valor esperado en un solo sitio.
+Afirmaban la conducta con defecto; cada HU que arregló el suyo cambió el valor esperado en un solo sitio.
+Hoy las tres afirman la conducta corregida.
 
-| Caso | Función común | Afirmación que cambiará |
-|---|---|---|
-| R7n (y R7) | `direct_flow_review` | «el candado NO queda liberado» |
-| R12n (y R12) | `review_until_dead_letter` | «el mensaje no es persistente» |
-| R13 | `case_r13` | `x-retry-count` y las cuatro fallas |
+| Caso | Función común | Qué afirma hoy | La invirtió |
+|---|---|---|---|
+| R7n (y R7) | `direct_flow_review` | El candado queda liberado tras finalizar | HU-IA.1 |
+| R12n (y R12) | `review_until_dead_letter` | El mensaje muerto es persistente y lleva `x-error` y `x-dead-reason=max_retries`; siguen las cuatro fallas y `x-retry-count=3` | HU-IA.3 |
+| R13 | `case_r13` | Cada mensaje falla una sola vez y muere al momento: `x-retry-count=0`, `x-dead-reason=permanent`, `x-error` no vacío y persistente | HU-IA.3 |
 
 R12n **para Ollama** si está arriba (y lo vuelve a levantar al terminar); si ya está abajo, no toca nada.
 Si lo que escucha en `:11434` es el Ollama de escritorio, lo mata: se corre con permiso. Un caso sin modelo

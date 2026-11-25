@@ -45,8 +45,8 @@ const (
 const reviewLanguage = "es"
 
 // ErrMalformedEvent marca un evento que no se puede decodificar/validar. El
-// clasificador de retry lo trata como permanente: reintentar no lo arregla, va al
-// DLQ. Ver classifyError en retry.go.
+// clasificador lo trata como permanente: reintentar no lo arregla, y el consumer lo
+// manda a la cola muerta sin reintentos. Ver classifyError e IsPermanent en retry.go.
 var ErrMalformedEvent = errors.New("evento attempt.review_requested malformado")
 
 // ErrInvalidVerdict marca una respuesta del LLM cuyo verdict no es uno de los
@@ -178,8 +178,8 @@ func (p *AttemptReviewProcessor) Process(ctx context.Context, payload []byte) er
 // POST review es upsert en learning). Un fallo de learning (GET, POST o finalize) sí
 // corta: no es de la respuesta. Un 4xx permanente de learning (ErrLearningPermanent)
 // o un mode sin provider se envuelven en un error que el clasificador marca
-// permanente; aun así el consumer con DLQ reintenta MaxRetries antes de mandar el
-// mensaje al DLQ (ConsumeWithDLQ no consulta el clasificador, deuda 140).
+// permanente: el consumer con DLQ consulta IsPermanent y manda el mensaje a la cola
+// muerta sin reintentos.
 func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mode, flow string, answers []events.AttemptReviewAnswerRef) error {
 	provider, ok := p.providers[mode]
 	if !ok || provider == nil {

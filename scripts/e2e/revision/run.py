@@ -28,6 +28,9 @@ NO_PENDING_MSG = "review sin pendientes"
 TEACHER_FLOW_MSG = "review completada, flujo teacher/short_answer: release-claim (sin finalize)"
 DIRECT_MSG = "attempt finalizado (flow direct)"
 HANDLER_ERROR_MSG = "Error procesando evento"
+# The two lines of internal/bootstrap/consumer_hooks.go (HU-IA.3).
+RETRY_MSG = "Mensaje fallido: se reintenta"
+DEAD_LETTER_MSG = "Mensaje enviado a la cola muerta"
 
 
 def offline_review(case, cfg, expected_pending_keys=None):
@@ -593,6 +596,10 @@ def review_until_dead_letter(case, cfg):
     case.measure("seconds_between_failures", gaps)
     case.note("lo esperado entre fallas: 5, 10 y 20 s; x-retry-count de 1 a 3 no se ve en la "
               "cola (el reintento se consume al instante): se deduce de las 4 fallas y del 3 final")
+    case.check("log: tres líneas de reintento", 3, len(case.tail.grep(RETRY_MSG, "")))
+    dead_lines = case.tail.grep(DEAD_LETTER_MSG, "reason=max_retries")
+    case.check("log: una línea de envío a la cola muerta", 1, len(dead_lines),
+               evidence=dead_lines[-1] if dead_lines else None)
     released = case.tail.grep("candado liberado", "attempt_id=" + attempt_id)
     case.check("candado liberado en cada salida (4 líneas)", 4, len(released))
     attempt = f.attempt_row(attempt_id)
@@ -607,8 +614,11 @@ def review_until_dead_letter(case, cfg):
         case.check("cola muerta: x-original-routing-key", c.REVIEW_QUEUE,
                    headers.get("x-original-routing-key"))
         case.check("cola muerta: hay x-failed-at", True, "x-failed-at" in headers)
-        case.check("cola muerta: el mensaje no es persistente (delivery_mode distinto de 2)",
-                   True, dead[0]["delivery_mode"] != 2, evidence=dead[0]["delivery_mode"])
+        case.check("cola muerta: el mensaje es persistente (delivery_mode 2)",
+                   2, dead[0]["delivery_mode"])
+        case.check("cola muerta: x-dead-reason", "max_retries", headers.get("x-dead-reason"))
+        case.check("cola muerta: x-error no vacío", True, bool(headers.get("x-error")),
+                   evidence=headers.get("x-error"))
     return exam, attempt_id, dead
 
 
@@ -709,23 +719,25 @@ def case_r13(case):
     case.check("los dos mensajes acaban en la cola muerta de revisión", 2, len(dead))
     for message in dead:
         kind = "tipo desconocido" if unknown_type in message["payload"] else "JSON roto"
-        case.check(f"{kind}: x-retry-count (no va directo: tres reintentos)", 3,
-                   message["headers"].get("x-retry-count"), evidence=message["headers"])
-    unknown_lines, unknown_gaps = error_times(case, unknown_type)
-    case.check("tipo desconocido: cuatro ejecuciones fallidas", 4, len(unknown_lines),
+        headers = message["headers"]
+        case.check(f"{kind}: x-retry-count (va directo: sin reintentos)", 0,
+                   headers.get("x-retry-count"), evidence=headers)
+        case.check(f"{kind}: x-dead-reason", "permanent", headers.get("x-dead-reason"))
+        case.check(f"{kind}: x-error no vacío", True, bool(headers.get("x-error")),
+                   evidence=headers.get("x-error"))
+        case.check(f"{kind}: el mensaje es persistente (delivery_mode 2)", 2,
+                   message["delivery_mode"])
+    unknown_lines, _ = error_times(case, unknown_type)
+    case.check("tipo desconocido: una sola ejecución fallida", 1, len(unknown_lines),
                evidence=unknown_lines[-1] if unknown_lines else None)
-    broken_lines, broken_gaps = error_times(case, "invalid message format")
-    case.check("JSON roto: cuatro ejecuciones fallidas", 4, len(broken_lines),
+    broken_lines, _ = error_times(case, "invalid message format")
+    case.check("JSON roto: una sola ejecución fallida", 1, len(broken_lines),
                evidence=broken_lines[-1] if broken_lines else None)
-    case.measure("seconds_between_failures", {"unknown": unknown_gaps, "broken": broken_gaps})
-    # Both poison messages share the review queue: the second one fails for the first time
-    # while the first one is still in its 5 s wait. That is the consumer serving another message.
-    first_unknown = c.line_time(unknown_lines[0]) if unknown_lines else None
-    first_broken = c.line_time(broken_lines[0]) if broken_lines else None
-    gap = None if first_unknown is None or first_broken is None else \
-        round(first_broken - first_unknown, 2)
-    case.check("el segundo mensaje se atiende durante la espera del primero (menos de 5 s "
-               "entre sus primeras fallas)", True, gap is not None and abs(gap) < 5, evidence=gap)
+    # Each poison message leaves one dead-letter line in the worker log, and no retry line.
+    dead_lines = case.tail.grep(DEAD_LETTER_MSG, "reason=permanent")
+    case.check("log: una línea de envío a la cola muerta por mensaje", 2, len(dead_lines),
+               evidence=dead_lines[-1] if dead_lines else None)
+    case.check("log: ninguna línea de reintento", 0, len(case.tail.grep(RETRY_MSG, "")))
     case.check("el worker sigue vivo", True, c.worker_alive())
     case.check("la cola de revisión queda vacía", True, c.wait_queue_empty(c.REVIEW_QUEUE, 60))
     case.note("los dos mensajes de prueba quedan en la cola muerta de revisión (sufijo "
