@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 	"unicode"
 
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
@@ -25,29 +26,43 @@ const blankAnswerFeedback = "Respuesta en blanco."
 const maxFeedbackRunes = 600
 
 // reviewAnswer produce, para una respuesta, el resultado y los puntos que se
-// proponen. Una respuesta en blanco se resuelve por regla, sin ninguna llamada al
-// modelo. Si no, elige el carril (reviewOne), revalida el veredicto y escala los
-// puntos: en los carriles globales el Score ya viene derivado del veredicto
-// (reviewGlobal); en el de lista es 1 o 0 y en el de criterios conserva su fórmula.
+// proponen, y mide lo que costó (HU-IA.2): envuelve el proveedor en un
+// meteredProvider propio de la respuesta y rellena el carril, las llamadas al modelo
+// y la duración, también cuando sale con error.
 func (p *AttemptReviewProcessor) reviewAnswer(ctx context.Context, provider llm.LLMProvider, ans m2m.PendingAnswer) (ReviewLaneResult, error) {
+	start := time.Now()
+	metered := newMeteredProvider(provider, p.logger, ans.AnswerID)
+	out, err := p.resolveAnswer(ctx, metered, ans)
+	out.LLMCalls = metered.calls
+	out.Duration = time.Since(start)
+	return out, err
+}
+
+// resolveAnswer es la revisión sin la medición. Una respuesta en blanco se resuelve
+// por regla, sin ninguna llamada al modelo. Si no, elige el carril (reviewOne),
+// revalida el veredicto y escala los puntos: en los carriles globales el Score ya
+// viene derivado del veredicto (reviewGlobal); en el de lista es 1 o 0 y en el de
+// criterios conserva su fórmula.
+func (p *AttemptReviewProcessor) resolveAnswer(ctx context.Context, provider llm.LLMProvider, ans m2m.PendingAnswer) (ReviewLaneResult, error) {
 	if isBlankAnswer(ans.StudentAnswer, referenceAnswer(ans)) {
 		return ReviewLaneResult{
 			Result:      llm.ReviewResult{Verdict: llm.VerdictIncorrect, Score: 0, Feedback: blankAnswerFeedback},
 			Points:      0,
 			BlankByRule: true,
+			Lane:        ReviewLaneBlankRule,
 		}, nil
 	}
 
-	result, err := p.reviewOne(ctx, provider, ans)
+	result, lane, err := p.reviewOne(ctx, provider, ans)
 	if err != nil {
-		return ReviewLaneResult{Result: result}, err
+		return ReviewLaneResult{Result: result, Lane: lane}, err
 	}
 	result.Verdict = llm.Verdict(strings.ToLower(strings.TrimSpace(string(result.Verdict))))
 	if err := validateVerdict(ans.QuestionType, result.Verdict); err != nil {
-		return ReviewLaneResult{Result: result}, err
+		return ReviewLaneResult{Result: result, Lane: lane}, err
 	}
 	result.Feedback = capFeedback(result.Feedback)
-	return ReviewLaneResult{Result: result, Points: scaledPoints(result.Score, ans.Points)}, nil
+	return ReviewLaneResult{Result: result, Points: scaledPoints(result.Score, ans.Points), Lane: lane}, nil
 }
 
 // reviewGlobal es el juicio global del modelo (los carriles sin lista ni criterios).
