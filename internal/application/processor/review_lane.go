@@ -2,10 +2,26 @@ package processor
 
 import (
 	"context"
+	"time"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+)
+
+// ReviewLane es el carril por el que se resolvió una respuesta. Es el valor del
+// campo `lane` del log de la revisión (HU-IA.2).
+type ReviewLane string
+
+const (
+	// ReviewLaneList: corta con prep de lista (match determinista y pares).
+	ReviewLaneList ReviewLane = "list"
+	// ReviewLaneCriteria: larga con criterios (una llamada por criterio).
+	ReviewLaneCriteria ReviewLane = "criteria"
+	// ReviewLaneGlobal: juicio global del modelo.
+	ReviewLaneGlobal ReviewLane = "global"
+	// ReviewLaneBlankRule: respuesta en blanco resuelta por regla, sin modelo.
+	ReviewLaneBlankRule ReviewLane = "blank_rule"
 )
 
 // ReviewLaneResult es lo que el carril de corrección produce para UNA respuesta
@@ -16,6 +32,13 @@ type ReviewLaneResult struct {
 	Points float64
 	// BlankByRule: la respuesta estaba en blanco y se resolvió por regla, sin modelo.
 	BlankByRule bool
+	// Lane: el carril que resolvió la respuesta. Se rellena también si hay error.
+	Lane ReviewLane
+	// LLMCalls: llamadas hechas al modelo para esta respuesta; cuentan las que
+	// fallan y los reintentos.
+	LLMCalls int
+	// Duration: lo que tardó reviewAnswer, sin la escritura en learning.
+	Duration time.Duration
 }
 
 // ReviewAnswerLane hace, para una respuesta, lo que el bucle de Process hace antes

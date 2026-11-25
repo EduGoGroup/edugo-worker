@@ -263,9 +263,9 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 		lane, err := p.reviewAnswer(ctx, provider, ans)
 		if err != nil {
 			p.logger.Warn("fallo del LLM o veredicto inválido en una respuesta, se sigue con las demás",
-				"attempt_id", attemptID, "answer_id", ans.AnswerID, "question_type", ans.QuestionType,
-				"veredicto_invalido", errors.Is(err, ErrInvalidVerdict), "provider", provider.Name(),
-				"motivo", err.Error())
+				append([]any{"attempt_id", attemptID, "answer_id", ans.AnswerID, "question_type", ans.QuestionType,
+					"veredicto_invalido", errors.Is(err, ErrInvalidVerdict), "motivo", err.Error()},
+					reviewLogFields(lane, provider.Name())...)...)
 			answerErrs = append(answerErrs, fmt.Errorf("LLM revisando answer %s (attempt %s): %w", ans.AnswerID, attemptID, err))
 			continue
 		}
@@ -278,7 +278,7 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 			return fmt.Errorf("escribiendo review de answer %s (attempt %s): %w", ans.AnswerID, attemptID, err)
 		}
 
-		p.logger.Info("answer revisada por LLM",
+		p.logger.Info("answer revisada por LLM", append([]any{
 			"attempt_id", attemptID,
 			"answer_id", ans.AnswerID,
 			"question_type", ans.QuestionType,
@@ -286,8 +286,7 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 			"score", result.Score,
 			"points_awarded", points,
 			"en_blanco_por_regla", lane.BlankByRule,
-			"provider", provider.Name(),
-		)
+		}, reviewLogFields(lane, provider.Name())...)...)
 	}
 
 	// Alguna respuesta quedó sin propuesta: no se finaliza y se devuelve el error
@@ -332,8 +331,9 @@ func claimConflictCause(err error) string {
 // (plan 042 F3c). short_answer con prep content_kind=list ⇒ carril TRITURADO (match
 // determinista + pares binarios, reemplaza el juicio global). short_answer con prep
 // de otro content_kind ⇒ prompt global enriquecido con los ítems normalizados. Sin
-// prep (o inválido) o cualquier otro tipo ⇒ flujo global actual intacto.
-func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLMProvider, ans m2m.PendingAnswer) (llm.ReviewResult, error) {
+// prep (o inválido) o cualquier otro tipo ⇒ flujo global actual intacto. Devuelve
+// además el carril elegido, también cuando hay error (HU-IA.2).
+func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLMProvider, ans m2m.PendingAnswer) (llm.ReviewResult, ReviewLane, error) {
 	prep := p.parsePrep(ans)
 
 	req := llm.ReviewRequest{
@@ -349,13 +349,14 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 		if prep.ContentKind == questionprep.ContentKindList {
 			p.logger.Info("short_answer con prep list: carril triturado (match determinista + pares)",
 				"answer_id", ans.AnswerID, "items", len(prep.Items))
-			return shortanswer.Grade(ctx, provider, shortanswer.GradeInput{
+			res, err := shortanswer.Grade(ctx, provider, shortanswer.GradeInput{
 				QuestionText:  ans.QuestionText,
 				StudentAnswer: ans.StudentAnswer,
 				Items:         prep.Items,
 				ItemsVerbatim: prep.ItemsVerbatim,
 				Language:      reviewLanguage,
 			})
+			return res, ReviewLaneList, err
 		}
 		// term/number/date/free: mejora barata del prompt global (D-042.10 §short_answer,
 		// punto 5) sin cambiar el contrato del POST review.
@@ -376,7 +377,7 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 		if len(criteria) > 0 {
 			p.logger.Info("open_ended con prep criteria: carril por criterios (una llamada por criterio)",
 				"answer_id", ans.AnswerID, "criteria", len(criteria))
-			return openended.Grade(ctx, provider, openended.GradeInput{
+			res, err := openended.Grade(ctx, provider, openended.GradeInput{
 				QuestionText:   ans.QuestionText,
 				ExpectedAnswer: ans.ExpectedAnswer,
 				StudentAnswer:  ans.StudentAnswer,
@@ -384,6 +385,7 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 				Language:       reviewLanguage,
 				Logger:         p.logger,
 			})
+			return res, ReviewLaneCriteria, err
 		}
 		// F4a: sin criterios reales, se enriquece el prompt global con intención/ideas/variantes.
 		req.Prep = &llm.ReviewPrep{
@@ -394,7 +396,9 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 		}
 	}
 
-	return p.reviewGlobal(ctx, provider, req)
+	p.logger.Info("revisión por juicio global", "answer_id", ans.AnswerID)
+	res, err := p.reviewGlobal(ctx, provider, req)
+	return res, ReviewLaneGlobal, err
 }
 
 // parsePrep decodifica y valida el llm_prep que learning adjuntó a la answer contra
