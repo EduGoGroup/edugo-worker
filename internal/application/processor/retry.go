@@ -51,6 +51,11 @@ func classifyError(err error) ErrorType {
 		return ErrorTypePermanent
 	}
 
+	// Mensaje que el registry no puede enrutar (JSON roto, sin event_type, sin processor).
+	if errors.Is(err, ErrUnroutableMessage) {
+		return ErrorTypePermanent
+	}
+
 	// 4xx permanente de learning (request malformada, answer inexistente, scope
 	// insuficiente): reintentar no lo arregla.
 	if errors.Is(err, m2m.ErrLearningPermanent) {
@@ -58,4 +63,11 @@ func classifyError(err error) ErrorType {
 	}
 
 	return ErrorTypeTransient
+}
+
+// IsPermanent dice si reintentar el error no lo arregla. Es el criterio que el consumer
+// con cola muerta usa para mandar el mensaje a la cola muerta sin reintentos. Un error
+// nil no es un fallo: devuelve false.
+func IsPermanent(err error) bool {
+	return err != nil && classifyError(err) == ErrorTypePermanent
 }

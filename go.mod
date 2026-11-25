@@ -11,7 +11,7 @@ require (
 	github.com/EduGoGroup/edugo-shared/lifecycle/shutdown v0.900.0
 	github.com/EduGoGroup/edugo-shared/logger v0.900.1
 	github.com/EduGoGroup/edugo-shared/messaging/events v0.900.4
-	github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.1
+	github.com/EduGoGroup/edugo-shared/messaging/rabbit v0.900.2
 	github.com/EduGoGroup/edugo-shared/metrics v0.900.0
 	github.com/EduGoGroup/edugo-shared/resilience/circuitbreaker v0.900.0
 	github.com/EduGoGroup/edugo-shared/resilience/ratelimiter v0.900.0

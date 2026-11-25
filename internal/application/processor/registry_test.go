@@ -170,6 +170,10 @@ func TestRegistry_Process_UnknownEventType(t *testing.T) {
 	if !strings.Contains(err.Error(), "no processor registered") {
 		t.Errorf("expected error to contain 'no processor registered', got: %v", err)
 	}
+
+	if !errors.Is(err, ErrUnroutableMessage) {
+		t.Errorf("expected ErrUnroutableMessage, got: %v", err)
+	}
 }
 
 func TestRegistry_Process_InvalidJSON(t *testing.T) {
@@ -184,6 +188,14 @@ func TestRegistry_Process_InvalidJSON(t *testing.T) {
 
 	if err == nil {
 		t.Error("expected error for invalid JSON, got nil")
+	}
+
+	if !errors.Is(err, ErrUnroutableMessage) {
+		t.Errorf("expected ErrUnroutableMessage, got: %v", err)
+	}
+
+	if !strings.Contains(err.Error(), "invalid message format") {
+		t.Errorf("expected error to contain 'invalid message format', got: %v", err)
 	}
 }
 
@@ -202,6 +214,10 @@ func TestRegistry_Process_MissingEventType(t *testing.T) {
 
 	if err == nil {
 		t.Error("expected error for missing event_type, got nil")
+	}
+
+	if !errors.Is(err, ErrUnroutableMessage) {
+		t.Errorf("expected ErrUnroutableMessage, got: %v", err)
 	}
 }
 
@@ -233,6 +249,15 @@ func TestRegistry_Process_ProcessorError(t *testing.T) {
 
 	if !errors.Is(err, expectedError) {
 		t.Errorf("expected error %v, got %v", expectedError, err)
+	}
+
+	// El error de un processor pasa sin envolver: no es un fallo de enrutamiento.
+	if err != expectedError { //nolint:errorlint // se afirma identidad: el registry no envuelve
+		t.Errorf("expected the processor error untouched, got %v", err)
+	}
+
+	if errors.Is(err, ErrUnroutableMessage) {
+		t.Error("a processor error must not be marked as unroutable")
 	}
 }
 
