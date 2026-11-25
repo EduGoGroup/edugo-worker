@@ -90,3 +90,6 @@ satisfaga la interfaz de `processor.go`, regístralo en el `ProcessorRegistry` (
   reúsalos en procesadores nuevos en lugar de reinventar.
 - **AuthClient** (`client/`) llama a la API de identity para validar/contexto; tiene caché con TTL.
 - Reglas globales: código en inglés, logs/docs en español, fechas UTC.
+- **`scripts/e2e/`**: los guiones de inyección de punta a punta (Python, solo biblioteca estándar), con
+  guarda de entorno local; uso en `scripts/e2e/README.md`. Su gate, sin red:
+  `python3 -m unittest discover -s scripts/e2e/tests -v` (`make ci-local` no los mira).
