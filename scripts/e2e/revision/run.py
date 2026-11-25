@@ -596,8 +596,9 @@ def review_until_dead_letter(case, cfg):
     case.measure("seconds_between_failures", gaps)
     case.note("lo esperado entre fallas: 5, 10 y 20 s; x-retry-count de 1 a 3 no se ve en la "
               "cola (el reintento se consume al instante): se deduce de las 4 fallas y del 3 final")
-    case.check("log: tres líneas de reintento", 3, len(case.tail.grep(RETRY_MSG, "")))
-    dead_lines = case.tail.grep(DEAD_LETTER_MSG, "reason=max_retries")
+    case.check("log: tres líneas de reintento", 3, len(case.tail.grep(RETRY_MSG, "queue=" + c.REVIEW_QUEUE)))
+    dead_lines = case.tail.grep(DEAD_LETTER_MSG, "queue=" + c.REVIEW_QUEUE,
+                                "reason=max_retries")
     case.check("log: una línea de envío a la cola muerta", 1, len(dead_lines),
                evidence=dead_lines[-1] if dead_lines else None)
     released = case.tail.grep("candado liberado", "attempt_id=" + attempt_id)
@@ -737,7 +738,7 @@ def case_r13(case):
     dead_lines = case.tail.grep(DEAD_LETTER_MSG, "reason=permanent")
     case.check("log: una línea de envío a la cola muerta por mensaje", 2, len(dead_lines),
                evidence=dead_lines[-1] if dead_lines else None)
-    case.check("log: ninguna línea de reintento", 0, len(case.tail.grep(RETRY_MSG, "")))
+    case.check("log: ninguna línea de reintento", 0, len(case.tail.grep(RETRY_MSG, "queue=" + c.REVIEW_QUEUE)))
     case.check("el worker sigue vivo", True, c.worker_alive())
     case.check("la cola de revisión queda vacía", True, c.wait_queue_empty(c.REVIEW_QUEUE, 60))
     case.note("los dos mensajes de prueba quedan en la cola muerta de revisión (sufijo "
