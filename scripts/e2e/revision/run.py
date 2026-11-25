@@ -389,9 +389,9 @@ def direct_flow_review(case, cfg):
     lines = case.tail.grep(DIRECT_MSG, "attempt_id=" + attempt_id)
     case.check(f"el log dice «{DIRECT_MSG}»", True, bool(lines),
                evidence=lines[-1] if lines else None)
-    case.check("el candado NO queda liberado (ai_review_claimed_at sigue puesto)", True,
-               attempt["ai_review_claimed_at"] is not None,
-               evidence=attempt["ai_review_claimed_at"])
+    # Read straight from the column: the direct flow leaves no release line in the log.
+    case.check("el finalize libera el candado (ai_review_claimed_at es nulo)", None,
+               attempt["ai_review_claimed_at"])
     for key, row in f.by_key(exam, rows).items():
         f.assert_ai_reviewed(case, key, row)
     f.assert_grade_item(case, actors, attempt_id)
