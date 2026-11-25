@@ -1,0 +1,754 @@
+{
+  "run": {
+    "mode": "material-pairs",
+    "started_at": "2026-11-25T13:51:25Z",
+    "finished_at": "2026-11-25T13:55:52Z",
+    "provider": "local",
+    "model": "gemma4:e4b",
+    "model_digest": "dc35e8d9c6061baa6f0fa870975ab6932e2542b579b13ea0f199fa4bb7300c9c",
+    "ollama_version": "0.34.4",
+    "embed_model": "embeddinggemma",
+    "embed_model_digest": "85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1",
+    "temperature": 0,
+    "worker_commit": "c6112ccad3f25a240ae100b1aeca595c1f32be7b",
+    "worker_dirty": false
+  },
+  "data": {
+    "pairs_sha256": "0fdaa1a702d615e5e8c886c215e564d125385d363507f629f60683ae37efb39c",
+    "params": {
+      "chunk_target_words": 300,
+      "chunk_max_words": 400,
+      "chunk_min_words": 200,
+      "chunk_merge_threshold_words": 80,
+      "dedupe_high": 0.93,
+      "dedupe_low": 0.5,
+      "relevance_min": 0.4,
+      "relevance_mode": "local",
+      "target_questions": 20,
+      "call_timeout_s": 120,
+      "embed_timeout_s": 60,
+      "max_redeliveries": 3
+    },
+    "table": [
+      {
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "pairs": 10,
+          "tier_text": 0,
+          "tier_embed": 0,
+          "tier_llm": 10,
+          "hits": 8,
+          "missed_dups": 2,
+          "false_dups": 0,
+          "invalid_outputs": 0,
+          "provider_errors": 0
+        },
+        "judge_only": {
+          "pairs": 10,
+          "tier_text": 0,
+          "tier_embed": 0,
+          "tier_llm": 10,
+          "hits": 8,
+          "missed_dups": 2,
+          "false_dups": 0,
+          "invalid_outputs": 0,
+          "provider_errors": 0
+        }
+      },
+      {
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "pairs": 10,
+          "tier_text": 1,
+          "tier_embed": 4,
+          "tier_llm": 5,
+          "hits": 7,
+          "missed_dups": 3,
+          "false_dups": 0,
+          "invalid_outputs": 0,
+          "provider_errors": 0
+        },
+        "judge_only": {
+          "pairs": 10,
+          "tier_text": 1,
+          "tier_embed": 0,
+          "tier_llm": 9,
+          "hits": 6,
+          "missed_dups": 4,
+          "false_dups": 0,
+          "invalid_outputs": 0,
+          "provider_errors": 0
+        }
+      },
+      {
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "pairs": 10,
+          "tier_text": 4,
+          "tier_embed": 1,
+          "tier_llm": 5,
+          "hits": 10,
+          "missed_dups": 0,
+          "false_dups": 0,
+          "invalid_outputs": 0,
+          "provider_errors": 0
+        },
+        "judge_only": {
+          "pairs": 10,
+          "tier_text": 4,
+          "tier_embed": 0,
+          "tier_llm": 6,
+          "hits": 10,
+          "missed_dups": 0,
+          "false_dups": 0,
+          "invalid_outputs": 0,
+          "provider_errors": 0
+        }
+      },
+      {
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "pairs": 10,
+          "tier_text": 0,
+          "tier_embed": 9,
+          "tier_llm": 1,
+          "hits": 10,
+          "missed_dups": 0,
+          "false_dups": 0,
+          "invalid_outputs": 0,
+          "provider_errors": 0
+        },
+        "judge_only": {
+          "pairs": 10,
+          "tier_text": 0,
+          "tier_embed": 0,
+          "tier_llm": 10,
+          "hits": 10,
+          "missed_dups": 0,
+          "false_dups": 0,
+          "invalid_outputs": 0,
+          "provider_errors": 0
+        }
+      }
+    ],
+    "judge": {
+      "calls": 56,
+      "elapsed_ms": 264897,
+      "invalid_outputs": 0,
+      "provider_errors": 0
+    },
+    "embed": {
+      "calls": 40,
+      "texts": 80,
+      "elapsed_ms": 2685,
+      "errors": 0
+    },
+    "elapsed_ms": 267664,
+    "pairs": [
+      {
+        "id": "par-01",
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 8668
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 4155
+        }
+      },
+      {
+        "id": "par-02",
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 7270
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 4399
+        }
+      },
+      {
+        "id": "par-03",
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 5575
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 2410
+        }
+      },
+      {
+        "id": "par-04",
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 5939
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 2261
+        }
+      },
+      {
+        "id": "par-05",
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 6940
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 2904
+        }
+      },
+      {
+        "id": "par-06",
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5616
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 2547
+        }
+      },
+      {
+        "id": "par-07",
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 5848
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 3169
+        }
+      },
+      {
+        "id": "par-08",
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 5295
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 2546
+        }
+      },
+      {
+        "id": "par-09",
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5363
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 2874
+        }
+      },
+      {
+        "id": "par-10",
+        "category": "paraphrase",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 6726
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 3164
+        }
+      },
+      {
+        "id": "typ-01",
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "dup",
+          "elapsed_ms": 81
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 6347
+        }
+      },
+      {
+        "id": "typ-02",
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "tier": "text",
+          "verdict": "dup",
+          "elapsed_ms": 71
+        },
+        "judge_only": {
+          "tier": "text",
+          "verdict": "dup",
+          "elapsed_ms": 0
+        }
+      },
+      {
+        "id": "typ-03",
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5368
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 3005
+        }
+      },
+      {
+        "id": "typ-04",
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "dup",
+          "elapsed_ms": 91
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 6214
+        }
+      },
+      {
+        "id": "typ-05",
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5911
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 2907
+        }
+      },
+      {
+        "id": "typ-06",
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 5852
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 2589
+        }
+      },
+      {
+        "id": "typ-07",
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5358
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 2681
+        }
+      },
+      {
+        "id": "typ-08",
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "dup",
+          "elapsed_ms": 40
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 5406
+        }
+      },
+      {
+        "id": "typ-09",
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 5551
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 2605
+        }
+      },
+      {
+        "id": "typ-10",
+        "category": "other_type",
+        "label": "dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "dup",
+          "elapsed_ms": 44
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "dup",
+          "elapsed_ms": 6479
+        }
+      },
+      {
+        "id": "idea-01",
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "tier": "text",
+          "verdict": "no_dup",
+          "elapsed_ms": 53
+        },
+        "judge_only": {
+          "tier": "text",
+          "verdict": "no_dup",
+          "elapsed_ms": 0
+        }
+      },
+      {
+        "id": "idea-02",
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5496
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 2534
+        }
+      },
+      {
+        "id": "idea-03",
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5734
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 2726
+        }
+      },
+      {
+        "id": "idea-04",
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "no_dup",
+          "elapsed_ms": 42
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5240
+        }
+      },
+      {
+        "id": "idea-05",
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "tier": "text",
+          "verdict": "no_dup",
+          "elapsed_ms": 44
+        },
+        "judge_only": {
+          "tier": "text",
+          "verdict": "no_dup",
+          "elapsed_ms": 0
+        }
+      },
+      {
+        "id": "idea-06",
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "tier": "text",
+          "verdict": "no_dup",
+          "elapsed_ms": 35
+        },
+        "judge_only": {
+          "tier": "text",
+          "verdict": "no_dup",
+          "elapsed_ms": 0
+        }
+      },
+      {
+        "id": "idea-07",
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 4595
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 2571
+        }
+      },
+      {
+        "id": "idea-08",
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5556
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 1957
+        }
+      },
+      {
+        "id": "idea-09",
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5803
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 2842
+        }
+      },
+      {
+        "id": "idea-10",
+        "category": "same_idea_other_question",
+        "label": "no_dup",
+        "real": {
+          "tier": "text",
+          "verdict": "no_dup",
+          "elapsed_ms": 86
+        },
+        "judge_only": {
+          "tier": "text",
+          "verdict": "no_dup",
+          "elapsed_ms": 0
+        }
+      },
+      {
+        "id": "sec-01",
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "no_dup",
+          "elapsed_ms": 39
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5994
+        }
+      },
+      {
+        "id": "sec-02",
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "no_dup",
+          "elapsed_ms": 79
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5609
+        }
+      },
+      {
+        "id": "sec-03",
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "no_dup",
+          "elapsed_ms": 72
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 6182
+        }
+      },
+      {
+        "id": "sec-04",
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "no_dup",
+          "elapsed_ms": 48
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5046
+        }
+      },
+      {
+        "id": "sec-05",
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "no_dup",
+          "elapsed_ms": 49
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 6039
+        }
+      },
+      {
+        "id": "sec-06",
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "no_dup",
+          "elapsed_ms": 46
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 4949
+        }
+      },
+      {
+        "id": "sec-07",
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5643
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 2801
+        }
+      },
+      {
+        "id": "sec-08",
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "no_dup",
+          "elapsed_ms": 74
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 6436
+        }
+      },
+      {
+        "id": "sec-09",
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "no_dup",
+          "elapsed_ms": 50
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 6921
+        }
+      },
+      {
+        "id": "sec-10",
+        "category": "different_section",
+        "label": "no_dup",
+        "real": {
+          "tier": "embed",
+          "verdict": "no_dup",
+          "elapsed_ms": 42
+        },
+        "judge_only": {
+          "tier": "llm",
+          "verdict": "no_dup",
+          "elapsed_ms": 5920
+        }
+      }
+    ]
+  }
+}

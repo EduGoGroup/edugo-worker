@@ -17,6 +17,13 @@
 //   - mode=bank (AR-INF.1): pasa el banco etiquetado de learning por el carril de
 //     corrección real (processor.ReviewAnswerLane) y saca una tabla por categoría.
 //
+//   - mode=material (AR-IA.3): pasa cada PDF de los casos por el procesador real del
+//     riel material→evaluación, montado sobre un almacén en memoria, y cuenta la
+//     generación, el sustento, la reducción, el borrador y el coste.
+//
+//   - mode=material-pairs (AR-IA.3): pasa parejas etiquetadas de preguntas por la
+//     pasada de duplicadas real y cuenta, por categoría, qué escalón decide y qué.
+//
 // Sirve para (a) smoke de la infra LLM, (b) elegir el modelo local midiendo (no
 // en papel) y (c) regresión de prompts.
 //
@@ -49,12 +56,14 @@ import (
 	"encoding/json"
 	"flag"
 	"fmt"
+	"log/slog"
 	"os"
 	"strings"
 	"time"
 
+	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/assessmentimport"
-	"github.com/EduGoGroup/edugo-worker/internal/chunking"
+	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
 	llmapi "github.com/EduGoGroup/edugo-worker/internal/llm/api"
 	"github.com/EduGoGroup/edugo-worker/internal/llm/ollama"
@@ -69,7 +78,7 @@ oxígeno. En la fase oscura (ciclo de Calvin), el dióxido de carbono se fija pa
 glucosa. La ecuación general es: 6 CO2 + 6 H2O + luz -> C6H12O6 + 6 O2.`
 
 func main() {
-	mode := flag.String("mode", "generate", "modo del harness: generate (contrato 038) | review (corrección, 040 T2c) | prep (preparación, 042 F2d) | review-prep (carril triturado short_answer, 042 F3d) | material (pipeline A/B material→evaluación, 043 F3b) | embed (calibración dedupe por embeddings, 044 F1b) | relevance (calibración umbral relevancia, 044 F2a) | bank (banco etiquetado por el carril de corrección, AR-INF.1)")
+	mode := flag.String("mode", "generate", "modo del harness: generate (contrato 038) | review (corrección, 040 T2c) | prep (preparación, 042 F2d) | review-prep (carril triturado short_answer, 042 F3d) | material (el riel material→evaluación entero, AR-IA.3) | material-pairs (parejas etiquetadas por la pasada de duplicadas, AR-IA.3) | embed (calibración dedupe por embeddings, 044 F1b) | relevance (calibración umbral relevancia, 044 F2a) | bank (banco etiquetado por el carril de corrección, AR-INF.1)")
 	provider := flag.String("provider", "local", "provider LLM: local (alias de ollama) | ollama | api. 'local'/'api' espejan el vocabulario de la política por escuela (D-039.2; 'off' no aplica al harness)")
 	materialPath := flag.String("material", "", "ruta a un archivo de texto con el material (vacío = muestra interna)")
 	title := flag.String("title", "Fotosíntesis — capítulo 3", "título del material")
@@ -86,13 +95,10 @@ func main() {
 	apiModel := flag.String("api-model", "claude-sonnet-5", "modelo del provider api")
 	apiBaseURL := flag.String("api-base-url", "", "base URL del provider api (vacío = default)")
 
-	materialInputsCSV := flag.String("material-inputs", "", "modo material: rutas coma-separadas a documentos (.pdf → pdf.Extractor, .txt → texto plano). Vacío = todos los .txt de "+defaultMaterialDir)
-	chunkTarget := flag.Int("chunk-target", 300, "modo material: TargetWords del porcionado (default = config productiva)")
-	chunkMax := flag.Int("chunk-max", 400, "modo material: MaxWords del porcionado (default = config productiva)")
-	chunkMin := flag.Int("chunk-min", 200, "modo material: MinWords del porcionado (default = config productiva)")
-	chunkMerge := flag.Int("chunk-merge", 80, "modo material: MergeThresholdWords del porcionado (default = config productiva)")
-	skipPropose := flag.Bool("skip-propose", false, "modo material: omite la Batería B (solo mide el digest A)")
-	digestPrompt := flag.String("digest-prompt", "v2", "modo material: variante del prompt A: v2 (tarea partida, ruta productiva del provider local; default) | v1 (llamada única legacy, para regresión)")
+	materialCasesPath := flag.String("material-cases", defaultMaterialCases, "modo material: fichero de casos (PDF y secciones declaradas)")
+	materialInputsCSV := flag.String("material-inputs", "", "modo material: rutas coma-separadas a otros PDF, en lugar de los casos (sin secciones)")
+	materialPairsPath := flag.String("material-pairs", defaultMaterialPairs, "modo material-pairs: fichero de parejas etiquetadas")
+	embedModel := flag.String("embed-model", "", "modos material y material-pairs: modelo de embeddings (vacío = el de la configuración de producción)")
 
 	embedModelsCSV := flag.String("embed-models", "nomic-embed-text,embeddinggemma", "modo embed: modelos de embeddings coma-separados a comparar (secuencial)")
 	embedPairsPath := flag.String("embed-pairs", defaultEmbedPairs, "modo embed: ruta a la batería de pares dup/no_dup")
@@ -112,6 +118,13 @@ func main() {
 	if *mode == "embed" {
 		runEmbed(*ollamaURL, *embedModelsCSV, *embedPairsPath, *embedOutDir, *runsDir, *timeout)
 		return
+	}
+
+	// Los modos del riel de material comprueban sus datos ANTES de mirar si hay
+	// modelo: un PDF que falta o una sección que no aparece paran el arnés aquí.
+	var mat materialSetup
+	if *mode == "material" || *mode == "material-pairs" {
+		mat = prepareMaterialMode(*mode, *provider, *materialCasesPath, *materialInputsCSV, *materialPairsPath, *embedModel, *timeout)
 	}
 
 	content := sampleMaterial
@@ -156,6 +169,10 @@ func main() {
 		}
 	}
 	info := newRunInfo(*mode, *provider, modelName, mi)
+	var deps railDeps
+	if *mode == "material" || *mode == "material-pairs" {
+		deps = mat.connect(p, &info, *ollamaURL)
+	}
 
 	switch *mode {
 	case "generate":
@@ -171,25 +188,92 @@ func main() {
 	case "bank":
 		runBank(p, info, *bankPath, *deterministicPath, *runsDir, *timeout)
 	case "material":
-		runMaterial(p, materialOptions{
-			timeout:   *timeout,
-			inputsCSV: *materialInputsCSV,
-			chunkCfg: chunking.Config{
-				TargetWords:         *chunkTarget,
-				MaxWords:            *chunkMax,
-				MinWords:            *chunkMin,
-				MergeThresholdWords: *chunkMerge,
-			},
-			skipPropose:   *skipPropose,
-			digestVariant: *digestPrompt,
-			provider:      *provider,
-			ollamaURL:     *ollamaURL,
-			ollamaModel:   *ollamaModel,
-		})
+		runMaterial(deps, info, *runsDir, mat.cases, mat.casesSum, mat.params)
+	case "material-pairs":
+		runMaterialPairs(deps, info, *runsDir, mat.pairs, mat.pairsSum, mat.params)
 	case "relevance":
 		runRelevance(p, info, *runsDir, *relevanceCasesPath, *relevanceOutPath, *timeout)
 	default:
-		fatalf("modo desconocido %q (usa generate|review|prep|review-prep|material|embed|relevance|bank)", *mode)
+		fatalf("modo desconocido %q (usa generate|review|prep|review-prep|material|material-pairs|embed|relevance|bank)", *mode)
+	}
+}
+
+// materialSetup es lo que los modos material y material-pairs preparan antes de
+// tocar el modelo: la configuración de producción y sus datos ya comprobados.
+type materialSetup struct {
+	cfg          config.MaterialPipelineConfig
+	log          logger.Logger
+	embedModel   string
+	embedTimeout time.Duration
+	params       materialParams
+	cases        []preparedCase
+	casesSum     string
+	pairs        pairsFile
+	pairsSum     string
+}
+
+// prepareMaterialMode lee la configuración de producción sin entorno y comprueba
+// los datos del modo. Cualquier fallo aquí es del arnés: termina con código != 0.
+func prepareMaterialMode(mode, provider, casesPath, inputsCSV, pairsPath, embedModel string, timeout time.Duration) materialSetup {
+	// La fase 1 y el juez de duplicadas van solo con el proveedor local (ADR 0036).
+	if provider != "local" && provider != "ollama" {
+		fatalf("el modo %s solo corre con el proveedor local (ADR 0036)", mode)
+	}
+	empty := &config.Config{}
+	llmCfg := empty.GetLLMConfigWithDefaults()
+	m := materialSetup{
+		cfg:          empty.GetMaterialPipelineConfigWithDefaults(),
+		log:          logger.NewSlogAdapter(slog.New(slog.NewTextHandler(os.Stderr, &slog.HandlerOptions{Level: slog.LevelWarn}))),
+		embedModel:   llmCfg.Embed.Model,
+		embedTimeout: llmCfg.Embed.Timeout,
+	}
+	if strings.TrimSpace(embedModel) != "" {
+		m.embedModel = embedModel
+	}
+	m.params = newMaterialParams(m.cfg, timeout, m.embedTimeout)
+
+	if mode == "material-pairs" {
+		var err error
+		if m.pairs, m.pairsSum, err = loadMaterialPairs(pairsPath); err != nil {
+			fatalf("%v", err)
+		}
+		return m
+	}
+	var cases []materialCase
+	if strings.TrimSpace(inputsCSV) != "" {
+		cases = casesFromInputs(inputsCSV)
+	} else {
+		var err error
+		if cases, m.casesSum, err = loadMaterialCases(casesPath); err != nil {
+			fatalf("%v", err)
+		}
+	}
+	prepared, err := prepareMaterialCases(cases, chunkConfigFrom(m.cfg), m.log)
+	if err != nil {
+		fatalf("%v", err)
+	}
+	m.cases = prepared
+	return m
+}
+
+// connect comprueba el modelo de embeddings (el generador ya se comprobó), lo deja
+// en la cabecera de la corrida y arma las dependencias del riel.
+func (m materialSetup) connect(p llm.LLMProvider, info *runInfo, ollamaURL string) railDeps {
+	model, ok := p.(railModel)
+	if !ok {
+		fatalf("el proveedor %s no implementa las llamadas del riel de material", p.Name())
+	}
+	emi, err := preflightOllama(ollamaURL, m.embedModel, 15*time.Second)
+	if err != nil {
+		fatalf("comprobación previa del modelo de embeddings: %v", err)
+	}
+	info.EmbedModel = m.embedModel
+	info.EmbedModelDigest = emi.Digest
+	return railDeps{
+		model:    model,
+		embedder: ollama.NewEmbedder(ollama.EmbedConfig{BaseURL: ollamaURL, Model: m.embedModel, Timeout: m.embedTimeout}),
+		cfg:      m.cfg,
+		log:      m.log,
 	}
 }
 

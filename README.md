@@ -201,8 +201,34 @@ modelo real y **mide, no juzga** (ADR 0048 del ecosistema):
   descarga nada.
 
 Modos: `generate` (contrato 038), `review`, `prep`, `review-prep`, `material`,
-`embed`, `relevance` y `bank`. **`material` es la excepción**: no repite ni sale con
-1 por contenido, pero aún imprime OK/FAIL por comprobación y no guarda su corrida.
+`material-pairs`, `embed`, `relevance` y `bank`.
+
+**El modo `material`** (AR-IA.3) mide el riel material→evaluación entero. Por cada caso de
+`cmd/llm-harness/testdata/material/cases.json` (un PDF) monta **el procesador de producción**
+(`processor.NewMaterialPipelineProcessor` y su `Process`) sobre un almacén en memoria que hace de
+learning: fase 0 (extraer y trocear), fase 1 (leer y preguntar por trozo) y las cuatro pasadas de
+la fase 2, con los reintentos de producción y sus parámetros (300/400/200/80, 0,93 y 0,50,
+relevancia 0,4, cupo 20). Sin cola, sin learning y sin base: solo Ollama, con el modelo generador
+y el de embeddings (`-embed-model`, por defecto el de la configuración). Imprime cinco tablas
+(generación, sustento, reducción, borrador y coste) y guarda la corrida con las candidatas
+enteras. Una reentrega de la cola se imita volviendo a llamar a `Process` sobre el mismo almacén,
+hasta 3 veces y solo tras un error transitorio; un caso que no termina se guarda como
+`incomplete`. Antes de mirar si hay modelo comprueba los datos: un PDF que falta o una sección
+declarada que no aparece en el texto extraído paran el arnés con código 1.
+
+**El modo `material-pairs`** (AR-IA.3) pasa las parejas etiquetadas de
+`testdata/material/pairs.json` por la pasada de duplicadas real (`reduce.DedupePass`), cada una
+dos veces: con el embedder de producción (qué escalón decide: letras, coseno o juez) y con uno
+fijo en la zona gris (el juez solo). Cuenta por categoría lo que coincide con la etiqueta, las
+duplicadas que se escapan, las falsas duplicadas y las salidas inválidas.
+
+```bash
+LLM_LOCAL_MODEL=gemma4:e4b make llm-harness ARGS="-mode material"
+LLM_LOCAL_MODEL=gemma4:e4b make llm-harness ARGS="-mode material-pairs"
+```
+
+Para medir otro PDF sin tocar los casos congelados: `-material-inputs ruta/al.pdf` (sin
+secciones) o `-material-cases otro.json`.
 
 **El modo `bank`** (AR-INF.1) pasa el banco etiquetado de learning por el carril de
 corrección real (`processor.ReviewAnswerLane`). Solo pasan los casos que la parte
