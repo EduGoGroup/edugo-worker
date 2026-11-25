@@ -8,6 +8,7 @@ y dejan un JSON por caso. Nacieron en la corrida del 2026-11-24 (ecosistema,
 |---|---|
 | `revision/run.py` | P1 a P3 (preparación), R1 a R13, R7n, R12n y R12b (revisión) |
 | `material/run.py` | M1 a M5 (material → evaluación) |
+| `concurrency/run.py` | C1 (el tope de inferencias: tres revisiones y dos PDF cortos a la vez) |
 
 `e2e_env.py` es lo único que comparten: la guarda, las rutas de lo que vive fuera del repo, `--out-dir` y
 la regla del código de salida. Los ayudantes de HTTP, SQL y RabbitMQ siguen duplicados entre los dos
@@ -43,6 +44,26 @@ EDUGO_BASE_PASSWORD=<clave> python3 scripts/e2e/material/run.py --no-model --out
   `ciclo_del_agua.pdf` salvo que se le dé `--material-id`. Además: `--pdf`, `--answers-file`,
   `--timeout-min`.
 - Un caso cada vez, en serie: hay un solo entorno.
+
+## El caso de concurrencia (C1)
+
+```bash
+EDUGO_BASE_PASSWORD=<clave> python3 scripts/e2e/concurrency/run.py --out-dir <carpeta>
+```
+
+`C1` es **con modelo**: se mide, no es gate, y arranca Ollama (se pregunta antes de correrlo). Siembra en
+serie tres exámenes con la preparación fijada a mano y guarda un intento de cada uno; con el worker parado,
+entrega los tres intentos y pide la generación de dos `ciclo_del_agua.pdf`; después arranca el worker, que
+recibe los cinco mensajes de golpe. Reusa los ayudantes de `revision/` y de `material/` sin cambiarlos
+(importa `material/run.py` con otro nombre de módulo; su `main` está tras `if __name__`).
+
+- **Afirma solo relojes y colas**: ninguna línea `Client.Timeout exceeded` y ningún `Mensaje fallido: se
+  reintenta` en el log del worker durante la ventana, y las tres colas muertas igual que antes.
+- **Anota sin afirmar** (`measured`): el estado final de cada respuesta, intento y job, la espera de cada
+  turno (`turn_waits`, de las líneas `turno de inferencia …`) y el reloj de pared, junto a los 1.023 s
+  medidos sin tope con menos carga.
+- `--timeout-min` cambia el tope de la ventana (40 minutos por defecto). `--list` no necesita entorno.
+- Deja sembrado: tres evaluaciones con su intento, dos materiales y sus jobs.
 
 ## Qué necesita levantado
 

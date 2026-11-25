@@ -6,9 +6,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 )
 
 func fakeAnthropic(t *testing.T, text string) *httptest.Server {
@@ -128,4 +132,96 @@ func TestAnthropic_ReviewCalls_NoSchemaAndRaw(t *testing.T) {
 			}
 		}
 	}
+}
+
+// testGuard only bounds a test that hangs; no assertion depends on it elapsing.
+const testGuard = 10 * time.Second
+
+// The paid provider has its own cap: never more than N requests in flight. nil is no cap.
+func TestComplete_RespectsItsOwnCap(t *testing.T) {
+	const calls = 6
+	// run fires the calls against a server that tells when a request is open (entered)
+	// and holds it until release is closed. It returns the peak of open requests.
+	run := func(t *testing.T, limiter *inferencecap.Limiter, drive func(entered <-chan struct{}, release chan struct{})) int32 {
+		t.Helper()
+		var open, peak atomic.Int32
+		entered := make(chan struct{}, calls)
+		release := make(chan struct{})
+		srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+			cur := open.Add(1)
+			defer open.Add(-1)
+			for {
+				old := peak.Load()
+				if cur <= old || peak.CompareAndSwap(old, cur) {
+					break
+				}
+			}
+			entered <- struct{}{}
+			<-release
+			_ = json.NewEncoder(w).Encode(anthropicResponse{Content: []anthropicContentBlock{
+				{Type: "text", Text: `{"verdict":"correct","score":1,"feedback":"ok"}`}}})
+		}))
+		defer srv.Close()
+		p, err := New(Config{Provider: ProviderAnthropic, APIKey: "k", Model: "m", BaseURL: srv.URL, Limiter: limiter})
+		if err != nil {
+			t.Fatal(err)
+		}
+		var wg sync.WaitGroup
+		for i := 0; i < calls; i++ {
+			wg.Add(1)
+			go func() {
+				defer wg.Done()
+				if _, err := p.ReviewAnswer(context.Background(), llm.ReviewRequest{QuestionText: "q", StudentAnswer: "a"}); err != nil {
+					t.Errorf("ReviewAnswer: %v", err)
+				}
+			}()
+		}
+		drive(entered, release)
+		wg.Wait()
+		return peak.Load()
+	}
+	// opened waits until n requests are open in the server.
+	opened := func(t *testing.T, entered <-chan struct{}, n int) {
+		t.Helper()
+		for i := 0; i < n; i++ {
+			select {
+			case <-entered:
+			case <-time.After(testGuard):
+				t.Fatalf("solo %d de %d peticiones llegaron al servidor", i, n)
+			}
+		}
+	}
+
+	t.Run("con tope de 2", func(t *testing.T) {
+		limiter := inferencecap.New("api", 2, nil)
+		queued := make(chan int, 64)
+		limiter.OnQueueChange(func(waiting int) { queued <- waiting })
+		peak := run(t, limiter, func(entered <-chan struct{}, release chan struct{}) {
+			// Two are open and held; the other four wait for a turn outside the server.
+			opened(t, entered, 2)
+			guard := time.After(testGuard)
+			for waiting := -1; waiting != calls-2; {
+				select {
+				case waiting = <-queued:
+				case <-guard:
+					t.Fatalf("la fila del turno no llegó a %d", calls-2)
+				}
+			}
+			close(release)
+		})
+		if peak != 2 {
+			t.Fatalf("hubo %d peticiones en vuelo con tope de 2", peak)
+		}
+	})
+
+	t.Run("nil no limita", func(t *testing.T) {
+		// Nothing is released until all of them are open: it only ends without a cap.
+		peak := run(t, nil, func(entered <-chan struct{}, release chan struct{}) {
+			opened(t, entered, calls)
+			close(release)
+		})
+		if peak != calls {
+			t.Fatalf("sin tope se esperaban %d a la vez, hubo %d", calls, peak)
+		}
+	})
 }

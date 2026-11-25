@@ -93,12 +93,14 @@ llm:
     model: "${LLM_LOCAL_MODEL}" # ej. gemma4:e4b (único modelo de los 3 rieles, deuda 037)
     timeout: "120s"
     temperature: 0 # greedy determinista: la corrección es JSON estructurado, no prosa creativa (045)
+    max_in_flight: 1 # tope de inferencias simultáneas contra Ollama (HU-IA.10); LLM_LOCAL_MAX_IN_FLIGHT
   api: # provider por API (modo "api": Claude/Gemini)
     provider: "${LLM_API_PROVIDER}" # anthropic | gemini
     api_key: "${LLM_API_KEY}" # Secret Manager en cloud
     model: "${LLM_API_MODEL}"
     timeout: "60s"
     max_tokens: 4096
+    max_in_flight: 4 # tope de peticiones simultáneas al proveedor de pago (HU-IA.10); LLM_API_MAX_IN_FLIGHT
 
 # Health Checks
 health:

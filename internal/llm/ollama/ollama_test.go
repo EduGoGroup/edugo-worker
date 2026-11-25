@@ -8,9 +8,13 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"strings"
+	"sync"
+	"sync/atomic"
 	"testing"
+	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 )
 
 func TestGenerateAssessment_OK(t *testing.T) {
@@ -401,5 +405,197 @@ func TestGenerate_SeedOnlyOnMaterialRetry(t *testing.T) {
 		if len(b) != 6 {
 			t.Errorf("petición %d: el cuerpo trae %d claves, se esperan 6: %v", i, len(b), b)
 		}
+	}
+}
+
+// testGuard only bounds a test that hangs; no assertion depends on it elapsing.
+const testGuard = 10 * time.Second
+
+// gatedOllama is a fake Ollama that, like the real one with OLLAMA_NUM_PARALLEL=1, serves
+// one request at a time and queues the rest. It tells the test when a request is being
+// served (entered) and holds it until the test says so (release), or until the client
+// gives up. peak is the most requests it ever had open at once (queued included) and
+// hits how many arrived.
+type gatedOllama struct {
+	srv        *httptest.Server
+	entered    chan struct{}
+	release    chan struct{}
+	peak, hits atomic.Int32
+}
+
+func newGatedOllama(t *testing.T) *gatedOllama {
+	t.Helper()
+	g := &gatedOllama{entered: make(chan struct{}, 64), release: make(chan struct{}, 64)}
+	var open atomic.Int32
+	serial := make(chan struct{}, 1)
+	g.srv = httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// The body is read first: only then does the server notice a client that gave up.
+		_, _ = io.Copy(io.Discard, r.Body)
+		g.hits.Add(1)
+		cur := open.Add(1)
+		defer open.Add(-1)
+		for {
+			old := g.peak.Load()
+			if cur <= old || g.peak.CompareAndSwap(old, cur) {
+				break
+			}
+		}
+		select {
+		case serial <- struct{}{}:
+			defer func() { <-serial }()
+		case <-r.Context().Done():
+			return
+		}
+		g.entered <- struct{}{}
+		select {
+		case <-g.release:
+		case <-r.Context().Done():
+			return
+		}
+		if r.URL.Path == "/api/embed" {
+			_ = json.NewEncoder(w).Encode(embedResponse{Embeddings: [][]float32{{0.1}}})
+			return
+		}
+		_ = json.NewEncoder(w).Encode(generateResponse{
+			Response: `{"verdict":"correct","score":1,"feedback":"ok"}`, Done: true})
+	}))
+	t.Cleanup(g.srv.Close)
+	return g
+}
+
+// serve lets n requests through, one by one, as each one is being served.
+func (g *gatedOllama) serve(t *testing.T, n int) {
+	t.Helper()
+	for i := 0; i < n; i++ {
+		select {
+		case <-g.entered:
+			g.release <- struct{}{}
+		case <-time.After(testGuard):
+			t.Errorf("la petición %d de %d no llegó al servidor", i+1, n)
+			return
+		}
+	}
+}
+
+// watchedLimiter builds a limiter whose queue length changes arrive on a channel.
+func watchedLimiter(capacity int) (*inferencecap.Limiter, <-chan int) {
+	l := inferencecap.New("local", capacity, nil)
+	changes := make(chan int, 1024)
+	l.OnQueueChange(func(waiting int) { changes <- waiting })
+	return l, changes
+}
+
+// waitQueued blocks until the limiter reports n callers queued.
+func waitQueued(t *testing.T, changes <-chan int, n int) {
+	t.Helper()
+	guard := time.After(testGuard)
+	for {
+		select {
+		case got := <-changes:
+			if got == n {
+				return
+			}
+		case <-guard:
+			t.Fatalf("la fila del turno no llegó a %d", n)
+		}
+	}
+}
+
+// reviewAtOnce fires n ReviewAnswer calls at the same time; failed receives how many
+// failed once all of them returned.
+func reviewAtOnce(p *Provider, n int) (failed <-chan int32) {
+	out := make(chan int32, 1)
+	var wg sync.WaitGroup
+	var errs atomic.Int32
+	for i := 0; i < n; i++ {
+		wg.Add(1)
+		go func() {
+			defer wg.Done()
+			if _, err := p.ReviewAnswer(context.Background(), llm.ReviewRequest{QuestionText: "q", StudentAnswer: "a"}); err != nil {
+				errs.Add(1)
+			}
+		}()
+	}
+	go func() {
+		wg.Wait()
+		out <- errs.Load()
+	}()
+	return out
+}
+
+// CA-IA.14: with more calls asked than the cap, the server never sees two at once and
+// the wait for the turn is off the call clock. Without the cap (nil), the same load
+// expires: the calls queue inside the server with their clock running.
+func TestGenerate_WaitDoesNotCountOnClock(t *testing.T) {
+	const (
+		calls   = 5
+		timeout = 250 * time.Millisecond
+	)
+
+	t.Run("con tope de 1 ninguna vence", func(t *testing.T) {
+		g := newGatedOllama(t)
+		limiter, changes := watchedLimiter(1)
+		p := New(Config{BaseURL: g.srv.URL, Model: "m", Timeout: timeout, Limiter: limiter})
+
+		// The test holds the only turn: the five calls queue outside the server.
+		busy, err := limiter.Acquire(context.Background())
+		if err != nil {
+			t.Fatal(err)
+		}
+		failed := reviewAtOnce(p, calls)
+		waitQueued(t, changes, calls)
+		// The one real duration of this test: the calls wait for their turn longer than
+		// their whole Timeout. A clock that counted the wait would expire all of them.
+		<-time.After(2 * timeout)
+		if g.hits.Load() != 0 {
+			t.Fatalf("llegaron %d peticiones al servidor sin turno", g.hits.Load())
+		}
+		busy()
+		g.serve(t, calls)
+		if got := <-failed; got != 0 {
+			t.Fatalf("vencieron %d llamadas con el tope puesto", got)
+		}
+		if g.peak.Load() != 1 || g.hits.Load() != calls {
+			t.Fatalf("el servidor vio %d a la vez (%d peticiones esperadas, llegaron %d)", g.peak.Load(), calls, g.hits.Load())
+		}
+	})
+
+	t.Run("sin tope vencen en la fila del servidor", func(t *testing.T) {
+		// Nobody releases the server: every call sits inside it, the first being served
+		// and the rest queued, until its own Timeout expires.
+		g := newGatedOllama(t)
+		p := New(Config{BaseURL: g.srv.URL, Model: "m", Timeout: timeout})
+		if got := <-reviewAtOnce(p, calls); got == 0 {
+			t.Fatal("sin tope se esperaba al menos una llamada vencida")
+		}
+		if g.peak.Load() < 2 {
+			t.Fatalf("sin tope el servidor debía ver varias a la vez, vio %d", g.peak.Load())
+		}
+	})
+}
+
+func TestGenerate_CancelledWhileWaitingNeverCalls(t *testing.T) {
+	g := newGatedOllama(t)
+	limiter, changes := watchedLimiter(1)
+	busy, err := limiter.Acquire(context.Background())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer busy()
+
+	ctx, cancel := context.WithCancel(context.Background())
+	errCh := make(chan error, 1)
+	p := New(Config{BaseURL: g.srv.URL, Model: "m", Limiter: limiter})
+	go func() {
+		_, err := p.ReviewAnswer(ctx, llm.ReviewRequest{QuestionText: "q", StudentAnswer: "a"})
+		errCh <- err
+	}()
+	waitQueued(t, changes, 1)
+	cancel()
+	if err := <-errCh; !errors.Is(err, context.Canceled) {
+		t.Fatalf("se esperaba context.Canceled, llegó %v", err)
+	}
+	if g.hits.Load() != 0 {
+		t.Fatalf("el servidor recibió %d peticiones de una llamada cancelada en la fila", g.hits.Load())
 	}
 }

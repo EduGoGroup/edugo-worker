@@ -13,6 +13,7 @@ import (
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 	"github.com/EduGoGroup/edugo-worker/internal/openended"
 	"github.com/EduGoGroup/edugo-worker/internal/questionprep"
 	"github.com/EduGoGroup/edugo-worker/internal/shortanswer"
@@ -106,6 +107,9 @@ type AttemptReviewProcessor struct {
 	learning  LearningReviewClient
 	providers map[string]llm.LLMProvider
 	logger    logger.Logger
+	// turns maps the mode ("local"/"api") to its inference cap (HU-IA.10). A mode
+	// without limiter does not wait.
+	turns map[string]*inferencecap.Limiter
 }
 
 // NewAttemptReviewProcessor construye el processor. providers mapea el mode
@@ -123,6 +127,35 @@ func NewAttemptReviewProcessor(
 		providers: providers,
 		logger:    log,
 	}
+}
+
+// WithInferenceTurns sets the inference cap of each mode. A review takes the turn of its
+// mode for the whole message, before the lock, and releases it on every exit (HU-IA.10).
+func (p *AttemptReviewProcessor) WithInferenceTurns(turns map[string]*inferencecap.Limiter) *AttemptReviewProcessor {
+	p.turns = turns
+	return p
+}
+
+// holdTurn waits for the inference turn of the mode and returns the context that carries
+// it. The wait is logged on its own line: it is not part of any answer's duration.
+func (p *AttemptReviewProcessor) holdTurn(ctx context.Context, attemptID, mode string) (context.Context, func(), error) {
+	limiter := p.turns[mode]
+	if limiter == nil {
+		return ctx, func() {}, nil
+	}
+	start := time.Now()
+	held, release, err := limiter.Hold(ctx)
+	if err != nil {
+		return ctx, release, fmt.Errorf("esperando turno de inferencia de attempt %s: %w", attemptID, err)
+	}
+	taken := time.Now()
+	p.logger.Info("turno de inferencia tomado",
+		"attempt_id", attemptID, "limiter", limiter.Name(), "wait_ms", taken.Sub(start).Milliseconds())
+	return held, func() {
+		release()
+		p.logger.Info("turno de inferencia soltado",
+			"attempt_id", attemptID, "limiter", limiter.Name(), "held_ms", time.Since(taken).Milliseconds())
+	}, nil
 }
 
 // EventType satisface processor.Processor.
@@ -187,6 +220,14 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 		// transitorio. Permanente para no reintentar en vano.
 		return fmt.Errorf("%w: no hay LLMProvider para mode=%q", ErrMalformedEvent, mode)
 	}
+
+	// Turno de inferencia del modo, por mensaje y ANTES del candado: quien espera turno
+	// no tiene el candado, y las llamadas de esta revisión van seguidas (HU-IA.10).
+	ctx, releaseTurn, err := p.holdTurn(ctx, attemptID, mode)
+	if err != nil {
+		return err
+	}
+	defer releaseTurn()
 
 	// Candado «en revisión por IA»: reclamar ANTES de tocar nada, para que profe y
 	// worker no choquen (plan 040 F4). Un 409 (candado ajeno vigente o intento ya

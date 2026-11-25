@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
@@ -47,6 +48,9 @@ type Config struct {
 	Timeout time.Duration
 	// MaxTokens del completion. Default 4096.
 	MaxTokens int
+	// Limiter caps the requests in flight against the paid provider (HU-IA.10): a
+	// ceiling on spend and on requests, not on the machine. nil is "no cap".
+	Limiter *inferencecap.Limiter
 }
 
 // Provider es la implementación por API de llm.LLMProvider.
@@ -215,8 +219,15 @@ func (p *Provider) ProposeCandidates(ctx context.Context, in llm.ProposeCandidat
 	return candidates, nil
 }
 
-// complete enruta al backend concreto.
+// complete enruta al backend concreto. Antes pide su turno al tope del proveedor por
+// API (HU-IA.10): la espera queda fuera del reloj de la petición.
 func (p *Provider) complete(ctx context.Context, prompt string) (string, error) {
+	release, err := p.cfg.Limiter.Acquire(ctx)
+	if err != nil {
+		return "", fmt.Errorf("llm api request not sent: %w", err)
+	}
+	defer release()
+
 	switch p.cfg.Provider {
 	case ProviderAnthropic:
 		return p.completeAnthropic(ctx, prompt)

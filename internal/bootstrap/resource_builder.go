@@ -18,10 +18,12 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/health"
 	httpInfra "github.com/EduGoGroup/edugo-worker/internal/infrastructure/http"
+	workermetrics "github.com/EduGoGroup/edugo-worker/internal/infrastructure/metrics"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/nlp"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
 	llmapi "github.com/EduGoGroup/edugo-worker/internal/llm/api"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 	"github.com/EduGoGroup/edugo-worker/internal/llm/ollama"
 	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline/reduce"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -70,6 +72,7 @@ type ResourceBuilder struct {
 	llmProvider            llm.LLMProvider
 	llmProviders           map[string]llm.LLMProvider
 	embedder               llm.Embedder
+	inferenceTurns         map[string]*inferencecap.Limiter
 	processorRegistry      *processor.Registry
 	metricsServer          *httpInfra.MetricsServer
 	healthChecker          *health.Checker
@@ -339,6 +342,14 @@ func (b *ResourceBuilder) WithLLMProvider() *ResourceBuilder {
 
 	llmCfg := b.config.GetLLMConfigWithDefaults()
 
+	// Tope de inferencias simultáneas (HU-IA.10): un limitador para Ollama (generación
+	// y embeddings) y otro para el proveedor de pago. Cada cliente pide su turno justo
+	// antes de abrir la petición; la revisión lo toma por mensaje.
+	localCap, apiCap := llmCfg.InferenceCaps()
+	localTurns := inferencecap.New("local", localCap, b.observeInferenceWait)
+	apiTurns := inferencecap.New("api", apiCap, b.observeInferenceWait)
+	b.inferenceTurns = map[string]*inferencecap.Limiter{"local": localTurns, "api": apiTurns}
+
 	// Provider local (Ollama). Es también el default histórico expuesto en
 	// Resources.LLMProvider.
 	localProvider := ollama.New(ollama.Config{
@@ -346,6 +357,7 @@ func (b *ResourceBuilder) WithLLMProvider() *ResourceBuilder {
 		Model:       llmCfg.Local.Model,
 		Timeout:     llmCfg.Local.Timeout,
 		Temperature: llmCfg.Local.Temperature,
+		Limiter:     localTurns,
 	})
 	b.llmProvider = localProvider
 
@@ -355,7 +367,7 @@ func (b *ResourceBuilder) WithLLMProvider() *ResourceBuilder {
 	// soportado), se omite la clave "api" y el processor errará claro solo si una
 	// escuela pide mode=api sin provider disponible —sin romper el carril local—.
 	b.llmProviders = map[string]llm.LLMProvider{"local": localProvider}
-	if apiProvider, err := BuildAPIProvider(llmCfg.API); err != nil {
+	if apiProvider, err := buildAPIProvider(llmCfg.API, apiTurns); err != nil {
 		b.logger.Warn("provider LLM por API no disponible (mode=api fallará hasta corregir config)",
 			"error", err.Error(), "api_provider", llmCfg.API.Provider)
 	} else {
@@ -369,7 +381,11 @@ func (b *ResourceBuilder) WithLLMProvider() *ResourceBuilder {
 		BaseURL: llmCfg.Embed.BaseURL,
 		Model:   llmCfg.Embed.Model,
 		Timeout: llmCfg.Embed.Timeout,
+		Limiter: localTurns,
 	})
+
+	b.logger.Info("✅ tope de inferencias simultáneas",
+		"local_max_in_flight", localTurns.Capacity(), "api_max_in_flight", apiTurns.Capacity())
 
 	b.logger.Info("✅ LLM providers initialized (selección por mode de escuela: local|api)",
 		"local_provider", localProvider.Name(),
@@ -385,9 +401,35 @@ func (b *ResourceBuilder) WithLLMProvider() *ResourceBuilder {
 // buildAPIProvider construye el provider por API a demanda (plan 040/041 lo usa
 // cuando la política de una escuela pide modo "api"). Se expone para no atar el
 // import del paquete api solo al harness. Devuelve error si la config no permite
-// construirlo (proveedor no soportado, etc.).
+// construirlo (proveedor no soportado, etc.). Sin tope de inferencias: quien lo llama
+// desde fuera del worker es un flujo en serie.
 func BuildAPIProvider(cfg config.LLMAPIConfig) (llm.LLMProvider, error) {
+	return buildAPIProvider(cfg, nil)
+}
+
+// slowInferenceWait is the wait from which a per-call turn is logged at Info.
+const slowInferenceWait = 30 * time.Second
+
+// observeInferenceWait records every granted inference turn (HU-IA.10): the histogram
+// always; the log only for per-call turns (material, preparation, embeddings), at Debug
+// or at Info when the wait was long. The review logs its own message turn.
+func (b *ResourceBuilder) observeInferenceWait(w inferencecap.Wait) {
+	workermetrics.RecordInferenceWait(w.Limiter, w.Duration.Seconds())
+	if w.Message {
+		return
+	}
+	if w.Duration > slowInferenceWait {
+		b.logger.Info("turno de inferencia por llamada tras una espera larga",
+			"limiter", w.Limiter, "wait_ms", w.Duration.Milliseconds())
+		return
+	}
+	b.logger.Debug("turno de inferencia por llamada", "limiter", w.Limiter, "wait_ms", w.Duration.Milliseconds())
+}
+
+// buildAPIProvider builds the API provider with its inference cap (nil is "no cap").
+func buildAPIProvider(cfg config.LLMAPIConfig, limiter *inferencecap.Limiter) (llm.LLMProvider, error) {
 	return llmapi.New(llmapi.Config{
+		Limiter:   limiter,
 		Provider:  cfg.Provider,
 		APIKey:    cfg.APIKey,
 		Model:     cfg.Model,
@@ -488,7 +530,7 @@ func (b *ResourceBuilder) WithProcessors() *ResourceBuilder {
 
 	b.processorRegistry = processor.NewRegistry(b.logger)
 	b.processorRegistry.Register(processor.NewAttemptReviewProcessor(
-		b.settingsClient, b.learningClient, b.llmProviders, b.logger))
+		b.settingsClient, b.learningClient, b.llmProviders, b.logger).WithInferenceTurns(b.inferenceTurns))
 	// Carril de preparación (plan 042 F2): comparte registry (enruta por event_type),
 	// pero consume su propia cola (canal por riel, main.go arranca su consumer).
 	b.processorRegistry.Register(processor.NewQuestionPrepProcessor(
