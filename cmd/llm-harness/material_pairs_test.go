@@ -178,8 +178,39 @@ func TestPairs_CountsByCategory(t *testing.T) {
 			t.Errorf("%s: %+v (se espera 4 parejas por el juez: 1 igual, 1 escapada, 1 falsa, 1 inválida)", name, c)
 		}
 	}
-	// Dos medidas por pareja, una llamada al juez cada una, y la inválida cuenta.
-	if stats.Calls != 8 || stats.InvalidOutputs != 2 {
-		t.Errorf("cuentas del juez: %+v (se esperan 8 llamadas y 2 inválidas)", stats)
+	// Dos medidas por pareja, una llamada al juez cada una; la inválida se reintenta
+	// una vez por medida y sus dos llamadas cuentan.
+	if stats.Calls != 10 || stats.InvalidOutputs != 4 {
+		t.Errorf("cuentas del juez: %+v (se esperan 10 llamadas y 4 inválidas)", stats)
+	}
+}
+
+// Una pareja que la pasada deja sin decidir cuenta como salida inválida del juez, no
+// como «no duplicada» (HU-IA.9).
+func TestMeasurePair_UndecidedIsInvalidOutput(t *testing.T) {
+	member := func(text string) []byte {
+		return []byte(fmt.Sprintf(`{"version":1,"question_type":"short_answer","question_text":%q,"correct_answer":"x"}`, text))
+	}
+	p := materialPair{ID: "p", Category: "c", Label: pairLabelNoDup,
+		A: member("alfa pregunta una cosa"), B: member("Una pregunta completamente distinta sobre otro asunto")}
+	judge := &fakeModel{judgeFn: func(llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
+		return llm.ReviewResult{}, fmt.Errorf("%w: ollama returned status 500", llm.ErrLLMQuality)
+	}}
+	cfg := (&config.Config{}).GetMaterialPipelineConfigWithDefaults()
+	m, err := measurePair(context.Background(), p, greyZoneEmbedder{}, judge,
+		reduce.Config{DupHigh: cfg.DedupeHigh, DupLow: cfg.DedupeLow}, quietLog())
+	if err != nil {
+		t.Fatalf("measurePair: %v", err)
+	}
+	if m.Tier != pairTierLLM || m.ErrorKind != errKindInvalidOutput || m.Verdict != "" || m.Error == "" {
+		t.Fatalf("medida: %+v (se espera escalón del juez, salida inválida y sin veredicto)", m)
+	}
+	if judge.judged != 2 {
+		t.Fatalf("el juez se reintenta una vez: %d llamadas", judge.judged)
+	}
+	var c pairCounts
+	c.add(p.Label, m)
+	if c.InvalidOutputs != 1 || c.Hits+c.MissedDups+c.FalseDups != 0 {
+		t.Fatalf("cuentas: %+v (inválida, y en ninguna columna de acuerdo)", c)
 	}
 }

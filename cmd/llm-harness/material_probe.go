@@ -27,7 +27,8 @@ type railModel interface {
 }
 
 // Clases de error de una llamada al modelo. Una salida que no se pudo interpretar es
-// un dato del modelo; lo demás (red, timeout, 5xx) es del proveedor.
+// un dato del modelo, y también el 500 con que Ollama corta un bucle de repetición
+// (HU-IA.9); lo demás (red, timeout, cualquier otro 5xx) es del proveedor.
 const (
 	errKindInvalidOutput = "invalid_output"
 	errKindProvider      = "provider_error"

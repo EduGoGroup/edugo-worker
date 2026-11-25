@@ -20,11 +20,13 @@ import (
 // ErrLLMQuality marca una salida del LLM que no se pudo interpretar por su CALIDAD (no
 // por infraestructura): respuesta sin objeto JSON, JSON sin cierre balanceado, o un
 // cuerpo que no parsea contra el contrato esperado. Es DISTINTO de un fallo de transporte
-// (servidor caído, timeout, HTTP 5xx), que sube SIN este sentinel. El caller del pipeline
+// (servidor caído, timeout, HTTP 5xx), que sube SIN este sentinel; la única excepción es
+// el 500 con que Ollama corta un bucle de repetición del modelo, que sí lo lleva
+// (ollama.ErrRepeatLimit, HU-IA.9). El caller del pipeline
 // material→evaluación lo usa para separar CALIDAD —que activa reintento con jitter de
 // temperatura y aislamiento del chunk— de INFRA —que sigue tratándose como transitorio
 // (reintento del evento / DLQ)—. Las implementaciones envuelven con él SOLO los errores de
-// parseo/extracción, nunca los de transporte.
+// parseo/extracción y ese 500, nunca los de transporte.
 var ErrLLMQuality = errors.New("salida del LLM no interpretable por su calidad")
 
 // MaterialInput es el material de origen a partir del cual generar una

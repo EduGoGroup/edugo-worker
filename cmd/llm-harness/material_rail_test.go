@@ -11,6 +11,7 @@ import (
 
 	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/ollama"
 	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
@@ -153,6 +154,37 @@ func TestRail_InvalidModelOutputIsData(t *testing.T) {
 	}
 	if len(run.Candidates) != 0 || run.Metrics.Draft.Selected != 0 {
 		t.Fatalf("no debería haber candidatas: %d", len(run.Candidates))
+	}
+	saveCaseRun(t, run)
+}
+
+// Un bucle de repetición en la propuesta de un trozo no corta el riel (HU-IA.9).
+func TestRail_RepeatLoopChunkEndsRail(t *testing.T) {
+	model := workingModel()
+	okPropose := model.propose
+	calls := 0
+	model.propose = func(in llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
+		calls++
+		if calls <= 2 { // el primer trozo: la llamada y su reintento
+			return nil, fmt.Errorf("proponiendo: %w", ollama.ErrRepeatLimit)
+		}
+		return okPropose(in)
+	}
+	c := prepareTestPDF(t, testRailLongPDF)
+	if c.ExpectedChunks < 2 {
+		t.Fatalf("el PDF de prueba da %d trozo: hace falta otro que sí proponga", c.ExpectedChunks)
+	}
+	run := runMaterialCase(context.Background(), testDeps(model), c)
+
+	if run.Outcome != outcomeComplete || len(run.Attempts) != 1 || run.Metrics.Cost.Redeliveries != 0 {
+		t.Fatalf("desenlace %q con %d entregas (se espera completo, sin reentregas)", run.Outcome, len(run.Attempts))
+	}
+	propose := run.Metrics.Cost.Propose
+	if propose.QualityRetries != 1 || propose.InvalidOutputs != 2 || propose.ProviderErrors != 0 || propose.Calls != c.ExpectedChunks+1 {
+		t.Fatalf("cuentas de «preguntar»: %+v con %d trozos", propose, c.ExpectedChunks)
+	}
+	if run.Chunks[0].Status != storeStatusDone || len(run.Candidates) != 3*(c.ExpectedChunks-1) {
+		t.Fatalf("el trozo del bucle queda %s y hay %d candidatas", run.Chunks[0].Status, len(run.Candidates))
 	}
 	saveCaseRun(t, run)
 }

@@ -65,19 +65,6 @@ func TestReviewAnswer_OK(t *testing.T) {
 	}
 }
 
-func TestGenerateAssessment_HTTPError(t *testing.T) {
-	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.WriteHeader(http.StatusInternalServerError)
-		_, _ = w.Write([]byte("boom"))
-	}))
-	defer srv.Close()
-
-	p := New(Config{BaseURL: srv.URL, Model: "m"})
-	if _, err := p.GenerateAssessment(context.Background(), llm.MaterialInput{}, llm.GenerationParams{}); err == nil {
-		t.Fatal("esperaba error por status 500")
-	}
-}
-
 func TestGenerate_RequestIncluyeThinkFalse(t *testing.T) {
 	// El body del request a Ollama DEBE incluir "think":false (evita el `{}` de los
 	// modelos con thinking como qwen3 bajo format:json). Se verifica que la clave
@@ -266,5 +253,153 @@ func TestReviewAnswer_UnparseableIsQualityError(t *testing.T) {
 	_, err := New(Config{BaseURL: srv.URL, Model: "m"}).ReviewAnswer(context.Background(), llm.ReviewRequest{})
 	if !errors.Is(err, llm.ErrLLMQuality) || !strings.Contains(err.Error(), "no parseable") {
 		t.Fatalf("se esperaba un error de calidad «no parseable», salió %v", err)
+	}
+}
+
+// repeatLimitResponse es el cuerpo literal del 500 de Ollama 0.34.4 ante un bucle.
+const repeatLimitResponse = `{"error":"prediction aborted, token repeat limit reached"}`
+
+// statusServer responde siempre el mismo estado y cuerpo.
+func statusServer(status int, body string) *httptest.Server {
+	return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.WriteHeader(status)
+		_, _ = w.Write([]byte(body))
+	}))
+}
+
+// El 500 por bucle de repetición sale del proveedor como fallo de calidad, con su texto.
+func TestGenerate_RepeatLimit500IsQuality(t *testing.T) {
+	srv := statusServer(http.StatusInternalServerError, repeatLimitResponse)
+	defer srv.Close()
+	p := New(Config{BaseURL: srv.URL, Model: "m"})
+	ctx := context.Background()
+
+	calls := map[string]func() error{
+		"ProposeCandidates": func() error {
+			_, err := p.ProposeCandidates(ctx, llm.ProposeCandidatesInput{})
+			return err
+		},
+		"DigestChunk": func() error {
+			_, err := p.DigestChunk(ctx, llm.DigestChunkInput{})
+			return err
+		},
+		"ReviewAnswer": func() error {
+			_, err := p.ReviewAnswer(ctx, llm.ReviewRequest{})
+			return err
+		},
+		"PrepareQuestion": func() error {
+			_, err := p.PrepareQuestion(ctx, llm.PrepRequest{})
+			return err
+		},
+	}
+	for name, call := range calls {
+		err := call()
+		if !errors.Is(err, ErrRepeatLimit) || !errors.Is(err, llm.ErrLLMQuality) {
+			t.Errorf("%s: se esperaba ErrRepeatLimit (calidad), salió %v", name, err)
+			continue
+		}
+		if !strings.Contains(err.Error(), "token repeat limit reached") || !strings.Contains(err.Error(), "500") {
+			t.Errorf("%s: el error no conserva el estado y el texto de Ollama: %v", name, err)
+		}
+	}
+}
+
+// Cualquier otro estado no 2xx sigue siendo infraestructura: sube sin el centinela de
+// calidad (el 500 con otro texto, y el texto del bucle con otro estado).
+func TestGenerateAssessment_HTTPError(t *testing.T) {
+	cases := []struct {
+		status int
+		body   string
+	}{
+		{http.StatusInternalServerError, "boom"},
+		{http.StatusServiceUnavailable, repeatLimitResponse},
+		{http.StatusInternalServerError, `{"error":"model runner has unexpectedly stopped"}`},
+	}
+	for _, c := range cases {
+		srv := statusServer(c.status, c.body)
+		_, err := New(Config{BaseURL: srv.URL, Model: "m"}).GenerateAssessment(context.Background(), llm.MaterialInput{}, llm.GenerationParams{})
+		srv.Close()
+		if err == nil || errors.Is(err, llm.ErrLLMQuality) {
+			t.Errorf("%d %q: se esperaba un error de infraestructura, salió %v", c.status, c.body, err)
+		}
+	}
+}
+
+// La semilla viaja solo en los reintentos de «leer» y «preguntar»; el resto de las
+// peticiones lleva en options lo mismo que antes: solo la temperatura.
+func TestGenerate_SeedOnlyOnMaterialRetry(t *testing.T) {
+	var bodies []map[string]any
+	response := `{"version":1,"chunk_topic":"t","summary":"s","main_ideas":["i"],"candidates":[],"category":"central",` +
+		`"verdict":"correct","score":1,"feedback":"ok","ideas":["a"]}`
+	srv := capturingServer(t, response, &bodies)
+	defer srv.Close()
+	p := New(Config{BaseURL: srv.URL, Model: "m"})
+	ctx := context.Background()
+	retry := llm.InvalidOutputRetryTemperature
+
+	options := func(from int) []map[string]any {
+		out := make([]map[string]any, 0, len(bodies)-from)
+		for _, b := range bodies[from:] {
+			out = append(out, b["options"].(map[string]any))
+		}
+		return out
+	}
+
+	// Con temperatura de reintento: las dos mitades de «leer» y «preguntar» mandan seed.
+	if _, err := p.DigestChunk(ctx, llm.DigestChunkInput{Temperature: &retry}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.ProposeCandidates(ctx, llm.ProposeCandidatesInput{Temperature: &retry}); err != nil {
+		t.Fatal(err)
+	}
+	seeded := options(0)
+	if len(seeded) != 3 {
+		t.Fatalf("se esperaban 3 peticiones con reintento, hubo %d", len(seeded))
+	}
+	for i, o := range seeded {
+		seed, ok := o["seed"].(float64)
+		if !ok || seed == 0 || o["temperature"] != retry {
+			t.Errorf("petición %d del reintento de material: options %v (se espera seed distinta de cero y temperatura %v)", i, o, retry)
+		}
+	}
+
+	// Sin temperatura de reintento, y en toda llamada que no es del material: sin seed.
+	mark := len(bodies)
+	unseeded := []func() error{
+		func() error { _, err := p.DigestChunk(ctx, llm.DigestChunkInput{}); return err },
+		func() error { _, err := p.ProposeCandidates(ctx, llm.ProposeCandidatesInput{}); return err },
+		func() error { _, err := p.ReviewAnswer(ctx, llm.ReviewRequest{Temperature: &retry}); return err },
+		func() error {
+			_, err := p.JudgePairEquivalence(ctx, llm.PairEquivalenceRequest{Temperature: &retry})
+			return err
+		},
+		func() error {
+			_, err := p.CheckCriterion(ctx, llm.CriterionCheckRequest{Temperature: &retry})
+			return err
+		},
+		func() error { _, err := p.ExtractIdeas(ctx, llm.ExtractIdeasRequest{}); return err },
+		func() error { _, err := p.ScoreRelevance(ctx, llm.RelevanceRequest{}); return err },
+		func() error { _, err := p.PrepareQuestion(ctx, llm.PrepRequest{}); return err },
+	}
+	for i, call := range unseeded {
+		if err := call(); err != nil {
+			t.Fatalf("llamada %d sin semilla: %v", i, err)
+		}
+	}
+	for i, o := range options(mark) {
+		if len(o) != 1 || o["temperature"] == nil {
+			t.Errorf("petición %d: options %v (se espera solo temperature, como antes)", i, o)
+		}
+	}
+	// El cuerpo entero lleva las seis claves de siempre y ninguna más.
+	for i, b := range bodies[mark:] {
+		for _, key := range []string{"model", "prompt", "stream", "format", "think", "options"} {
+			if _, ok := b[key]; !ok {
+				t.Errorf("petición %d: falta la clave %q", i, key)
+			}
+		}
+		if len(b) != 6 {
+			t.Errorf("petición %d: el cuerpo trae %d claves, se esperan 6: %v", i, len(b), b)
+		}
 	}
 }

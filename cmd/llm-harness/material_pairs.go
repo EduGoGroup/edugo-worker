@@ -10,7 +10,8 @@ package main
 //   - "judge_only": con un embedder fijo en la zona gris. Toda pareja que las letras
 //     no deciden llega al juez: mide al juez solo.
 //
-// Una corrida por pareja y por medida, sin repetir. Un error del juez es un dato.
+// Una corrida por pareja y por medida, sin repetir; el único reintento es el de la
+// propia pasada ante una salida inválida del juez. Un error del juez es un dato.
 
 import (
 	"context"
@@ -149,6 +150,13 @@ func measurePair(ctx context.Context, p materialPair, embedder llm.Embedder, jud
 		return m, nil
 	}
 	switch {
+	case rep.PairsUndecided == 1:
+		// The judge failed on quality twice and the pass left the pair ungrouped: that
+		// is an invalid output of the judge, never a "no_dup".
+		m.Tier = pairTierLLM
+		m.ErrorKind = errKindInvalidOutput
+		m.Error = "el juez no decidió la pareja: salida inválida en la llamada y en su reintento"
+		return m, nil
 	case rep.PairsText == 1:
 		m.Tier = pairTierText
 	case rep.PairsEmbed == 1:

@@ -17,6 +17,18 @@ import (
 	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
+// ErrRepeatLimit marks Ollama's 500 "token repeat limit reached": the model got stuck
+// repeating one token and Ollama aborted the prediction. The server is fine; it is the
+// model's output that failed, so it wraps llm.ErrLLMQuality (HU-IA.9).
+var ErrRepeatLimit = fmt.Errorf("%w: ollama cortó un bucle de repetición del modelo", llm.ErrLLMQuality)
+
+// repeatLimitBody is the text Ollama 0.34.4 puts in the body of that 500.
+const repeatLimitBody = "token repeat limit reached"
+
+// materialRetrySeed is the fixed, non-zero seed of the material quality retries: at the
+// retry temperature it makes the draw repeatable from one run to the next (HU-IA.9).
+const materialRetrySeed = 7919
+
 // Config configura el provider Ollama. Se inyecta desde bootstrap/config; el
 // provider NUNCA lee env directo (D-039.3).
 type Config struct {
@@ -81,10 +93,13 @@ type generateRequest struct {
 	Options *generateOptions `json:"options,omitempty"`
 }
 
-// generateOptions son las opciones de muestreo de Ollama que el worker fija.
-// Hoy solo temperature (determinismo); ampliable (top_p, seed) sin tocar callers.
+// generateOptions son las opciones de muestreo de Ollama que el worker fija: la
+// temperatura siempre y, solo en los reintentos del material, la semilla (HU-IA.9).
 type generateOptions struct {
 	Temperature float64 `json:"temperature"`
+	// Seed es nil salvo en un reintento de «leer» o «preguntar»: sin ella, el cuerpo
+	// de la petición es el de siempre.
+	Seed *int `json:"seed,omitempty"`
 }
 
 // generateResponse es la respuesta (con stream:false, un solo objeto).
@@ -197,16 +212,15 @@ func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest
 // control, a ~+22% de latencia. El caller valida contra ChunkArtifactsV1, igual.
 func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
 	// Override opcional de temperatura (jitter del reintento por calidad, plan 043);
-	// nil = temperatura por instancia (determinista). Aplica a AMBAS mitades.
-	temperature := p.temperature
-	if in.Temperature != nil {
-		temperature = *in.Temperature
-	}
+	// nil = temperatura por instancia (determinista). Aplica a AMBAS mitades, y con él
+	// viaja la semilla fija del reintento.
+	options := p.materialOptions(in.Temperature)
 
 	// A1: summary encadenable + tema (la mitad que sostiene el pipeline, va primero).
-	outS, err := p.generateWithTemperature(ctx, llm.BuildDigestSummaryPrompt(in), temperature)
+	outS, err := p.generateWith(ctx, llm.BuildDigestSummaryPrompt(in), options, jsonFormat)
 	if err != nil {
-		// Fallo de transporte/HTTP: es INFRA, sube SIN el sentinel de calidad.
+		// Transporte o HTTP: INFRA, sube SIN el sentinel de calidad. La excepción es el
+		// 500 del bucle de repetición (ErrRepeatLimit), que ya llega como calidad.
 		return nil, err
 	}
 	rawS, err := llm.ExtractJSON(outS)
@@ -220,7 +234,7 @@ func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*l
 	}
 
 	// A2: solo las ideas del trozo.
-	outI, err := p.generateWithTemperature(ctx, llm.BuildDigestIdeasPrompt(in), temperature)
+	outI, err := p.generateWith(ctx, llm.BuildDigestIdeasPrompt(in), options, jsonFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -241,14 +255,12 @@ func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*l
 // cada candidata contra CandidatePayloadV1.
 func (p *Provider) ProposeCandidates(ctx context.Context, in llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
 	prompt := llm.BuildProposeCandidatesPrompt(in)
-	// Override opcional de temperatura (jitter del reintento por calidad de la fase B).
-	temperature := p.temperature
-	if in.Temperature != nil {
-		temperature = *in.Temperature
-	}
-	out, err := p.generateWithTemperature(ctx, prompt, temperature)
+	// Override opcional de temperatura (jitter del reintento por calidad de la fase B),
+	// con la semilla fija del reintento.
+	out, err := p.generateWith(ctx, prompt, p.materialOptions(in.Temperature), jsonFormat)
 	if err != nil {
-		// Fallo de transporte/HTTP: INFRA, sube SIN el sentinel de calidad.
+		// Transporte o HTTP: INFRA, sube SIN el sentinel de calidad. La excepción es el
+		// 500 del bucle de repetición (ErrRepeatLimit), que ya llega como calidad.
 		return nil, err
 	}
 	rawJSON, err := llm.ExtractJSON(out)
@@ -264,14 +276,18 @@ func (p *Provider) ProposeCandidates(ctx context.Context, in llm.ProposeCandidat
 
 // generate ejecuta POST /api/generate con la temperatura por instancia del provider.
 func (p *Provider) generate(ctx context.Context, prompt string) (string, error) {
-	return p.generateWithTemperature(ctx, prompt, p.temperature)
+	return p.generateFormat(ctx, prompt, p.temperature, jsonFormat)
 }
 
-// generateWithTemperature ejecuta POST /api/generate con una temperatura explícita y
-// devuelve el texto crudo del modelo. La usa DigestChunk para aplicar el jitter del
-// reintento por calidad sin cambiar el default determinista del resto de llamadas.
-func (p *Provider) generateWithTemperature(ctx context.Context, prompt string, temperature float64) (string, error) {
-	return p.generateFormat(ctx, prompt, temperature, jsonFormat)
+// materialOptions son las opciones de una llamada del material («leer» o «preguntar»):
+// sin override, la temperatura del proveedor y nada más; con el override del reintento
+// de calidad, esa temperatura y la semilla fija.
+func (p *Provider) materialOptions(override *float64) generateOptions {
+	if override == nil {
+		return generateOptions{Temperature: p.temperature}
+	}
+	seed := materialRetrySeed
+	return generateOptions{Temperature: *override, Seed: &seed}
 }
 
 // temperatureFor devuelve la temperatura de una llamada: la de la petición si viene
@@ -286,13 +302,20 @@ func (p *Provider) temperatureFor(override *float64) float64 {
 // generateFormat ejecuta POST /api/generate con una temperatura y un format
 // explícitos ("json" o un JSON Schema) y devuelve el texto crudo del modelo.
 func (p *Provider) generateFormat(ctx context.Context, prompt string, temperature float64, format json.RawMessage) (string, error) {
+	return p.generateWith(ctx, prompt, generateOptions{Temperature: temperature}, format)
+}
+
+// generateWith ejecuta POST /api/generate con las opciones y el format dados. Un estado
+// no 2xx es un error de infraestructura, salvo el 500 con que Ollama corta un bucle de
+// repetición del modelo: ese sale como ErrRepeatLimit (calidad) con el mensaje original.
+func (p *Provider) generateWith(ctx context.Context, prompt string, options generateOptions, format json.RawMessage) (string, error) {
 	reqBody := generateRequest{
 		Model:   p.model,
 		Prompt:  prompt,
 		Stream:  false,
 		Format:  format,
 		Think:   false,
-		Options: &generateOptions{Temperature: temperature},
+		Options: &options,
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -317,7 +340,11 @@ func (p *Provider) generateFormat(ctx context.Context, prompt string, temperatur
 		return "", fmt.Errorf("reading ollama response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		text := strings.TrimSpace(string(body))
+		if resp.StatusCode == http.StatusInternalServerError && strings.Contains(text, repeatLimitBody) {
+			return "", fmt.Errorf("%w: ollama returned status %d: %s", ErrRepeatLimit, resp.StatusCode, text)
+		}
+		return "", fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, text)
 	}
 
 	var gr generateResponse
