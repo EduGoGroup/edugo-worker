@@ -44,7 +44,9 @@ const maxSummaryWords = 120
 // reintento; los fallos de INFRA (Ollama caído/timeout/5xx) siguen siendo transitorios
 // (reintento del evento / DLQ), sin reintento in-processor. La misma política gobierna la
 // fase A (digest) y la fase B (propuesta de candidatas): ambas envuelven sus errores de
-// parseo con llm.ErrLLMQuality para distinguir calidad de infra.
+// parseo con llm.ErrLLMQuality para distinguir calidad de infra. El 500 con que Ollama
+// corta un bucle de repetición del modelo es CALIDAD: el proveedor ya lo trae con el
+// sentinel (HU-IA.9).
 const (
 	// llmQualityRetries son los reintentos in-processor de una llamada del LLM ante un
 	// fallo de CALIDAD (1 reintento ⇒ 2 intentos totales).
@@ -555,9 +557,10 @@ func (p *MaterialPipelineProcessor) attemptDigest(ctx context.Context, jobID str
 }
 
 // isQualityFailure distingue un fallo de CALIDAD del LLM (salida degenerada: parseo/JSON,
-// artefactos que no cumplen el contrato, summary inválido) de uno de INFRA (Ollama caído,
-// timeout, HTTP 5xx). Solo la calidad activa el reintento con jitter y el aislamiento del
-// chunk; la infra sigue subiendo como transitorio (reintento del evento / DLQ intactos).
+// artefactos que no cumplen el contrato, summary inválido, o el 500 del bucle de repetición
+// que el proveedor ya marca con llm.ErrLLMQuality) de uno de INFRA (Ollama caído, timeout,
+// cualquier otro HTTP 5xx). Solo la calidad activa el reintento con jitter y el aislamiento
+// del chunk; la infra sigue subiendo como transitorio (reintento del evento / DLQ intactos).
 func isQualityFailure(err error) bool {
 	return errors.Is(err, llm.ErrLLMQuality) || errors.Is(err, ErrInvalidChunkArtifacts)
 }
