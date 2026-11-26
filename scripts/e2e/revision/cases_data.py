@@ -180,7 +180,7 @@ CASES = {
             "actors": "science_5b", "prep_mode": "offline",
             "questions": [open_q("abierta", WATER_TEXT + " (R11).", WATER_PARTIAL, WATER_EXPECTED,
                                  WATER_RUBRIC)]},
-    "R12": {"title": "Revisión: el modelo no responde (Ollama parado antes de entregar)",
+    "R12": {"title": "Revisión: el modelo no responde y el rescate lo corrige solo (Ollama parado antes de entregar)",
             "actors": "science_5b", "prep_mode": "offline",
             "questions": [open_q("abierta", WATER_TEXT + " (R12).", WATER_PARTIAL, WATER_EXPECTED,
                                  WATER_RUBRIC)]},
@@ -196,13 +196,18 @@ CASES = {
             "actors": "english_a2",
             "probe_question": open_q("sonda", "Write one sentence about your school. (R13)", None,
                                      rubric="One correct sentence.")},
+    "R14n": {"title": "Rescate: un intento entregado sin mensaje reaparece tras la edad mínima (sin modelo)",
+             "actors": "english_a2", "prep_mode": "offline",
+             "questions": [open_q("abierta", "Describe your favourite food in two sentences. (R14n)",
+                                  "I like rice. It is very tasty.",
+                                  rubric="Two sentences in present simple.")]},
 }
 
 ORDER = ["P1", "P2", "P3", "P3n", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R7n", "R8", "R9", "R10",
-         "R11", "R12", "R12n", "R12b", "R13"]
+         "R11", "R12", "R12n", "R12b", "R13", "R14n"]
 
 # The cases whose green does not depend on what a model writes (ADR 0048): the only ones
 # that can be a gate. Every other case is measured. `needs_model` is set on each case.
-NO_MODEL = ("P3n", "R5", "R7n", "R8", "R11", "R12n", "R13")
+NO_MODEL = ("P3n", "R5", "R7n", "R8", "R11", "R12n", "R13", "R14n")
 for _name, _cfg in CASES.items():
     _cfg["needs_model"] = _name not in NO_MODEL
