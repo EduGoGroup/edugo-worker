@@ -9,11 +9,14 @@ package main
 //     tenga (internal/infra/postgres/pipeline/chunk.go de learning);
 //   - las candidatas se listan por trozo y luego por id;
 //   - los conteos de trozos del job, por estado;
-//   - la máquina de estados del job (a processing desde pending o processing; a
-//     done o failed solo desde processing) y la de la candidata (un estado terminal
-//     no cambia a otro distinto): lo demás es un conflicto (409);
+//   - la máquina de estados del job (HU-IA.5): a processing o a failed desde pending
+//     o processing; done NO es un destino del PATCH (409) y un job terminal no cambia;
+//     la fase nunca retrocede (queda la mayor); y la de la candidata (un estado
+//     terminal no cambia a otro distinto): lo demás es un conflicto (409);
 //   - las ideas del job son la unión de las main_ideas de sus trozos cerrados;
-//   - la entrega falla sin seleccionadas (422, permanente).
+//   - la entrega es lo único que cierra el job en done: procede desde processing,
+//     fase 1; falla sin seleccionadas (422, permanente, con el mismo error tipado que
+//     el cliente) y sobre un job en otro estado o fase es un conflicto (409).
 //
 // Es una copia: si learning cambia una de estas reglas, hay que cambiarla aquí.
 // Sus tests (material_store_test.go) la fijan.
@@ -66,7 +69,7 @@ type memoryStore struct {
 
 	// Marcas de tiempo del riel, para los segundos por fase.
 	chunkedAt   time.Time // fin de la fase 0 (trozos guardados)
-	phase1Done  time.Time // fin de la fase 1 (job en done, fase 1)
+	phase1Done  time.Time // fin de la fase 1 (primer PATCH processing con fase 1)
 	deliveredAt time.Time
 }
 
@@ -216,7 +219,9 @@ func (s *memoryStore) MarkChunkFailed(_ context.Context, chunkID, reason string)
 	return nil
 }
 
-// UpdateJobStatus aplica la máquina de estados del job de learning.
+// UpdateJobStatus aplica la máquina de estados del job de learning: a processing o
+// a failed desde pending o processing; done no es un destino (lo escribe la entrega);
+// la fase nunca retrocede.
 func (s *memoryStore) UpdateJobStatus(_ context.Context, jobID, status string, phase int16, lastError *string) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -226,34 +231,34 @@ func (s *memoryStore) UpdateJobStatus(_ context.Context, jobID, status string, p
 	from := s.job.Status
 	allowed := false
 	switch status {
-	case storeStatusProcessing:
+	case storeStatusProcessing, storeStatusFailed:
 		allowed = from == storeStatusPending || from == storeStatusProcessing
-	case storeStatusDone, storeStatusFailed:
-		allowed = from == storeStatusProcessing
 	}
 	if !allowed {
 		return m2m.ErrPipelineConflict
 	}
 	s.job.Status = status
-	s.job.Phase = phase
+	if phase > s.job.Phase {
+		s.job.Phase = phase
+	}
 	s.job.LastError = lastError
-	if status == storeStatusDone && phase == 1 {
+	// El ancla de la fase 1 se fija una sola vez: los latidos y las reentregas
+	// vuelven a pedir processing y no deben moverla.
+	if status == storeStatusProcessing && s.job.Phase >= 1 && s.phase1Done.IsZero() {
 		s.phase1Done = time.Now()
 	}
 	return nil
 }
 
-// DeliverJob arma el borrador con las seleccionadas. Sin seleccionadas falla con un
-// permanente (el 422 de learning); una reentrega sobre un job ya entregado devuelve
-// el mismo borrador.
+// DeliverJob arma el borrador con las seleccionadas y cierra el job en done, fase 2,
+// en el orden de learning: una reentrega sobre un job ya entregado devuelve el mismo
+// borrador; sin seleccionadas falla con el permanente tipado (el 422 de learning); y
+// solo procede desde processing, fase 1 (lo demás es un conflicto, 409).
 func (s *memoryStore) DeliverJob(_ context.Context, jobID string) (string, int, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if jobID != s.job.JobID {
 		return "", 0, s.notFound("job", jobID)
-	}
-	if s.job.Status != storeStatusDone {
-		return "", 0, m2m.ErrPipelineConflict
 	}
 	selected := 0
 	for _, c := range s.candidates {
@@ -265,10 +270,14 @@ func (s *memoryStore) DeliverJob(_ context.Context, jobID string) (string, int, 
 		return *s.job.AssessmentID, selected, nil
 	}
 	if selected == 0 {
-		return "", 0, fmt.Errorf("%w: el job %s no tiene candidatas seleccionadas que entregar (422)", m2m.ErrLearningPermanent, jobID)
+		return "", 0, fmt.Errorf("%w: job %s (422)", m2m.ErrNoSelectedCandidates, jobID)
+	}
+	if s.job.Status != storeStatusProcessing || s.job.Phase != 1 {
+		return "", 0, m2m.ErrPipelineConflict
 	}
 	id := "draft-" + jobID
 	s.job.AssessmentID = &id
+	s.job.Status = storeStatusDone
 	s.job.Phase = 2
 	s.deliveredAt = time.Now()
 	return id, selected, nil
@@ -388,13 +397,13 @@ func (s *memoryStore) delivered() bool {
 	return s.job.Status == storeStatusDone && s.job.AssessmentID != nil && *s.job.AssessmentID != ""
 }
 
-// seedCandidates deja el almacén con el job cerrado en fase 1 y un trozo por
+// seedCandidates deja el almacén con el job en processing, fase 1, y un trozo por
 // candidata dada, cada una viva. Lo usa el modo de parejas, que entra directo a la
 // pasada de duplicadas sin pasar por las fases 0 y 1.
 func (s *memoryStore) seedCandidates(payloads ...json.RawMessage) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	s.job.Status = storeStatusDone
+	s.job.Status = storeStatusProcessing
 	s.job.Phase = 1
 	for i, p := range payloads {
 		c := &memChunk{id: fmt.Sprintf("chunk-%03d", i), seq: i, status: storeStatusDone}

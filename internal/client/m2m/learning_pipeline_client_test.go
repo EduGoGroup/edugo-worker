@@ -428,6 +428,41 @@ func TestLearningPipelineClient_DeliverJob_422Permanent(t *testing.T) {
 	}
 }
 
+func TestLearningPipelineClient_DeliverJob_422NoSelected(t *testing.T) {
+	// HU-IA.5 (deuda 171): el 422 sin seleccionadas (code PIPELINE_NO_SELECTED_CANDIDATES,
+	// el cuerpo real de learning) es ErrNoSelectedCandidates Y sigue siendo permanente;
+	// otro 422 (PIPELINE_DELIVERY_REJECTED) es solo permanente.
+	cases := []struct {
+		code       string
+		noSelected bool
+	}{
+		{"PIPELINE_NO_SELECTED_CANDIDATES", true},
+		{"PIPELINE_DELIVERY_REJECTED", false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.code, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnprocessableEntity)
+				_, _ = w.Write([]byte(`{"error":"unprocessable_entity","message":"el job no se puede entregar","code":"` + tc.code + `"}`))
+			}))
+			defer srv.Close()
+
+			c := NewLearningPipelineClient(LearningPipelineClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"tok"}})
+			_, _, err := c.DeliverJob(context.Background(), "job-1")
+			if !errors.Is(err, ErrLearningPermanent) {
+				t.Fatalf("un 422 de la entrega es permanente, got: %v", err)
+			}
+			if got := errors.Is(err, ErrNoSelectedCandidates); got != tc.noSelected {
+				t.Fatalf("errors.Is(err, ErrNoSelectedCandidates) = %v, se esperaba %v (err: %v)", got, tc.noSelected, err)
+			}
+			if errors.Is(err, ErrPipelineConflict) {
+				t.Fatal("un 422 no es ErrPipelineConflict")
+			}
+		})
+	}
+}
+
 func TestLearningPipelineClient_DeliverJob_EmptyJobID(t *testing.T) {
 	c := NewLearningPipelineClient(LearningPipelineClientConfig{BaseURL: "http://unused", TokenProvider: staticToken{"tok"}})
 	if _, _, err := c.DeliverJob(context.Background(), ""); err == nil {
