@@ -147,12 +147,29 @@ func BuildDigestChunkPrompt(in DigestChunkInput) string {
 	return b.String()
 }
 
+// proposeExampleMultipleSelect y proposeExampleOpenEnded son los dos ejemplos que el
+// prompt de la llamada B enseña al modelo (HU-IA.8). Van como JSON entero para que un
+// test los pase por ValidateCandidatePayload: un ejemplo roto enseñaría a romper el
+// contrato. El tema (instrumentos de cuerda) es ajeno a los casos del arnés, y el texto
+// es distintivo a propósito: una candidata que lo copie se encuentra por igualdad.
+const (
+	proposeExampleMultipleSelect = `{"version":1,"question_type":"multiple_select","question_text":"¿Cuáles de estos instrumentos son de cuerda frotada?","options":["Violín","Trompeta","Viola","Tambor"],"correct_answer":["Violín","Viola"],"source_ideas":["Los instrumentos de cuerda frotada son el violín, la viola, el violonchelo y el contrabajo"]}`
+	proposeExampleOpenEnded      = `{"version":1,"question_type":"open_ended","question_text":"Explica por qué un violonchelo suena más grave que un violín.","explanation":"Debe mencionar: sus cuerdas son más largas y gruesas; una cuerda más larga y gruesa vibra más despacio.","source_ideas":["Las cuerdas largas y gruesas vibran más despacio y dan sonidos graves"]}`
+)
+
 // BuildProposeCandidatesPrompt arma el prompt de la llamada B. Recibe SOLO el tema y
 // las ideas del trozo (jamás el texto crudo) y pide {candidates:[…]} con 2–4 preguntas
 // candidatas conformes a CandidatePayloadV1 (misma forma de correct_answer que la
 // generación 038). Criterios SIN sesgo (lección 045): preguntas claras y justas, sin
 // inclinar la respuesta. Se envuelve en {candidates:[…]} —no un arreglo pelado— para
 // que ExtractJSON (que aísla un objeto {…}) lo capture.
+//
+// La mezcla de tipos (HU-IA.8): el prompt dice qué tipo conviene a qué idea y que no
+// hace falta usar todos ni seguir el orden de la lista; pide la selección múltiple solo
+// cuando las ideas enumeran dos o más elementos correctos, y la abierta, como mucho una
+// por trozo, con "explanation" como rúbrica breve («Debe mencionar: …») de la que la
+// preparación saca los criterios. Lo que el modelo hace con este texto se mide con el
+// arnés (ADR 0048); los tests solo afirman que el texto está.
 func BuildProposeCandidatesPrompt(in ProposeCandidatesInput) string {
 	lang := in.Language
 	if lang == "" {
@@ -166,6 +183,12 @@ func BuildProposeCandidatesPrompt(in ProposeCandidatesInput) string {
 	b.WriteString("- Forma exacta: {\"candidates\":[{\"version\":1,\"question_type\":\"…\",\"question_text\":\"…\",\"options\":[\"…\"],\"correct_answer\":…,\"explanation\":\"…\",\"source_ideas\":[\"…\"]}]}.\n")
 	b.WriteString("- Propón entre 2 y 4 candidatas variadas; prioriza cubrir ideas DISTINTAS. Está bien sobregenerar (otro paso las filtrará).\n")
 	b.WriteString("- \"question_type\" ∈ {\"multiple_choice\",\"multiple_select\",\"true_false\",\"short_answer\",\"open_ended\"}.\n")
+	b.WriteString("- ELIGE el tipo según lo que dice cada idea:\n")
+	b.WriteString("  · un dato, un nombre o una fecha: short_answer o multiple_choice.\n")
+	b.WriteString("  · una afirmación que se puede negar: true_false.\n")
+	b.WriteString("  · una lista de elementos: multiple_select.\n")
+	b.WriteString("  · una causa, un proceso, una comparación o una consecuencia: open_ended.\n")
+	b.WriteString("- NO hace falta usar todos los tipos ni seguir el orden de la lista; dos preguntas del mismo tipo están bien si las ideas lo piden.\n")
 	b.WriteString("- \"options\": ARREGLO de strings con ≥2 elementos SOLO para multiple_choice y multiple_select; para true_false, short_answer y open_ended OMITE \"options\" (o déjalo como arreglo vacío).\n")
 	b.WriteString("- Las opciones NO llevan marca de correcta. La correcta se indica en \"correct_answer\" por TEXTO, según el tipo:\n")
 	b.WriteString("  · multiple_choice: string que COPIA EXACTAMENTE el texto de una opción.\n")
@@ -173,8 +196,10 @@ func BuildProposeCandidatesPrompt(in ProposeCandidatesInput) string {
 	b.WriteString("  · true_false: string \"true\" o \"false\".\n")
 	b.WriteString("  · short_answer: string con la respuesta esperada.\n")
 	b.WriteString("  · open_ended: OMITE \"correct_answer\".\n")
+	b.WriteString("- multiple_select SOLO si las ideas enumeran 2 o más elementos correctos: cada opción correcta sale de las ideas y \"correct_answer\" es un ARREGLO que copia esas opciones. Ejemplo de forma (no copies su contenido): " + proposeExampleMultipleSelect + "\n")
+	b.WriteString("- open_ended: como mucho UNA por respuesta. Su \"explanation\" es OBLIGATORIA y es una rúbrica breve sacada de las ideas, que empieza por «Debe mencionar:». Ejemplo de forma (no copies su contenido): " + proposeExampleOpenEnded + "\n")
 	b.WriteString("- CRÍTICO: en multiple_choice/multiple_select, \"correct_answer\" copia el TEXTO de la opción carácter por carácter. NUNCA uses letras (A, B, C), números ni índices.\n")
-	b.WriteString("- \"explanation\": opcional, 1 frase que justifica la respuesta.\n")
+	b.WriteString("- \"explanation\": opcional, 1 frase que justifica la respuesta (salvo en open_ended, donde es la rúbrica).\n")
 	b.WriteString("- \"source_ideas\": subconjunto de las IDEAS dadas (copiadas) que sustentan la pregunta.\n")
 	// Sin sesgo (lección 045): preguntas claras y justas, sin inclinar la respuesta ni
 	// regalar pistas; los distractores plausibles pero inequívocamente incorrectos.
