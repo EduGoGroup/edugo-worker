@@ -127,7 +127,7 @@ no arranca Ollama al restaurar el entorno.
 ## Qué deja sembrado
 
 Nada se limpia: cada caso deja su evaluación, su intento y, según el caso, mensajes en colas muertas (R12n,
-R13) o un job `pending` que bloquea su material (M3). El único SQL que escribe es el de R7 y R7n
+R13) o dos jobs `failed` con su motivo, que no bloquean su material (M3). El único SQL que escribe es el de R7 y R7n
 (`llm.review.flow`), que se restaura al terminar el caso.
 
 ## Gate

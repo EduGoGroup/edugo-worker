@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strings"
 	"sync/atomic"
 	"testing"
 
@@ -256,9 +257,10 @@ func TestRail_NoSelectedIsDataNotRedelivery(t *testing.T) {
 	if run.Metrics.Draft.Selected != 0 || run.Metrics.Reduction.DroppedIrrelevant != len(run.Candidates) {
 		t.Fatalf("reducción: %+v", run.Metrics.Reduction)
 	}
-	// Learning no deja pasar un job de done a failed: queda done, en fase 1 y sin borrador.
-	if run.JobStatus != storeStatusDone || run.JobPhase != 1 {
-		t.Fatalf("job en %s fase %d (se espera done fase 1)", run.JobStatus, run.JobPhase)
+	// HU-IA.5 (deuda 171): el job queda failed, en fase 2, con el motivo primero; nunca
+	// done sin borrador.
+	if run.JobStatus != storeStatusFailed || run.JobPhase != 2 || !strings.HasPrefix(run.JobLastError, "Ninguna pregunta generada pasó los filtros: no hay borrador. · ") {
+		t.Fatalf("job en %s fase %d con %q (se espera failed fase 2 con el motivo de la deuda 171)", run.JobStatus, run.JobPhase, run.JobLastError)
 	}
 	saveCaseRun(t, run)
 }

@@ -121,21 +121,59 @@ func TestMemoryStore_TerminalStatusConflict(t *testing.T) {
 		t.Fatalf("candidata inexistente: %v (se espera permanente)", err)
 	}
 
-	// El job: done solo desde processing, y failed no sale de done.
-	j := newMemoryStore("job-2", "")
-	if err := j.UpdateJobStatus(ctx, "job-2", storeStatusDone, 1, nil); !errors.Is(err, m2m.ErrPipelineConflict) {
+	// El job (HU-IA.5, la copia de learning): a processing o a failed desde pending o
+	// processing; done NO es destino del PATCH; un terminal no cambia.
+	off := newMemoryStore("job-2", "")
+	if err := off.UpdateJobStatus(ctx, "job-2", storeStatusFailed, 0, strPtr("apagado")); err != nil {
+		t.Fatalf("pending a failed (pipeline apagado): %v", err)
+	}
+	if err := off.UpdateJobStatus(ctx, "job-2", storeStatusProcessing, 0, nil); !errors.Is(err, m2m.ErrPipelineConflict) {
+		t.Fatalf("failed a processing: %v (se espera conflicto)", err)
+	}
+	j := newMemoryStore("job-3", "")
+	if err := j.UpdateJobStatus(ctx, "job-3", storeStatusDone, 1, nil); !errors.Is(err, m2m.ErrPipelineConflict) {
 		t.Fatalf("pending a done: %v (se espera conflicto)", err)
 	}
-	_ = j.UpdateJobStatus(ctx, "job-2", storeStatusProcessing, 0, nil)
-	if err := j.UpdateJobStatus(ctx, "job-2", storeStatusDone, 1, nil); err != nil {
-		t.Fatalf("processing a done: %v", err)
+	_ = j.UpdateJobStatus(ctx, "job-3", storeStatusProcessing, 0, nil)
+	if err := j.UpdateJobStatus(ctx, "job-3", storeStatusDone, 1, nil); !errors.Is(err, m2m.ErrPipelineConflict) {
+		t.Fatalf("processing a done: %v (se espera conflicto: solo la entrega escribe done)", err)
 	}
-	if err := j.UpdateJobStatus(ctx, "job-2", storeStatusFailed, 2, nil); !errors.Is(err, m2m.ErrPipelineConflict) {
-		t.Fatalf("done a failed: %v (se espera conflicto)", err)
+	// La fase no retrocede y el ancla de la fase 1 se fija una sola vez.
+	if err := j.UpdateJobStatus(ctx, "job-3", storeStatusProcessing, 1, nil); err != nil || j.phase1Done.IsZero() {
+		t.Fatalf("fin de la fase 1: %v, ancla %v", err, j.phase1Done)
 	}
-	// Sin seleccionadas, la entrega es un permanente y el job no gana borrador.
-	if _, _, err := j.DeliverJob(ctx, "job-2"); !errors.Is(err, m2m.ErrLearningPermanent) || j.delivered() {
+	anchor := j.phase1Done
+	if err := j.UpdateJobStatus(ctx, "job-3", storeStatusProcessing, 0, nil); err != nil || j.job.Phase != 1 || !j.phase1Done.Equal(anchor) {
+		t.Fatalf("un latido (processing/0): %v, fase %d, ancla movida=%v", err, j.job.Phase, !j.phase1Done.Equal(anchor))
+	}
+	// Sin seleccionadas, la entrega es el permanente tipado y el job no gana borrador.
+	if _, _, err := j.DeliverJob(ctx, "job-3"); !errors.Is(err, m2m.ErrNoSelectedCandidates) || !errors.Is(err, m2m.ErrLearningPermanent) || j.delivered() {
 		t.Fatalf("entrega sin seleccionadas: %v, delivered=%v", err, j.delivered())
+	}
+
+	// La entrega cierra done/2 solo desde processing/1; reentregar devuelve el mismo
+	// borrador y el done ya no cambia.
+	k := newMemoryStore("job-4", "")
+	k.seedCandidates(json.RawMessage(`{}`))
+	if _, err := k.UpdateCandidates(ctx, []m2m.CandidateUpdate{{ID: "cand-0001", Status: &selected}}); err != nil {
+		t.Fatalf("seleccionar: %v", err)
+	}
+	for _, from := range []string{storeStatusPending, storeStatusFailed} {
+		k.job.Status = from
+		if _, _, err := k.DeliverJob(ctx, "job-4"); !errors.Is(err, m2m.ErrPipelineConflict) || k.delivered() {
+			t.Fatalf("entrega desde %s: %v (se espera conflicto)", from, err)
+		}
+	}
+	k.job.Status = storeStatusProcessing
+	id, n, err := k.DeliverJob(ctx, "job-4")
+	if err != nil || n != 1 || k.job.Status != storeStatusDone || k.job.Phase != 2 || !k.delivered() {
+		t.Fatalf("entrega desde processing/1: %v, %d preguntas, job %s/%d", err, n, k.job.Status, k.job.Phase)
+	}
+	if again, _, err := k.DeliverJob(ctx, "job-4"); err != nil || again != id {
+		t.Fatalf("reentrega: %q, %v (se espera el mismo borrador %q)", again, err, id)
+	}
+	if err := k.UpdateJobStatus(ctx, "job-4", storeStatusFailed, 2, nil); !errors.Is(err, m2m.ErrPipelineConflict) {
+		t.Fatalf("done a failed: %v (se espera conflicto)", err)
 	}
 }
 

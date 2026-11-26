@@ -37,7 +37,7 @@ const maxRedeliveries = 3
 // Desenlaces de un caso.
 const (
 	outcomeComplete   = "complete"   // el job quedó done con borrador
-	outcomeNoDraft    = "no_draft"   // terminó sin borrador por un permanente (p. ej. sin seleccionadas): es un dato
+	outcomeNoDraft    = "no_draft"   // terminó sin borrador por un permanente (p. ej. sin seleccionadas): el job queda failed con su motivo; es un dato
 	outcomeIncomplete = "incomplete" // se agotaron las reentregas: el caso quedó a medias
 )
 

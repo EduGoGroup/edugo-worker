@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"time"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
@@ -57,11 +58,14 @@ type MaterialPipelineClient interface {
 	// MarkChunkFailed aísla un chunk envenenado marcándolo failed. 409 → ErrPipelineConflict
 	// (el chunk ya está done: carrera benigna).
 	MarkChunkFailed(ctx context.Context, chunkID, reason string) error
-	// UpdateJobStatus avanza el estado/fase del job. 409 → ErrPipelineConflict.
+	// UpdateJobStatus avanza el estado/fase del job: `processing` (tomar el job, fin de
+	// fase, latido) o `failed`. El worker NUNCA pide `done`: learning lo rechaza (409) y
+	// solo la entrega lo escribe (HU-IA.5). 409 → ErrPipelineConflict.
 	UpdateJobStatus(ctx context.Context, jobID, status string, phase int16, lastError *string) error
 	// DeliverJob cierra la fase 2 (reduce): arma el draft desde las candidatas `selected`
-	// y lo persiste server-side (assessment_id + job a done fase 2). Devuelve el id del
-	// assessment y su número de preguntas. 422 (sin selected) / 404 → ErrLearningPermanent.
+	// y lo persiste server-side (assessment_id + job a done fase 2; es lo único que deja
+	// un job en `done`). Devuelve el id del assessment y su número de preguntas. 422 sin
+	// selected → m2m.ErrNoSelectedCandidates; otro 422 / 404 → ErrLearningPermanent.
 	DeliverJob(ctx context.Context, jobID string) (assessmentID string, questions int, err error)
 }
 
@@ -94,11 +98,9 @@ type (
 // bootstrap (F3c) con Resources (embedder, providers local/api según RelevanceMode,
 // cliente M2M, config, logger).
 //
-// TargetQuestionsDefault: cupo de la selección final cuando el job no expone
-// `target_questions`. HOY el read-model M2M del GET job (PipelineJob) NO trae los params
-// del job, así que la selección SIEMPRE cae a este default (config del riel, D-044.5). Si
-// una versión futura de learning publica target_questions en el GET job, se amplía
-// PipelineJob y se lee de ahí, cayendo a este default solo cuando venga en cero.
+// TargetQuestionsDefault: el cupo de la selección final. Es el ÚNICO sitio del que sale
+// (config del riel, D-044.5; HU-IA.5): learning ya no escribe `target_questions` en los
+// params del job y el read-model M2M del GET job (PipelineJob) no trae params.
 type ReduceDeps struct {
 	Dedupe                 dedupeRunner
 	Relevance              relevanceRunner
@@ -132,6 +134,10 @@ type MaterialPipelineProcessor struct {
 	phase0   *MaterialPipelinePhase0
 	reduce   ReduceDeps
 	logger   logger.Logger
+
+	// heartbeatInterval es cada cuánto late el job mientras Process lo tiene (HU-IA.5).
+	// El constructor lo deja en jobHeartbeatInterval; los tests lo acortan.
+	heartbeatInterval time.Duration
 }
 
 // NewMaterialPipelineProcessor construye el processor y COMPONE la fase 0 con las
@@ -160,6 +166,8 @@ func NewMaterialPipelineProcessor(
 		phase0:   phase0,
 		reduce:   reduceDeps,
 		logger:   log,
+
+		heartbeatInterval: jobHeartbeatInterval,
 	}
 }
 
@@ -171,8 +179,11 @@ func (p *MaterialPipelineProcessor) EventType() string {
 // Process decodifica el evento, aplica la política de la escuela y orquesta el pipeline.
 // Errores:
 //   - evento malformado → ErrMalformedMaterialEvent (permanente → DLQ).
-//   - política ausente o ≠ "on" → ACK sin trabajo (no es fallo).
+//   - política ausente o ≠ "on" → el job se cierra como failed con su motivo y ACK
+//     (HU-IA.5: la docente ve «Falló» y por qué, no «En cola» para siempre).
 //   - settings inaccesible → transitorio (el consumer reintenta).
+//   - un fallo de servicio en el ÚLTIMO reintento cierra el job como failed antes de
+//     que el mensaje muera; el error sube igual.
 func (p *MaterialPipelineProcessor) Process(ctx context.Context, payload []byte) error {
 	var evt events.MaterialAssessmentRequestedEvent
 	if err := json.Unmarshal(payload, &evt); err != nil {
@@ -192,26 +203,28 @@ func (p *MaterialPipelineProcessor) Process(ctx context.Context, payload []byte)
 	}
 	mode := settingValueOr(settings, settingKeyPipelineMode, pipelineModeOff)
 	if mode != pipelineModeOn {
-		p.logger.Info("carril material→evaluación apagado para la escuela (llm.pipeline.mode≠on), se ignora (ACK)",
+		p.logger.Info("carril material→evaluación apagado para la escuela (llm.pipeline.mode≠on): el job se cierra como failed",
 			"job_id", jobID, "material_id", evt.Payload.MaterialID, "school_id", schoolID, "mode", mode)
-		return nil
+		return p.closeJobPipelineOff(ctx, jobID)
 	}
 
-	return p.orchestrate(ctx, jobID)
+	return p.failOnLastAttempt(ctx, jobID, p.orchestrate(ctx, jobID))
 }
 
 // orchestrate ejecuta el pipeline para un job cuya escuela tiene el riel encendido:
-// guarda de estado, fase 0 determinista, loop de fase 1 (LLM local) y fase 2 (reduce).
-// El modelo de fases del job (status/phase) dirige la reanudación SIN mecanismo nuevo:
-//   - failed → dead-end, nada que hacer (ACK).
-//   - done con assessment_id → fase 2 ya entregada, no-op benigno (ACK).
-//   - done sin assessment_id → done de fase 1: se reanuda directo en la fase 2 (reduce),
-//     sin repetir fase 0/1 (re-disparo del evento sobre un job ya digerido).
-//   - pending/processing → fase 0 + fase 1 y, al completarse, se ENCADENA la fase 2.
+// guarda de estado, tomar el job, fase 0 determinista, loop de fase 1 (LLM local) y
+// fase 2 (reduce). El modelo de fases del job (status/phase) dirige la reanudación SIN
+// mecanismo nuevo (HU-IA.5):
+//   - failed → dead-end, nada que hacer (ACK) y NINGÚN PATCH: lo cerró un fallo
+//     anterior o el barrido de jobs colgados.
+//   - done → solo la entrega lo escribe, así que ya tiene borrador: no-op (ACK).
+//   - pending/processing → el worker TOMA el job (PATCH processing, que además es el
+//     primer latido) y late mientras lo procesa. Con fase < 1 corre la fase 0 y la 1;
+//     con fase ≥ 1 (reentrega de un job ya digerido) va directo a la fase 2.
 //
-// Un error permanente marca el job failed (best-effort) antes de subir para que caiga al
-// DLQ con rastro; uno transitorio se deja subir intacto (el redelivery reanuda por status
-// sin marcar nada: las pasadas del reduce saltan lo terminal).
+// Un error permanente marca el job failed con su motivo antes de subir para que caiga
+// al DLQ con rastro; uno transitorio se deja subir intacto (el redelivery reanuda por
+// status sin marcar nada: las pasadas del reduce saltan lo terminal).
 func (p *MaterialPipelineProcessor) orchestrate(ctx context.Context, jobID string) error {
 	job, err := p.pipeline.GetJob(ctx, jobID)
 	if err != nil {
@@ -227,36 +240,41 @@ func (p *MaterialPipelineProcessor) orchestrate(ctx context.Context, jobID strin
 		return nil
 	}
 	if job.Status == jobStatusDone {
-		if phase2Delivered(job) {
-			p.logger.Info("job ya entregado (fase 2 completa, assessment asignado), no-op (ACK)",
-				"job_id", jobID, "assessment_id", *job.AssessmentID)
+		p.logger.Info("job ya entregado (done), no-op (ACK)", "job_id", jobID)
+		return nil
+	}
+
+	// Tomar el job: pending → processing (o processing → processing en una reentrega).
+	// Va DESPUÉS de leer la política y el estado: con el riel apagado, o sobre un job
+	// ya cerrado, no sale ningún PATCH processing. 409 = el job se cerró entre la
+	// lectura y el PATCH (el barrido, otro worker): nada que procesar.
+	if err := p.pipeline.UpdateJobStatus(ctx, jobID, jobStatusProcessing, job.Phase, nil); err != nil {
+		if errors.Is(err, m2m.ErrPipelineConflict) {
+			p.logger.Info("el job se cerró antes de tomarlo (409 en el PATCH processing), ACK", "job_id", jobID)
 			return nil
 		}
-		// done de fase 1: reanudar directo en la fase 2 (reduce), sin repetir fase 0/1.
-		p.logger.Info("job done de fase 1, se reanuda en la fase 2 (reduce)", "job_id", jobID)
-		return p.runPhase2(ctx, jobID)
+		return p.failIfPermanent(ctx, jobID, job.Phase, fmt.Errorf("tomando el job %s (processing): %w", jobID, err))
+	}
+	stopHeartbeat := p.startJobHeartbeat(ctx, jobID)
+	defer stopHeartbeat()
+
+	if job.Phase < 1 {
+		// Fase 0 (determinista, sin LLM): idempotente y reanudable; se salta sola si el
+		// job ya está porcionado. Sus errores permanentes (sentinels de PDF) marcan failed.
+		if err := p.phase0.Run(ctx, jobID); err != nil {
+			return p.failIfPermanent(ctx, jobID, 0, err)
+		}
+
+		// Fase 1 (LLM local): loop de chunks pendientes. Deja el job en processing/phase 1.
+		if err := p.runPhase1(ctx, jobID); err != nil {
+			return err
+		}
+	} else {
+		p.logger.Info("job con la fase 1 completa, se reanuda en la fase 2 (reduce)", "job_id", jobID)
 	}
 
-	// Fase 0 (determinista, sin LLM): idempotente y reanudable; se salta sola si el job
-	// ya está porcionado. Sus errores permanentes (sentinels de PDF) marcan failed.
-	if err := p.phase0.Run(ctx, jobID); err != nil {
-		return p.failIfPermanent(ctx, jobID, 0, err)
-	}
-
-	// Fase 1 (LLM local): loop de chunks pendientes. Cierra el job en done/phase1.
-	if err := p.runPhase1(ctx, jobID); err != nil {
-		return err
-	}
-
-	// Fase 2 (reduce): encadenada tras la fase 1 recién completa.
+	// Fase 2 (reduce): con el job en processing/phase 1; la entrega lo cierra en done.
 	return p.runPhase2(ctx, jobID)
-}
-
-// phase2Delivered indica si un job en `done` ya pasó la fase 2 (draft entregado): la
-// entrega M2M (D-044.6) le asigna un assessment_id server-side, que es la prueba durable
-// de que el reduce terminó. Un done sin assessment_id es done de fase 1 (reduce pendiente).
-func phase2Delivered(job *m2m.PipelineJob) bool {
-	return job.AssessmentID != nil && *job.AssessmentID != ""
 }
 
 // runPhase2 ejecuta el reduce (fase 2, plan 044) sobre un job con la fase 1 completa:
@@ -265,7 +283,8 @@ func phase2Delivered(job *m2m.PipelineJob) bool {
 // RE-INVOCABLE por status sin mecanismo nuevo: cada pasada salta lo terminal, así que un
 // fallo a mitad no corrompe —el redelivery reanuda donde quedó—. Contrato de errores
 // idéntico a la fase 1: un permanente marca el job failed (best-effort) antes de subir al
-// DLQ; un transitorio sube intacto para que el evento se reintente.
+// DLQ; un transitorio sube intacto para que el evento se reintente. El job sigue en
+// processing durante toda la fase 2 (HU-IA.5): no hay `done` hasta que hay borrador.
 func (p *MaterialPipelineProcessor) runPhase2(ctx context.Context, jobID string) error {
 	const phase = int16(2)
 
@@ -307,17 +326,19 @@ func (p *MaterialPipelineProcessor) runPhase2(ctx context.Context, jobID string)
 		"ideas_cubiertas", selRep.IdeasCubiertas, "ideas_sin_cubrir", len(selRep.IdeasSinCubrir))
 
 	// Entrega M2M: learning arma el draft desde las candidatas `selected` y cierra la
-	// fase 2 server-side (assessment_id + done/phase2). 422 (sin selected) → permanente.
+	// fase 2 server-side (assessment_id + done/phase2). Sin selected se llama igual: su
+	// 422 es permanente y deja el job failed con su motivo (deuda 171).
 	assessmentID, questions, err := p.pipeline.DeliverJob(ctx, jobID)
 	if err != nil {
-		return p.failIfPermanent(ctx, jobID, phase, fmt.Errorf("reduce: entrega del job %s: %w", jobID, err))
+		return p.failIfPermanent(ctx, jobID, phase, fmt.Errorf("reduce: entrega del job %s: %w: %w", jobID, errDraftDelivery, err))
 	}
 	p.logger.Info("fase 2 completa: draft entregado (assessment creado, job en done fase 2)",
 		"job_id", jobID, "assessment_id", assessmentID, "preguntas", questions, "seleccionadas", selRep.Selected)
 	return nil
 }
 
-// runPhase1 recorre los chunks pendientes hasta agotarlos y cierra el job en done.
+// runPhase1 recorre los chunks pendientes hasta agotarlos y deja el job en
+// processing/phase 1 (HU-IA.5: el job NO pasa a done aquí; lo cierra la entrega).
 // Respeta la cancelación del contexto entre chunks (shutdown ordenado).
 func (p *MaterialPipelineProcessor) runPhase1(ctx context.Context, jobID string) error {
 	for {
@@ -330,15 +351,12 @@ func (p *MaterialPipelineProcessor) runPhase1(ctx context.Context, jobID string)
 			return p.failIfPermanent(ctx, jobID, 1, fmt.Errorf("leyendo el siguiente chunk pendiente del job %s: %w", jobID, err))
 		}
 		if next == nil {
-			// No quedan pendientes: cerrar el job. 409 = otro worker ya lo cerró (ACK).
-			if err := p.pipeline.UpdateJobStatus(ctx, jobID, jobStatusDone, 1, nil); err != nil {
-				if errors.Is(err, m2m.ErrPipelineConflict) {
-					p.logger.Info("el job ya estaba cerrado por otro worker (409 en el PATCH done), ACK", "job_id", jobID)
-					return nil
-				}
-				return p.failIfPermanent(ctx, jobID, 1, fmt.Errorf("cerrando el job %s (done): %w", jobID, err))
+			// No quedan pendientes: marcar el fin de la fase 1. El 409 (el job se cerró
+			// mientras tanto) sube como error: la fase 2 no debe correr sobre un job cerrado.
+			if err := p.pipeline.UpdateJobStatus(ctx, jobID, jobStatusProcessing, 1, nil); err != nil {
+				return p.failIfPermanent(ctx, jobID, 1, fmt.Errorf("marcando el fin de la fase 1 del job %s: %w", jobID, err))
 			}
-			p.logger.Info("fase 1 completa: job en done (todas las porciones procesadas)", "job_id", jobID)
+			p.logger.Info("fase 1 completa: job en processing, fase 1 (todas las porciones procesadas)", "job_id", jobID)
 			return nil
 		}
 
@@ -349,22 +367,17 @@ func (p *MaterialPipelineProcessor) runPhase1(ctx context.Context, jobID string)
 }
 
 // failIfPermanent marca el job como failed (best-effort) SOLO si el error es permanente,
-// para que el mensaje caiga al DLQ con rastro del último error. Ignora el error del PATCH
-// (best-effort): si falla, el redelivery/DLQ nativo sigue operando. Devuelve el error
-// original intacto para que retry.go lo clasifique. Los transitorios NO marcan failed:
-// el redelivery reanuda el job donde quedó.
+// para que el mensaje caiga al DLQ con rastro: last_error lleva primero el motivo en
+// español que ve la docente y detrás el detalle técnico (jobFailureReason). Ignora el
+// error del PATCH (best-effort): si falla, el redelivery/DLQ nativo sigue operando.
+// Devuelve el error original intacto para que retry.go lo clasifique. Los transitorios
+// NO marcan failed aquí: el redelivery reanuda el job donde quedó (y si era el último
+// reintento lo cierra failOnLastAttempt).
 func (p *MaterialPipelineProcessor) failIfPermanent(ctx context.Context, jobID string, phase int16, err error) error {
 	if classifyError(err) != ErrorTypePermanent {
 		return err
 	}
-	msg := err.Error()
-	if perr := p.pipeline.UpdateJobStatus(ctx, jobID, jobStatusFailed, phase, &msg); perr != nil {
-		p.logger.Warn("no se pudo marcar el job como failed (best-effort, se ignora)",
-			"job_id", jobID, "phase", phase, "error", perr.Error())
-	} else {
-		p.logger.Info("job marcado como failed antes de subir al DLQ (error permanente)",
-			"job_id", jobID, "phase", phase, "last_error", msg)
-	}
+	p.markJobFailed(ctx, jobID, phase, jobFailureReason(phase, err))
 	return err
 }
 

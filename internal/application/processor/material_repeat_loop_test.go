@@ -108,8 +108,9 @@ func runRepeatLoopCase(t *testing.T, loops map[string]map[int]bool) (*fakeOllama
 	if err := newMaterialProcessor(onSettings(), pipe, prov).Process(context.Background(), materialEventJSON("job-1", "mat-1", "school-1")); err != nil {
 		t.Fatalf("un bucle de repetición del modelo no debe tumbar el evento: %v", err)
 	}
-	if last := pipe.updateCalls[len(pipe.updateCalls)-1]; last.status != jobStatusDone {
-		t.Fatalf("el job debe cerrar done, quedó %+v", last)
+	// HU-IA.5: la fase 1 deja el job en processing/1; el done lo escribe la entrega.
+	if last := pipe.updateCalls[len(pipe.updateCalls)-1]; last.status != jobStatusProcessing || last.phase != 1 {
+		t.Fatalf("la fase 1 debe terminar en processing/1, quedó %+v", last)
 	}
 	return fake, pipe
 }

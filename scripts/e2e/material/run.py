@@ -62,6 +62,12 @@ Q_REVIEW = "edugo.attempt.review_requested"
 Q_PREP = "edugo.question.prep_requested"
 WORK_QUEUES = (Q_MATERIAL, Q_REVIEW, Q_PREP)
 
+# The draft's quota lives in one place, the worker's config (target_questions_default).
+DRAFT_MAX_QUESTIONS = 20
+
+# What the worker leaves in the job's last_error when the school has the pipeline off.
+PIPELINE_OFF_REASON = "La generación con IA está apagada en esta escuela."
+
 # --- The case data ----------------------------------------------------------
 
 SAN_IGNACIO = {
@@ -88,9 +94,9 @@ CASES = {
     "M2": {"title": "Reanudación: matar el worker en la fase 1 y arrancarlo sin reinyectar",
            "school": SAN_IGNACIO, "pdf": "fotosintesis.pdf", "timeout_min": 60,
            "window_timeout_min": 25, "needs_model": True},
-    "M3": {"title": "Escuela con el pipeline apagado: 202, job pending y 409 al repetir",
+    "M3": {"title": "Escuela con el pipeline apagado: 202, job failed con su motivo y 202 al repetir",
            "school": GLOBAL_ENGLISH, "pdf": "ciclo_del_agua.pdf", "timeout_min": 3,
-           "hold_seconds": 45, "needs_model": False},
+           "needs_model": False},
     "M4": {"title": "La cadena entera: publicar el borrador, rendirlo y que el worker corrija",
            "school": SAN_IGNACIO, "timeout_min": 20, "prep_wait_seconds": 300,
            "needs_model": True},
@@ -641,7 +647,9 @@ def request_generation(token, material_id):
 def follow_job(res, job_id, tail, timeout, dlq_base):
     """Follows the job through SQL until `done` with `phase=2`. Leaves early if it drops
     to `failed` or if the message ended up in the dead-letter queue (the job stays
-    `processing`: a transient error does not mark it). Returns (job, reason, milestones)."""
+    `processing`: a transient error does not mark it). Only the delivery writes `done`,
+    so a `done` below phase 2 must never be seen: if it is, the mark
+    `done_below_phase2_seen_s` records when. Returns (job, reason, milestones)."""
     t0 = time.time()
     marks, reason, stuck = {}, "timeout", 0
     last_print, job = 0.0, None
@@ -654,6 +662,8 @@ def follow_job(res, job_id, tail, timeout, dlq_base):
             marks["chunks_seen_s"] = round(elapsed, 1)
         if job["status"] == "done" and "status_done_seen_s" not in marks:
             marks["status_done_seen_s"] = round(elapsed, 1)
+        if job["status"] == "done" and job["phase"] < 2 and "done_below_phase2_seen_s" not in marks:
+            marks["done_below_phase2_seen_s"] = round(elapsed, 1)
         if job["status"] == "done" and job["phase"] == 2:
             marks["phase2_seen_s"] = round(elapsed, 1)
             reason = "done_phase2"
@@ -755,8 +765,8 @@ def read_draft(res, token, job_id):
     questions = question_rows(assessment_id)
     selected = candidate_stats(job_id)["by_status"].get("selected", 0)
     res.check("el borrador tiene preguntas y son las candidatas `selected`",
-              f"{selected} (≥1 y ≤10)", len(questions),
-              1 <= len(questions) <= 10 and len(questions) == selected,
+              f"{selected} (≥1 y ≤{DRAFT_MAX_QUESTIONS})", len(questions),
+              1 <= len(questions) <= DRAFT_MAX_QUESTIONS and len(questions) == selected,
               {"questions_count": row["questions_count"]})
     res.check("cada pregunta del borrador vale 1 punto", 1,
               sorted({q["points"] for q in questions}), all(q["points"] == 1 for q in questions))
@@ -782,6 +792,12 @@ def note_dead_letters(res):
             res.note(f"no se pudo leer la cola muerta {dlq}: {err}")
 
 
+def check_done_only_at_phase2(res, marks):
+    """`done` is written only by the delivery: it is never seen below phase 2."""
+    seen = marks.get("done_below_phase2_seen_s")
+    res.check("nunca se ve el job en done con phase menor que 2", None, seen, seen is None)
+
+
 def generation_case(res, args, cfg, school, material_id, token):
     """The common body of M1 and M5: request generation, follow the job, read the draft."""
     tail = LogTail()
@@ -800,9 +816,10 @@ def generation_case(res, args, cfg, school, material_id, token):
     res.ids["job_id"] = job_id
     timeout = (args.timeout_min or cfg["timeout_min"]) * 60
     step(f"siguiendo el job {job_id} (tope {timeout // 60} min)")
-    job, reason, _ = follow_job(res, job_id, tail, timeout, dlq_base)
+    job, reason, marks = follow_job(res, job_id, tail, timeout, dlq_base)
     chunks = measure_job(res, job_id, tail)
 
+    check_done_only_at_phase2(res, marks)
     res.check("el job termina en done con phase=2", "done / 2", f"{job['status']} / {job['phase']}",
               job["status"] == "done" and job["phase"] == 2,
               {"reason": reason, "last_error": job["last_error"]})
@@ -972,7 +989,8 @@ def case_m2(res, args, cfg):
               bool(skipped), skipped[0]["raw"] if skipped else None)
 
     step(f"siguiendo el job hasta el final (tope {timeout // 60} min)")
-    job, reason, _ = follow_job(res, job_id, tail, timeout, dlq_base)
+    job, reason, marks = follow_job(res, job_id, tail, timeout, dlq_base)
+    check_done_only_at_phase2(res, marks)
     after = chunk_rows(job_id)
     measure_job(res, job_id, tail)
     again = tail.find("material porcionado y persistido (fase 0)", start=before_lines, job_id=job_id)
@@ -1028,6 +1046,8 @@ def case_m3(res, args, cfg):
     token = teacher_token(school)
     step(f"subiendo {os.path.basename(pdf)} en la Academia Global English")
     material_id = upload_material(res, token, school, pdf, "M3")
+    status_before = sql(f"SELECT status FROM content.materials WHERE id = '{uid(material_id)}'")[0]["status"]
+    res.measure("material_status_before", status_before)
     tail = LogTail()
     dlq_base = queue_depth(Q_MATERIAL + ".dlq")["total"]
 
@@ -1039,27 +1059,36 @@ def case_m3(res, args, cfg):
         raise ApiError(f"generate-assessment → {status}: {body}")
     res.ids["job_id"] = job_id
     job = job_row(job_id)
-    res.check("learning crea el job, en pending", "pending", job and job["status"],
-              bool(job) and job["status"] == "pending",
+    # The worker closes it in seconds: by the time of this read it may already be failed.
+    res.check("learning crea el job (pending, o ya failed si el worker llegó antes)",
+              "pending o failed", job and job["status"],
+              bool(job) and job["status"] in ("pending", "failed"),
               {"school_id": job and job["school_id"], "phase": job and job["phase"]})
 
-    step("esperando la confirmación sin trabajo del worker")
-    off = tail.wait("carril material→evaluación apagado", 120, job_id=job_id)
-    res.check("el worker confirma sin trabajar («carril material→evaluación apagado…»)", "1 línea",
-              len(off), len(off) == 1, off[0]["raw"] if off else None)
-    hold = cfg["hold_seconds"]
-    step(f"comprobando durante {hold} s que el job no se mueve")
-    t0, moved = time.time(), None
-    while time.time() - t0 < hold:
+    step("esperando a que el worker cierre el job como failed")
+    timeout = (args.timeout_min or cfg["timeout_min"]) * 60
+    t0, seen = time.time(), []
+    while time.time() - t0 < timeout:
         job = job_row(job_id)
-        if job["status"] != "pending" or chunk_rows(job_id):
-            moved = job["status"]
+        if job["status"] not in seen:
+            seen.append(job["status"])
+        if job["status"] != "pending":
             break
-        time.sleep(3)
+        tail.poll()
+        time.sleep(2)
     job = job_row(job_id)
-    res.check(f"el job sigue en pending tras {hold} s, sin trozos", "pending / phase=0 / 0 trozos",
-              f"{job['status']} / phase={job['phase']} / {len(chunk_rows(job_id))} trozos",
-              moved is None and job["status"] == "pending" and job["phase"] == 0)
+    res.measure("job_after", {"status": job["status"], "phase": job["phase"],
+                              "last_error": job["last_error"], "statuses_seen": seen,
+                              "waited_s": round(time.time() - t0, 1)})
+    res.check("el job acaba en failed, fase 0, sin pasar por processing", "failed / phase=0",
+              f"{job['status']} / phase={job['phase']}",
+              job["status"] == "failed" and job["phase"] == 0 and "processing" not in seen,
+              {"statuses_seen": seen})
+    res.check("last_error empieza por el motivo del apagado", PIPELINE_OFF_REASON,
+              job["last_error"], (job["last_error"] or "").startswith(PIPELINE_OFF_REASON))
+    res.check("el material conserva el estado que tenía tras subirlo", status_before,
+              job["material_status"], job["material_status"] == status_before)
+    res.check("el job no tiene trozos", 0, len(chunk_rows(job_id)), not chunk_rows(job_id))
     ok, work = wait_queue(Q_MATERIAL, lambda d: d["total"] == 0, 30)
     res.check("el mensaje quedó confirmado: la cola del material está vacía", 0, work["total"], ok,
               work)
@@ -1070,18 +1099,27 @@ def case_m3(res, args, cfg):
 
     step("generate-assessment (segunda vez)")
     status2, body2 = request_generation(teacher_token(school), material_id)
-    res.check("el segundo generate-assessment responde 409", 409, status2, status2 == 409,
-              {"body": body2})
-    same = isinstance(body2, dict) and body2.get("id") == job_id
-    res.check("el 409 trae el mismo job activo", job_id,
-              body2.get("id") if isinstance(body2, dict) else None, same)
-    jobs = sql(f"SELECT id, status FROM content.material_pipeline_job WHERE material_id = '{uid(material_id)}'")
-    res.check("no se creó un segundo job", 1, len(jobs), len(jobs) == 1)
+    res.check("el segundo generate-assessment responde 202: un job failed no bloquea", 202, status2,
+              status2 == 202, {"body": body2})
+    job2_id = body2.get("id") if isinstance(body2, dict) else None
+    res.check("el segundo disparo crea otro job", "un id distinto", job2_id,
+              bool(job2_id) and job2_id != job_id)
+    if job2_id:
+        res.ids["second_job_id"] = job2_id
+        t0 = time.time()
+        while time.time() - t0 < timeout and job_row(job2_id)["status"] == "pending":
+            time.sleep(2)
+    jobs = sql("SELECT id, status, phase, last_error FROM content.material_pipeline_job "
+               f"WHERE material_id = '{uid(material_id)}' ORDER BY created_at")
+    res.check("hay dos jobs del material y los dos están en failed", ["failed", "failed"],
+              [j["status"] for j in jobs],
+              len(jobs) == 2 and all(j["status"] == "failed" for j in jobs), {"jobs": jobs})
     mat = sql(f"SELECT status FROM content.materials WHERE id = '{uid(material_id)}'")[0]
+    res.check("el material sigue en el estado que tenía tras subirlo", status_before, mat["status"],
+              mat["status"] == status_before)
+    dead = queue_depth(Q_MATERIAL + ".dlq")["total"]
+    res.check("la cola muerta del material sigue sin crecer", dlq_base, dead, dead == dlq_base)
     res.measure("material_status_after", mat["status"])
-    res.note("el job queda en pending PARA SIEMPRE y bloquea con 409 toda generación futura de ese "
-             "material: es el candidato a alta «b» de la ola 0, confirmado o no por las afirmaciones "
-             "de arriba. El caso no lo limpia (no hay ruta para hacerlo y no se escribe por SQL).")
 
 
 # --- M4 ---------------------------------------------------------------------
