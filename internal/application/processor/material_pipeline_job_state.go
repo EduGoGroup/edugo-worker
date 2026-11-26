@@ -67,9 +67,11 @@ func permanentReasonFor(phase int16, err error) string {
 }
 
 // isPDFError dice si err es uno de los cuatro permanentes del extractor de PDF
-// (dañado, escaneado, demasiado grande o vacío).
+// (dañado, escaneado, demasiado grande o vacío) o el de la descarga que pasa del
+// tope de tamaño.
 func isPDFError(err error) bool {
-	return errors.Is(err, pdfErrors.ErrPDFCorrupt) ||
+	return errors.Is(err, m2m.ErrFileTooLarge) ||
+		errors.Is(err, pdfErrors.ErrPDFCorrupt) ||
 		errors.Is(err, pdfErrors.ErrPDFScanned) ||
 		errors.Is(err, pdfErrors.ErrPDFTooLarge) ||
 		errors.Is(err, pdfErrors.ErrPDFEmpty)
@@ -83,8 +85,8 @@ func composeJobReason(reason string, detail error) string {
 	return truncateUTF8(reason+jobReasonSeparator+detail.Error(), maxJobLastErrorBytes)
 }
 
-// truncateUTF8 corta s a lo sumo en limit bytes sin partir una runa: un UTF-8 partido
-// haría que learning rechazara el PATCH y el job se quedaría sin cerrar.
+// truncateUTF8 corta s a lo sumo en limit bytes sin partir una runa, para que el
+// motivo no acabe en un carácter roto al llegar a learning.
 func truncateUTF8(s string, limit int) string {
 	if len(s) <= limit {
 		return s

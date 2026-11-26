@@ -60,6 +60,7 @@ func TestJobFailureReason_ByCause(t *testing.T) {
 		{"PDF dañado", 0, fmt.Errorf("fase 0: %w", pdfErrors.ErrPDFCorrupt), jobReasonUnreadablePDF},
 		{"PDF escaneado", 0, fmt.Errorf("fase 0: %w", pdfErrors.ErrPDFScanned), jobReasonUnreadablePDF},
 		{"PDF demasiado grande", 0, pdfErrors.ErrPDFTooLarge, jobReasonUnreadablePDF},
+		{"descarga que pasa del tope de tamaño", 0, m2m.ErrFileTooLarge, jobReasonUnreadablePDF},
 		{"PDF vacío", 0, pdfErrors.ErrPDFEmpty, jobReasonUnreadablePDF},
 		{"error de PDF fuera de la fase 0", 1, pdfErrors.ErrPDFScanned, jobReasonPermanent},
 		{"otro permanente de learning", 1, fmt.Errorf("leyendo el siguiente chunk: %w", m2m.ErrLearningPermanent), jobReasonPermanent},

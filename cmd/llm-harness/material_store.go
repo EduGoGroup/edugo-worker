@@ -244,7 +244,7 @@ func (s *memoryStore) UpdateJobStatus(_ context.Context, jobID, status string, p
 	s.job.LastError = lastError
 	// El ancla de la fase 1 se fija una sola vez: los latidos y las reentregas
 	// vuelven a pedir processing y no deben moverla.
-	if s.job.Phase >= 1 && s.phase1Done.IsZero() {
+	if status == storeStatusProcessing && s.job.Phase >= 1 && s.phase1Done.IsZero() {
 		s.phase1Done = time.Now()
 	}
 	return nil
