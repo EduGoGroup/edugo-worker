@@ -1,0 +1,2078 @@
+{
+  "run": {
+    "mode": "material",
+    "started_at": "2026-11-26T19:15:49Z",
+    "finished_at": "2026-11-26T19:53:02Z",
+    "provider": "local",
+    "model": "gemma4:e4b",
+    "model_digest": "dc35e8d9c6061baa6f0fa870975ab6932e2542b579b13ea0f199fa4bb7300c9c",
+    "ollama_version": "0.34.4",
+    "embed_model": "embeddinggemma",
+    "embed_model_digest": "85462619ee721b466c5927d109d4cb765861907d5417b9109caebc4e614679f1",
+    "temperature": 0,
+    "worker_commit": "35f8ce9c5f4db3434523e694a04c6983edab533a",
+    "worker_dirty": false
+  },
+  "data": {
+    "cases_sha256": "ef732fd2de72ecfed418008b6148ec524449b956990915a2688379c4f3b8c5db",
+    "params": {
+      "chunk_target_words": 300,
+      "chunk_max_words": 400,
+      "chunk_min_words": 200,
+      "chunk_merge_threshold_words": 80,
+      "dedupe_high": 0.93,
+      "dedupe_low": 0.5,
+      "relevance_min": 0.4,
+      "relevance_mode": "local",
+      "target_questions": 20,
+      "call_timeout_s": 120,
+      "embed_timeout_s": 60,
+      "max_redeliveries": 3
+    },
+    "elapsed_ms": 2232735,
+    "cases": [
+      {
+        "id": "independencia",
+        "title": "La independencia de Hispanoamérica",
+        "pdf": "independencia_hispanoamerica.pdf",
+        "pdf_sha256": "39369a21a3447b959a4e7ad521063edd668d04e7094bb915d6c41a68400dff24",
+        "sections": [
+          "1. El mundo colonial a finales del siglo XVIII",
+          "2. Las causas internas del descontento",
+          "3. Las causas externas y la crisis de 1808",
+          "4. Las primeras juntas de gobierno",
+          "5. La guerra en el norte: Bolívar y la Gran Colombia",
+          "6. La guerra en el sur: San Martín y el cruce de los Andes",
+          "7. México y Centroamérica: de Hidalgo a Iturbide",
+          "8. Las consecuencias de la independencia"
+        ],
+        "outcome": "incomplete",
+        "attempts": [
+          {
+            "elapsed_ms": 834063,
+            "error": "LLM proponiendo candidatas del chunk chunk-007 (job job-independencia): ollama request failed: Post \"http://localhost:11434/api/generate\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+            "error_kind": "provider_error"
+          },
+          {
+            "elapsed_ms": 273809,
+            "error": "LLM proponiendo candidatas del chunk chunk-007 (job job-independencia): ollama request failed: Post \"http://localhost:11434/api/generate\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+            "error_kind": "provider_error"
+          },
+          {
+            "elapsed_ms": 254376,
+            "error": "LLM proponiendo candidatas del chunk chunk-007 (job job-independencia): ollama request failed: Post \"http://localhost:11434/api/generate\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+            "error_kind": "provider_error"
+          },
+          {
+            "elapsed_ms": 247237,
+            "error": "LLM proponiendo candidatas del chunk chunk-007 (job job-independencia): ollama request failed: Post \"http://localhost:11434/api/generate\": context deadline exceeded (Client.Timeout exceeded while awaiting headers)",
+            "error_kind": "provider_error"
+          }
+        ],
+        "job_status": "processing",
+        "job_phase": 0,
+        "metrics": {
+          "generation": {
+            "chunks": 9,
+            "chunks_failed": 0,
+            "proposed_per_chunk": {
+              "values": [
+                4,
+                4,
+                4,
+                4,
+                2,
+                0,
+                4,
+                0,
+                0
+              ],
+              "min": 0,
+              "median": 4,
+              "max": 4,
+              "histogram": {
+                "0": 3,
+                "2": 1,
+                "4": 5
+              }
+            },
+            "proposed_total": 22,
+            "proposed_types": {
+              "multiple_choice": 6,
+              "multiple_select": 6,
+              "short_answer": 5,
+              "true_false": 5
+            },
+            "chunks_without_open_ended": 9,
+            "discarded_by_contract": [],
+            "deictic_statements": 0
+          },
+          "support": {
+            "answer_in_chunk_by_type": {
+              "multiple_choice": {
+                "full": 3,
+                "partial": 3
+              },
+              "multiple_select": {
+                "full": 2,
+                "none": 2,
+                "partial": 10
+              },
+              "short_answer": {
+                "full": 5
+              },
+              "true_false": {
+                "not_applicable": 5
+              }
+            },
+            "source_ideas": 29,
+            "source_ideas_given": 28,
+            "candidates_all_source_ideas_given": 21,
+            "candidates": 22
+          },
+          "reduction": {
+            "dedupe_ran": false,
+            "pairs_text": 0,
+            "pairs_embed": 0,
+            "pairs_llm": 0,
+            "clusters": 0,
+            "dropped_dup": 0,
+            "relevance_ran": false,
+            "scored": 0,
+            "dropped_irrelevant": 0,
+            "unscored": 0,
+            "quality_ran": false,
+            "dropped_invalid": 0,
+            "final_status": {
+              "candidate": 22
+            }
+          },
+          "draft": {
+            "selected": 0,
+            "target": 20,
+            "selected_types": {},
+            "selection_ran": false,
+            "ideas_covered": 0,
+            "ideas_uncovered": 0,
+            "sections": 8,
+            "sections_with_selected": 0,
+            "selected_questions": []
+          },
+          "cost": {
+            "digest": {
+              "calls": 15,
+              "elapsed_ms": 609194,
+              "invalid_outputs": 0,
+              "provider_errors": 0,
+              "quality_retries": 4
+            },
+            "propose": {
+              "calls": 17,
+              "elapsed_ms": 1000235,
+              "invalid_outputs": 7,
+              "provider_errors": 4,
+              "quality_retries": 6
+            },
+            "judge": {
+              "calls": 0,
+              "elapsed_ms": 0,
+              "invalid_outputs": 0,
+              "provider_errors": 0
+            },
+            "relevance": {
+              "calls": 0,
+              "elapsed_ms": 0,
+              "invalid_outputs": 0,
+              "provider_errors": 0
+            },
+            "embed": {
+              "calls": 0,
+              "texts": 0,
+              "elapsed_ms": 0,
+              "errors": 0
+            },
+            "phase0_ms": 11,
+            "phase1_ms": 0,
+            "dedupe_ms": 0,
+            "relevance_ms": 0,
+            "quality_ms": 0,
+            "selection_ms": 0,
+            "total_ms": 1609487,
+            "redeliveries": 3
+          }
+        },
+        "passes": {
+          "dedupe": null,
+          "relevance": null,
+          "quality": null,
+          "selection": null
+        },
+        "chunks": [
+          {
+            "seq": 0,
+            "words": 321,
+            "section": 0,
+            "status": "done",
+            "summary_words": 71,
+            "chunk_topic": "Estructura y sociedad del mundo colonial hispanoamericano a fines del siglo XVIII",
+            "main_ideas": [
+              "España gobernaba un vasto territorio en América a finales del siglo XVIII, organizado en cuatro virreinatos y capitanías generales",
+              "La sociedad colonial estaba estratificada por origen, con peninsulares en la cima, seguidos por criollos, mestizos, indígenas y esclavizados",
+              "La economía colonial se basaba en la minería de plata y la agricultura de haciendas, bajo un estricto monopolio comercial con España",
+              "Las reformas borbónicas, impulsadas por reyes como Carlos III, buscaron aumentar la recaudación fiscal y el control colonial"
+            ],
+            "secondary_ideas": [
+              "Los virreinatos eran Nueva España (México), Nueva Granada (Bogotá), Perú (Lima) y Río de la Plata (Buenos Aires)",
+              "Las capitanías generales incluían Venezuela, Chile, Guatemala y Cuba, con gobierno militar",
+              "Los peninsulares eran españoles nacidos en Europa y ocupaban los cargos más altos",
+              "Los criollos eran hijos de españoles nacidos en América, a menudo ricos, pero con acceso limitado a altos cargos",
+              "Los mestizos e indígenas pagaban tributo especial, y los esclavizados trabajaban en plantaciones y minas",
+              "El comercio estaba controlado por un monopolio que limitaba la compra y venta solo con España a través de puertos autorizados",
+              "Las reformas borbónicas incluyeron la creación de intendencias, el aumento de la alcabala y la expulsión de los jesuitas en 1767"
+            ],
+            "proposed": 4,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1,
+              "short_answer": 1,
+              "true_false": 1
+            }
+          },
+          {
+            "seq": 1,
+            "words": 305,
+            "section": 1,
+            "status": "done",
+            "summary_words": 94,
+            "chunk_topic": "Causas internas del descontento y rebeliones previas a la independencia",
+            "main_ideas": [
+              "Las reformas borbónicas generaron malestar debido a la pérdida de poder de los criollos frente a los peninsulares",
+              "La principal causa interna de la independencia fue la disparidad entre el poder económico y la exclusión política de los criollos",
+              "El aumento de impuestos desencadenó rebeliones previas a 1810",
+              "Los comerciantes criollos demandaban libre comercio para vender productos a Inglaterra y Estados Unidos, lo cual impedía el monopolio español"
+            ],
+            "secondary_ideas": [
+              "Los cargos de intendente fueron entregados mayormente a peninsulares recién llegados",
+              "En 1780, Túpac Amaru II lideró un levantamiento indígena en Perú contra los corregidores y la mita",
+              "En 1780, estalló la rebelión de los comuneros del Socorro en Nueva Granada por impuestos al tabaco y aguardiente",
+              "Las rebeliones tempranas no buscaban la independencia, sino el fin del mal gobierno",
+              "Las autoridades españolas respondieron a las rebeliones con más tropas y vigilancia",
+              "Muchos criollos prefirieron pedir reformas antes que la ruptura por temor a la revolución popular"
+            ],
+            "proposed": 4,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1,
+              "short_answer": 1,
+              "true_false": 1
+            }
+          },
+          {
+            "seq": 2,
+            "words": 308,
+            "section": 2,
+            "status": "done",
+            "summary_words": 92,
+            "chunk_topic": "Causas externas de la crisis de 1808 y la influencia ideológica",
+            "main_ideas": [
+              "Las ideas de la Ilustración, como la división de poderes y la soberanía popular, influyeron en América a través de libros y estudios en Europa.",
+              "La crisis de la monarquía española en 1808, con la ocupación de España por Napoleón y el encarcelamiento de Fernando VII, generó la pregunta sobre quién debía gobernar en ausencia del rey.",
+              "Los criollos aplicaron el principio de que en ausencia del rey, la soberanía regresa al pueblo, reclamando el derecho a formar juntas de gobierno."
+            ],
+            "secondary_ideas": [
+              "Las ideas de la Ilustración llegaron a América a menudo por contrabando.",
+              "Montesquieu y Rousseau defendían la división de poderes y la soberanía popular.",
+              "Los criollos que estudiaron en Europa conocieron estas ideas directamente."
+            ],
+            "proposed": 4,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1,
+              "short_answer": 1,
+              "true_false": 1
+            }
+          },
+          {
+            "seq": 3,
+            "words": 302,
+            "section": 2,
+            "status": "done",
+            "summary_words": 61,
+            "chunk_topic": "Formación de Juntas de Gobierno y Primeros Movimientos Independentistas",
+            "main_ideas": [
+              "La invasión napoleónica no generó el descontento, sino que abrió una oportunidad esperada por los criollos.",
+              "Entre 1809 y 1811 se formaron juntas de gobierno en ciudades de América del Sur, aunque fueron disueltas rápidamente por las tropas virreinales.",
+              "El movimiento se intensificó en 1810 debido a la ocupación francesa de España y la disolución de la Junta Central española.",
+              "Las juntas iniciales juraron lealtad a Fernando VII, una actitud denominada 'la máscara de Fernando' que permitía a los criollos tomar el poder sin ser considerados rebeldes.",
+              "Surgieron dos bandos: patriotas, que buscaban autonomía e independencia, y realistas, que defendían la unión con España.",
+              "Venezuela fue la primera en declarar la independencia el 5 de julio de 1811 y aprobar una constitución republicana, pero esta Primera República colapsó en 1812."
+            ],
+            "secondary_ideas": [
+              "Las primeras juntas aparecieron en 1809 en Chuquisaca, La Paz y Quito.",
+              "En Caracas, el cabildo destituyó a Vicente Emparan y formó una junta el 19 de abril de 1810.",
+              "En Buenos Aires, el cabildo abierto del 25 de mayo reemplazó al virrey Cisneros por la Primera Junta (Revolución de Mayo).",
+              "En Bogotá se formó la junta el 20 de julio, y en Santiago de Chile se instaló la Primera Junta Nacional de Gobierno el 18 de septiembre.",
+              "Los realistas mantuvieron fuerza en Lima, Montevideo y el sur de Chile.",
+              "La Primera República de Venezuela terminó debido a un terremoto en marzo de 1812 y el avance de tropas realistas, forzando la capitulación de Miranda."
+            ],
+            "proposed": 4,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1,
+              "short_answer": 1,
+              "true_false": 1
+            }
+          },
+          {
+            "seq": 4,
+            "words": 303,
+            "section": 3,
+            "status": "done",
+            "summary_words": 96,
+            "chunk_topic": "Reacción de Fernando VII y ascenso de Simón Bolívar",
+            "main_ideas": [
+              "Fernando VII regresó al trono en 1814 y anuló la Constitución liberal de Cádiz de 1812, enviando un ejército a América bajo Pablo Morillo.",
+              "Simón Bolívar, nacido en Caracas en 1783, inició la Campaña Admirable en 1813 desde Nueva Granada, reconquistando Caracas y siendo nombrado Libertador.",
+              "Bolívar escribió la Carta de Jamaica en 1815, exponiendo las causas de la revolución y proponiendo la unión de los pueblos americanos.",
+              "Bolívar regresó con apoyo de Alexandre Pétion, quien le proporcionó recursos a cambio de liberar esclavos en los territorios conquistados.",
+              "En 1819, Bolívar reunió el Congreso de Angostura, creando la República de Colombia (Gran Colombia), y venció a los realistas en la batalla de Boyacá el 7 de agosto de 1819."
+            ],
+            "secondary_ideas": [
+              "Hacia 1816, casi todas las juntas habían sido derrotadas, excepto el Río de la Plata.",
+              "Tras la caída de la Primera República, Bolívar se refugió en Nueva Granada.",
+              "Bolívar se unió a los llaneros de José Antonio Páez en la región del Orinoco.",
+              "Bolívar cruzó los llanos inundados y subió la cordillera de los Andes por el páramo de Pisba en 1819 para sorprender a los realistas.",
+              "La Gran Colombia estaba formada por Venezuela, Nueva Granada y Quito."
+            ],
+            "proposed": 2,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1
+            }
+          },
+          {
+            "seq": 5,
+            "words": 308,
+            "section": 4,
+            "status": "done",
+            "summary_words": 68,
+            "chunk_topic": "Consolidación de la Independencia en América del Sur: Venezuela, Ecuador, Chile y el Plan Continental",
+            "main_ideas": [
+              "La victoria de Carabobo el 24 de junio de 1821 aseguró la independencia de Venezuela.",
+              "Antonio José de Sucre liberó el actual Ecuador con la batalla de Pichincha el 24 de mayo de 1822.",
+              "José de San Martín propuso el plan continental para liberar Chile y luego Lima, evitando el Alto Perú.",
+              "El Ejército de los Andes fue preparado en Mendoza con ayuda de la población de Cuyo.",
+              "Chile logró su independencia en febrero de 1818, asegurada con la victoria de Maipú el 5 de abril de ese año."
+            ],
+            "secondary_ideas": [
+              "Bolívar enfocó su atención en el Perú, el último bastión realista, tras consolidar el norte de América del Sur.",
+              "José de San Martín nació en Yapeyú en 1778 y se formó militar en España.",
+              "Las Provincias Unidas del Río de la Plata declararon su independencia el 9 de julio de 1816 en Tucumán, pero estaban amenazadas desde el Alto Perú.",
+              "Fray Luis Beltrán dirigió el taller de fabricación de cañones y herraduras para el Ejército de los Andes.",
+              "En enero de 1817, unos cinco mil soldados cruzaron los Andes.",
+              "En la batalla de Chacabuco, el 12 de febrero, vencieron y entraron en Santiago, nombrando a Bernardo O'Higgins Director Supremo."
+            ],
+            "proposed": 0,
+            "proposed_types": {},
+            "propose_error_kind": "invalid_output"
+          },
+          {
+            "seq": 6,
+            "words": 317,
+            "section": 5,
+            "status": "done",
+            "summary_words": 115,
+            "chunk_topic": "Consolidación de la Independencia en Perú y Inicio de la Independencia en México",
+            "main_ideas": [
+              "La etapa siguiente a las independencias iniciales fue naval, con la llegada de una escuadra británica en 1820 a la costa peruana.",
+              "San Martín proclamó la independencia del Perú el 28 de julio de 1821, asumiendo el título de Protector, aunque los realistas mantuvieron el control de la sierra.",
+              "Tras la entrevista de Guayaquil en julio de 1822, San Martín renunció y se retiró a Europa.",
+              "Bolívar y Sucre finalizaron la guerra con victorias en Junín (agosto de 1824) y Ayacucho (9 de diciembre de 1824), poniendo fin al dominio español en América del Sur.",
+              "En Nueva España, la independencia comenzó como una rebelión popular, no como un movimiento de cabildos.",
+              "Miguel Hidalgo inició la lucha el 16 de septiembre de 1810 con el Grito de Dolores, reuniendo a indígenas y mestizos.",
+              "Hidalgo decretó la abolición de la esclavitud y del tributo indígena, pero fue derrotado y fusilado en 1811.",
+              "José María Morelos, un mejor organizador militar, convocó el Congreso de Chilpancingo, declarando la independencia en 1813 y presentando los Sentimientos de la Nación.",
+              "Morelos fue capturado y fusilado en 1815, y la insurgencia continuó como guerrilla bajo Vicente Guerrero."
+            ],
+            "secondary_ideas": [
+              "Los realistas conservaron la sierra peruana tras la proclamación de la independencia.",
+              "El ejército de Hidalgo era numeroso pero poco disciplinado.",
+              "Morelos pedía igualdad ante la ley y el fin de las castas en los Sentimientos de la Nación."
+            ],
+            "proposed": 4,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1,
+              "short_answer": 1,
+              "true_false": 1
+            }
+          },
+          {
+            "seq": 7,
+            "words": 311,
+            "section": 6,
+            "status": "pending",
+            "summary_words": 0,
+            "main_ideas": [],
+            "proposed": 0,
+            "proposed_types": {},
+            "propose_error_kind": "provider_error"
+          },
+          {
+            "seq": 8,
+            "words": 166,
+            "section": 7,
+            "status": "pending",
+            "summary_words": 0,
+            "main_ideas": [],
+            "proposed": 0,
+            "proposed_types": {}
+          }
+        ],
+        "candidates": [
+          {
+            "id": "cand-0001",
+            "chunk_seq": 0,
+            "section": 0,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_choice",
+              "question_text": "¿Qué grupos sociales ocupaban la posición más alta en la jerarquía de la sociedad colonial hispanoamericana a fines del siglo XVIII?",
+              "options": [
+                "Criollos",
+                "Mestizos",
+                "Peninsulares",
+                "Indígenas"
+              ],
+              "correct_answer": "Peninsulares",
+              "explanation": "Los peninsulares, españoles nacidos en Europa, ocupaban los cargos más altos en la estructura social colonial.",
+              "source_ideas": [
+                "La sociedad colonial estaba estratificada por origen, con peninsulares en la cima, seguidos por criollos, mestizos, indígenas y esclavizados"
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0002",
+            "chunk_seq": 0,
+            "section": 0,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_select",
+              "question_text": "¿Cuáles eran los pilares fundamentales de la economía colonial en América a fines del siglo XVIII?",
+              "options": [
+                "Comercio libre con todas las naciones",
+                "Producción textil artesanal",
+                "Minería de plata y agricultura de haciendas",
+                "Control total de la mano de obra esclava"
+              ],
+              "correct_answer": [
+                "Minería de plata y agricultura de haciendas",
+                "Control total de la mano de obra esclava"
+              ],
+              "explanation": "La economía se sustentaba en la minería de plata y la agricultura, operando bajo un estricto monopolio comercial.",
+              "source_ideas": [
+                "La economía colonial se basaba en la minería de plata y la agricultura de haciendas, bajo un estricto monopolio comercial con España"
+              ]
+            },
+            "answer_in_chunk": [
+              "full",
+              "none"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0003",
+            "chunk_seq": 0,
+            "section": 0,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "true_false",
+              "question_text": "Las reformas borbónicas, impulsadas por la Corona española, tuvieron como objetivo principal reducir el control administrativo sobre las colonias americanas.",
+              "correct_answer": "false",
+              "explanation": "Las reformas borbónicas buscaron aumentar la recaudación fiscal y el control colonial.",
+              "source_ideas": [
+                "Las reformas borbónicas, impulsadas por reyes como Carlos III, buscaron aumentar la recaudación fiscal y el control colonial"
+              ]
+            },
+            "answer_in_chunk": [
+              "not_applicable"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0004",
+            "chunk_seq": 0,
+            "section": 0,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "short_answer",
+              "question_text": "Mencione uno de los cuatro virreinatos que conformaban la organización territorial de España en América a finales del siglo XVIII.",
+              "correct_answer": "Nueva España, Nueva Granada, Perú o Río de la Plata",
+              "explanation": "Los cuatro virreinatos eran Nueva España, Nueva Granada, Perú y Río de la Plata.",
+              "source_ideas": [
+                "España gobernaba un vasto territorio en América a finales del siglo XVIII, organizado en cuatro virreinatos y capitanías generales",
+                "Los virreinatos eran Nueva España (México), Nueva Granada (Bogotá), Perú (Lima) y Río de la Plata (Buenos Aires)"
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 2,
+            "source_ideas_given": 2
+          },
+          {
+            "id": "cand-0005",
+            "chunk_seq": 1,
+            "section": 1,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_choice",
+              "question_text": "¿Cuál fue la principal fuente de malestar interno entre los criollos debido a las reformas borbónicas?",
+              "options": [
+                "La imposición de nuevos impuestos sin consulta",
+                "La pérdida de poder político frente a los peninsulares",
+                "La restricción del comercio con Inglaterra",
+                "La intervención directa de las autoridades indígenas"
+              ],
+              "correct_answer": "La pérdida de poder político frente a los peninsulares",
+              "explanation": "Las reformas borbónicas provocaron malestar por la disminución del poder criollo frente a los peninsulares.",
+              "source_ideas": [
+                "Las reformas borbónicas generaron malestar debido a la pérdida de poder de los criollos frente a los peninsulares"
+              ]
+            },
+            "answer_in_chunk": [
+              "partial"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0006",
+            "chunk_seq": 1,
+            "section": 1,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_select",
+              "question_text": "¿Qué demandas específicas tenían los comerciantes criollos en relación con el comercio exterior?",
+              "options": [
+                "La eliminación total de impuestos",
+                "El acceso al libre comercio con Inglaterra y Estados Unidos",
+                "La sustitución del monopolio español por un sistema abierto",
+                "La reducción de la vigilancia militar"
+              ],
+              "correct_answer": [
+                "El acceso al libre comercio con Inglaterra y Estados Unidos",
+                "La sustitución del monopolio español por un sistema abierto"
+              ],
+              "explanation": "Los comerciantes criollos exigían libre comercio para vender sus productos fuera del monopolio español.",
+              "source_ideas": [
+                "Los comerciantes criollos demandaban libre comercio para vender productos a Inglaterra y Estados Unidos, lo cual impedía el monopolio español"
+              ]
+            },
+            "answer_in_chunk": [
+              "partial",
+              "none"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0007",
+            "chunk_seq": 1,
+            "section": 1,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "true_false",
+              "question_text": "Las rebeliones tempranas previas a 1810 tenían como objetivo principal la consecución de la independencia total.",
+              "correct_answer": "false",
+              "explanation": "Las rebeliones tempranas no buscaban la independencia, sino el fin del mal gobierno.",
+              "source_ideas": [
+                "Las rebeliones tempranas no buscaban la independencia, sino el fin del mal gobierno"
+              ]
+            },
+            "answer_in_chunk": [
+              "not_applicable"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0008",
+            "chunk_seq": 1,
+            "section": 1,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "short_answer",
+              "question_text": "Mencione un ejemplo de levantamiento ocurrido en 1780 que evidenció el descontento social o político en América.",
+              "correct_answer": "Túpac Amaru II o comuneros del Socorro",
+              "explanation": "Túpac Amaru II y los comuneros del Socorro son ejemplos de levantamientos de 1780.",
+              "source_ideas": [
+                "En 1780, Túpac Amaru II lideró un levantamiento indígena en Perú contra los corregidores y la mita",
+                "En 1780, estalló la rebelión de los comuneros del Socorro en Nueva Granada por impuestos al tabaco y aguardiente"
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 2,
+            "source_ideas_given": 2
+          },
+          {
+            "id": "cand-0009",
+            "chunk_seq": 2,
+            "section": 2,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_choice",
+              "question_text": "¿Qué conceptos de la Ilustración influyeron en América y fueron difundidos a través de libros y estudios en Europa?",
+              "options": [
+                "Monarquía absoluta y derecho divino",
+                "División de poderes y soberanía popular",
+                "Mercantilismo y absolutismo",
+                "Teocracia y jerarquía social"
+              ],
+              "correct_answer": "División de poderes y soberanía popular",
+              "explanation": "La Ilustración promovió ideas como la división de poderes y la soberanía popular que llegaron a América a través de textos europeos.",
+              "source_ideas": [
+                "Las ideas de la Ilustración, como la división de poderes y la soberanía popular, influyeron en América a través de libros y estudios en Europa."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0010",
+            "chunk_seq": 2,
+            "section": 2,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_select",
+              "question_text": "¿Qué eventos o principios impulsaron a los criollos a reclamar el derecho a formar juntas de gobierno durante la crisis de 1808?",
+              "options": [
+                "La ocupación de España por Napoleón",
+                "El encarcelamiento de Fernando VII",
+                "La defensa de la soberanía popular",
+                "La imposición de un nuevo régimen monárquico"
+              ],
+              "correct_answer": [
+                "La ocupación de España por Napoleón",
+                "El encarcelamiento de Fernando VII",
+                "La defensa de la soberanía popular"
+              ],
+              "explanation": "La ausencia del rey y la aplicación del principio de soberanía popular llevaron a los criollos a formar juntas de gobierno.",
+              "source_ideas": [
+                "La crisis de la monarquía española en 1808, con la ocupación de España por Napoleón y el encarcelamiento de Fernando VII, generó la pregunta sobre quién debía gobernar en ausencia del rey.",
+                "Los criollos aplicaron el principio de que en ausencia del rey, la soberanía regresa al pueblo, reclamando el derecho a formar juntas de gobierno."
+              ]
+            },
+            "answer_in_chunk": [
+              "partial",
+              "partial",
+              "partial"
+            ],
+            "source_ideas": 2,
+            "source_ideas_given": 2
+          },
+          {
+            "id": "cand-0011",
+            "chunk_seq": 2,
+            "section": 2,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "true_false",
+              "question_text": "Los criollos que estudiaron en Europa tuvieron acceso directo a las ideas de Montesquieu y Rousseau, quienes defendían la soberanía popular y la división de poderes.",
+              "correct_answer": "true",
+              "explanation": "Los criollos que estudiaron en Europa conocieron directamente las ideas de Montesquieu y Rousseau.",
+              "source_ideas": [
+                "Los criollos que estudiaron en Europa conocieron estas ideas directamente.",
+                "Montesquieu y Rousseau defendían la división de poderes y la soberanía popular."
+              ]
+            },
+            "answer_in_chunk": [
+              "not_applicable"
+            ],
+            "source_ideas": 2,
+            "source_ideas_given": 2
+          },
+          {
+            "id": "cand-0012",
+            "chunk_seq": 2,
+            "section": 2,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "short_answer",
+              "question_text": "Según la aplicación de los criollos del principio de soberanía en 1808, ¿a quién regresaba la soberanía en ausencia del rey?",
+              "correct_answer": "al pueblo",
+              "explanation": "Los criollos aplicaron el principio de que en ausencia del rey, la soberanía regresa al pueblo.",
+              "source_ideas": [
+                "Los criollos aplicaron el principio de que en ausencia del rey, la soberanía regresa al pueblo, reclamando el derecho a formar juntas de gobierno."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0013",
+            "chunk_seq": 3,
+            "section": 2,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_choice",
+              "question_text": "¿Qué actitud adoptaron las juntas iniciales en América del Sur para poder tomar el poder sin ser percibidas como rebeldes?",
+              "options": [
+                "Buscar la independencia total de inmediato",
+                "Jurar lealtad a Fernando VII",
+                "Defender la unión con España",
+                "Reemplazar al virrey sin justificación"
+              ],
+              "correct_answer": "Jurar lealtad a Fernando VII",
+              "explanation": "La actitud de jurar lealtad a Fernando VII se denominó 'la máscara de Fernando'.",
+              "source_ideas": [
+                "Las juntas iniciales juraron lealtad a Fernando VII, una actitud denominada 'la máscara de Fernando' que permitía a los criollos tomar el poder sin ser considerados rebeldes."
+              ]
+            },
+            "answer_in_chunk": [
+              "partial"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0014",
+            "chunk_seq": 3,
+            "section": 2,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_select",
+              "question_text": "¿Qué eventos o lugares marcaron el inicio de la formación de juntas de gobierno en América del Sur?",
+              "options": [
+                "La invasión napoleónica",
+                "La formación de juntas en Chuquisaca, La Paz y Quito",
+                "El cabildo abierto de Buenos Aires el 25 de mayo",
+                "La declaración de independencia de Venezuela en 1811"
+              ],
+              "correct_answer": [
+                "La formación de juntas en Chuquisaca, La Paz y Quito",
+                "El cabildo abierto de Buenos Aires el 25 de mayo"
+              ],
+              "explanation": "Las primeras juntas aparecieron en 1809 en Chuquisaca, La Paz y Quito, y en Buenos Aires se formó la Primera Junta el 25 de mayo.",
+              "source_ideas": [
+                "Las primeras juntas aparecieron en 1809 en Chuquisaca, La Paz y Quito.",
+                "En Buenos Aires, el cabildo abierto del 25 de mayo reemplazó al virrey Cisneros por la Primera Junta (Revolución de Mayo)."
+              ]
+            },
+            "answer_in_chunk": [
+              "partial",
+              "full"
+            ],
+            "source_ideas": 2,
+            "source_ideas_given": 2
+          },
+          {
+            "id": "cand-0015",
+            "chunk_seq": 3,
+            "section": 2,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "true_false",
+              "question_text": "La invasión napoleónica fue la causa directa del descontento criollo que llevó a la formación de juntas de gobierno.",
+              "correct_answer": "false",
+              "explanation": "La invasión napoleónica no generó el descontento, sino que abrió una oportunidad esperada por los criollos.",
+              "source_ideas": [
+                "La invasión napoleónica no generó el descontento, sino que abrió una oportunidad esperada por los criollos."
+              ]
+            },
+            "answer_in_chunk": [
+              "not_applicable"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0016",
+            "chunk_seq": 3,
+            "section": 2,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "short_answer",
+              "question_text": "¿En qué año declaró Venezuela su independencia y qué tipo de gobierno aprobó inicialmente?",
+              "correct_answer": "5 de julio de 1811, una constitución republicana",
+              "explanation": "Venezuela fue la primera en declarar la independencia el 5 de julio de 1811 y aprobar una constitución republicana.",
+              "source_ideas": [
+                "Venezuela fue la primera en declarar la independencia el 5 de julio de 1811 y aprobar una constitución republicana, pero esta Primera República colapsó en 1812."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0017",
+            "chunk_seq": 4,
+            "section": 3,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_choice",
+              "question_text": "¿Qué acción tomó Fernando VII al regresar al trono en 1814 respecto a la Constitución de Cádiz de 1812 y qué envió a América?",
+              "options": [
+                "Anuló la Constitución de Cádiz y envió tropas bajo Pablo Morillo",
+                "Ratificó la Constitución de Cádiz y envió apoyo a los insurgentes",
+                "Ignoró la Constitución de Cádiz y se centró en asuntos internos",
+                "Modificó la Constitución de Cádiz y envió diplomáticos a América"
+              ],
+              "correct_answer": "Anuló la Constitución de Cádiz y envió tropas bajo Pablo Morillo",
+              "explanation": "Fernando VII anuló la Constitución liberal de Cádiz de 1812 y envió un ejército a América bajo Pablo Morillo.",
+              "source_ideas": [
+                "Fernando VII regresó al trono en 1814 y anuló la Constitución liberal de Cádiz de 1812, enviando un ejército a América bajo Pablo Morillo."
+              ]
+            },
+            "answer_in_chunk": [
+              "partial"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0018",
+            "chunk_seq": 4,
+            "section": 3,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_select",
+              "question_text": "¿Qué logros o acciones clave se asocian con Simón Bolívar en el periodo de 1813 a 1819?",
+              "options": [
+                "Escribir la Carta de Jamaica en 1815",
+                "Ser nombrado Libertador tras la Campaña Admirable",
+                "Unir los pueblos americanos en un proyecto político",
+                "Crear la República de Colombia en 1819"
+              ],
+              "correct_answer": [
+                "Ser nombrado Libertador tras la Campaña Admirable",
+                "Escribir la Carta de Jamaica en 1815",
+                "Crear la República de Colombia en 1819"
+              ],
+              "explanation": "Bolívar fue nombrado Libertador en 1813, escribió la Carta de Jamaica en 1815 y fundó la República de Colombia en 1819.",
+              "source_ideas": [
+                "Simón Bolívar, nacido en Caracas en 1783, inició la Campaña Admirable en 1813 desde Nueva Granada, reconquistando Caracas y siendo nombrado Libertador.",
+                "Bolívar escribió la Carta de Jamaica en 1815, exponiendo las causas de la revolución y proponiendo la unión de los pueblos americanos.",
+                "En 1819, Bolívar reunió el Congreso de Angostura, creando la República de Colombia (Gran Colombia)..."
+              ]
+            },
+            "answer_in_chunk": [
+              "partial",
+              "partial",
+              "partial"
+            ],
+            "source_ideas": 3,
+            "source_ideas_given": 2
+          },
+          {
+            "id": "cand-0019",
+            "chunk_seq": 6,
+            "section": 5,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_choice",
+              "question_text": "¿Qué evento marcó el inicio de la lucha por la independencia en Nueva España?",
+              "options": [
+                "La proclamación de la independencia por San Martín",
+                "La llegada de una escuadra británica a la costa peruana",
+                "El Grito de Dolores de Miguel Hidalgo",
+                "La convocatoria del Congreso de Chilpancingo"
+              ],
+              "correct_answer": "El Grito de Dolores de Miguel Hidalgo",
+              "explanation": "Miguel Hidalgo inició la lucha en Nueva España con el Grito de Dolores en 1810.",
+              "source_ideas": [
+                "Miguel Hidalgo inició la lucha el 16 de septiembre de 1810 con el Grito de Dolores, reuniendo a indígenas y mestizos."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0020",
+            "chunk_seq": 6,
+            "section": 5,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_select",
+              "question_text": "¿Qué logros o acciones se asocian con José María Morelos durante la insurgencia en Nueva España?",
+              "options": [
+                "Declarar la independencia en 1813",
+                "Ser derrotado y fusilado en 1811",
+                "Presentar los Sentimientos de la Nación",
+                "Asumir el título de Protector del Perú"
+              ],
+              "correct_answer": [
+                "Declarar la independencia en 1813",
+                "Presentar los Sentimientos de la Nación"
+              ],
+              "explanation": "Morelos declaró la independencia en 1813 y presentó los Sentimientos de la Nación.",
+              "source_ideas": [
+                "José María Morelos, un mejor organizador militar, convocó el Congreso de Chilpancingo, declarando la independencia en 1813 y presentando los Sentimientos de la Nación."
+              ]
+            },
+            "answer_in_chunk": [
+              "partial",
+              "partial"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0021",
+            "chunk_seq": 6,
+            "section": 5,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "true_false",
+              "question_text": "Tras la proclamación de la independencia del Perú por San Martín, los realistas lograron mantener el control total del territorio peruano.",
+              "correct_answer": "false",
+              "explanation": "Los realistas mantuvieron el control de la sierra peruana tras la proclamación de la independencia.",
+              "source_ideas": [
+                "San Martín proclamó la independencia del Perú el 28 de julio de 1821, asumiendo el título de Protector, aunque los realistas mantuvieron el control de la sierra."
+              ]
+            },
+            "answer_in_chunk": [
+              "not_applicable"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0022",
+            "chunk_seq": 6,
+            "section": 5,
+            "status": "candidate",
+            "score": null,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "short_answer",
+              "question_text": "¿Qué batallas decisivas pusieron fin al dominio español en América del Sur, según las acciones de Bolívar y Sucre?",
+              "correct_answer": "Junín y Ayacucho",
+              "explanation": "Bolívar y Sucre finalizaron la guerra con victorias en Junín y Ayacucho.",
+              "source_ideas": [
+                "Bolívar y Sucre finalizaron la guerra con victorias en Junín (agosto de 1824) y Ayacucho (9 de diciembre de 1824), poniendo fin al dominio español en América del Sur."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          }
+        ]
+      },
+      {
+        "id": "fotosintesis",
+        "title": "La fotosíntesis",
+        "pdf": "fotosintesis.pdf",
+        "pdf_sha256": "6dd2ced1fe6f5de6da87d23d4399f637f96971b4b88c7064b6a6d3acffa7b39b",
+        "outcome": "complete",
+        "attempts": [
+          {
+            "elapsed_ms": 529070
+          }
+        ],
+        "job_status": "done",
+        "job_phase": 2,
+        "metrics": {
+          "generation": {
+            "chunks": 3,
+            "chunks_failed": 0,
+            "proposed_per_chunk": {
+              "values": [
+                4,
+                4,
+                4
+              ],
+              "min": 4,
+              "median": 4,
+              "max": 4,
+              "histogram": {
+                "4": 3
+              }
+            },
+            "proposed_total": 12,
+            "proposed_types": {
+              "multiple_choice": 3,
+              "multiple_select": 3,
+              "short_answer": 3,
+              "true_false": 3
+            },
+            "chunks_without_open_ended": 3,
+            "discarded_by_contract": [],
+            "deictic_statements": 0
+          },
+          "support": {
+            "answer_in_chunk_by_type": {
+              "multiple_choice": {
+                "full": 2,
+                "partial": 1
+              },
+              "multiple_select": {
+                "full": 2,
+                "none": 2,
+                "partial": 3
+              },
+              "short_answer": {
+                "full": 3
+              },
+              "true_false": {
+                "not_applicable": 3
+              }
+            },
+            "source_ideas": 16,
+            "source_ideas_given": 16,
+            "candidates_all_source_ideas_given": 12,
+            "candidates": 12
+          },
+          "reduction": {
+            "dedupe_ran": true,
+            "pairs_text": 0,
+            "pairs_embed": 33,
+            "pairs_llm": 33,
+            "clusters": 0,
+            "dropped_dup": 0,
+            "relevance_ran": true,
+            "scored": 12,
+            "dropped_irrelevant": 0,
+            "unscored": 0,
+            "quality_ran": true,
+            "dropped_invalid": 0,
+            "final_status": {
+              "selected": 12
+            }
+          },
+          "draft": {
+            "selected": 12,
+            "target": 20,
+            "selected_types": {
+              "multiple_choice": 3,
+              "multiple_select": 3,
+              "short_answer": 3,
+              "true_false": 3
+            },
+            "selection_ran": true,
+            "ideas_covered": 10,
+            "ideas_uncovered": 2,
+            "sections": 0,
+            "sections_with_selected": 0,
+            "selected_questions": [
+              {
+                "chunk_seq": 0,
+                "section": -1,
+                "question_type": "multiple_choice",
+                "question_text": "¿Qué tipo de organismos son aquellos que realizan la fotosíntesis y cuál es su rol ecológico principal?"
+              },
+              {
+                "chunk_seq": 0,
+                "section": -1,
+                "question_type": "multiple_select",
+                "question_text": "¿Cuáles son los componentes o elementos esenciales que se transforman durante el proceso de fotosíntesis?"
+              },
+              {
+                "chunk_seq": 0,
+                "section": -1,
+                "question_type": "true_false",
+                "question_text": "El proceso de fotosíntesis ocurre exclusivamente en las raíces de las plantas, donde se encuentran los cloroplastos."
+              },
+              {
+                "chunk_seq": 0,
+                "section": -1,
+                "question_type": "short_answer",
+                "question_text": "¿Qué significa literalmente el término 'fotosíntesis'?"
+              },
+              {
+                "chunk_seq": 1,
+                "section": -1,
+                "question_type": "multiple_choice",
+                "question_text": "¿En qué parte del cloroplasto tiene lugar la fase luminosa de la fotosíntesis y qué factor es esencial para su ocurrencia?"
+              },
+              {
+                "chunk_seq": 1,
+                "section": -1,
+                "question_type": "multiple_select",
+                "question_text": "¿Qué procesos o resultados están asociados con la fase luminosa de la fotosíntesis?"
+              },
+              {
+                "chunk_seq": 1,
+                "section": -1,
+                "question_type": "true_false",
+                "question_text": "La detención de la fotólisis en ausencia de luz impide la fabricación de combustible interno y debilita a la planta."
+              },
+              {
+                "chunk_seq": 1,
+                "section": -1,
+                "question_type": "short_answer",
+                "question_text": "¿Qué etapa del proceso fotosintético utiliza el combustible generado en la fase luminosa para convertir dióxido de carbono en azúcares?"
+              },
+              {
+                "chunk_seq": 2,
+                "section": -1,
+                "question_type": "multiple_choice",
+                "question_text": "¿Qué tipo de energía utiliza la fase oscura para llevar a cabo sus procesos, en lugar de depender de la luz directa?"
+              },
+              {
+                "chunk_seq": 2,
+                "section": -1,
+                "question_type": "short_answer",
+                "question_text": "¿Cómo se denomina el proceso mediante el cual la planta incorpora el dióxido de carbono del aire a una molécula orgánica?"
+              },
+              {
+                "chunk_seq": 2,
+                "section": -1,
+                "question_type": "multiple_select",
+                "question_text": "¿Cuáles son los resultados globales o funciones vitales de la fotosíntesis?"
+              },
+              {
+                "chunk_seq": 2,
+                "section": -1,
+                "question_type": "true_false",
+                "question_text": "La glucosa producida durante la fotosíntesis solo puede ser utilizada inmediatamente como fuente de energía y no puede almacenarse."
+              }
+            ]
+          },
+          "cost": {
+            "digest": {
+              "calls": 3,
+              "elapsed_ms": 101940,
+              "invalid_outputs": 0,
+              "provider_errors": 0
+            },
+            "propose": {
+              "calls": 3,
+              "elapsed_ms": 125219,
+              "invalid_outputs": 0,
+              "provider_errors": 0
+            },
+            "judge": {
+              "calls": 33,
+              "elapsed_ms": 225143,
+              "invalid_outputs": 0,
+              "provider_errors": 0
+            },
+            "relevance": {
+              "calls": 12,
+              "elapsed_ms": 75101,
+              "invalid_outputs": 0,
+              "provider_errors": 0
+            },
+            "embed": {
+              "calls": 1,
+              "texts": 12,
+              "elapsed_ms": 1530,
+              "errors": 0
+            },
+            "phase0_ms": 5,
+            "phase1_ms": 227162,
+            "dedupe_ms": 226777,
+            "relevance_ms": 75111,
+            "quality_ms": 0,
+            "selection_ms": 12,
+            "total_ms": 529070,
+            "redeliveries": 0
+          }
+        },
+        "passes": {
+          "dedupe": [
+            {
+              "report": {
+                "Candidates": 12,
+                "Processed": 12,
+                "Clusters": 0,
+                "DroppedDup": 0,
+                "EmbeddingsComputed": 12,
+                "LLMCalls": 33,
+                "PairsText": 0,
+                "PairsEmbed": 33,
+                "PairsLLM": 33,
+                "PairsUndecided": 0
+              },
+              "elapsed_ms": 226777
+            }
+          ],
+          "relevance": [
+            {
+              "report": {
+                "Candidates": 12,
+                "Processed": 12,
+                "SkippedScored": 0,
+                "Scored": 12,
+                "DroppedIrrelevant": 0,
+                "Unscored": 0,
+                "LLMCalls": 12,
+                "LocalForced": 0,
+                "IdeasFromSource": true
+              },
+              "elapsed_ms": 75111
+            }
+          ],
+          "quality": [
+            {
+              "report": {
+                "Candidates": 12,
+                "Processed": 12,
+                "Valid": 12,
+                "DroppedInvalid": 0
+              },
+              "elapsed_ms": 0
+            }
+          ],
+          "selection": [
+            {
+              "report": {
+                "Selected": 12,
+                "PorTipo": {
+                  "multiple_choice": 3,
+                  "multiple_select": 3,
+                  "short_answer": 3,
+                  "true_false": 3
+                },
+                "IdeasCubiertas": 10,
+                "IdeasSinCubrir": [
+                  "La fotosíntesis es el proceso por el cual plantas, algas y algunas bacterias fabrican su alimento usando energía lumínica.",
+                  "En la fase oscura, la planta toma dióxido de carbono del aire y lo combina con energía guardada para formar glucosa."
+                ],
+                "TargetQuestions": 20,
+                "CandidatasVivas": 12,
+                "AlreadySelected": false,
+                "IdeasFromSource": false
+              },
+              "elapsed_ms": 12
+            }
+          ]
+        },
+        "chunks": [
+          {
+            "seq": 0,
+            "words": 302,
+            "section": -1,
+            "status": "done",
+            "summary_words": 69,
+            "chunk_topic": "Definición y componentes de la fotosíntesis",
+            "main_ideas": [
+              "La fotosíntesis es el proceso por el cual plantas, algas y algunas bacterias fabrican su alimento usando energía lumínica.",
+              "La fotosíntesis transforma materia inorgánica (agua y dióxido de carbono) en materia orgánica energética (glucosa) y libera oxígeno.",
+              "Los organismos que realizan la fotosíntesis son llamados productores o autótrofos y son la base de las cadenas alimentarias.",
+              "El proceso ocurre principalmente en las hojas y se lleva a cabo dentro de los cloroplastos, que contienen clorofila."
+            ],
+            "secondary_ideas": [
+              "El nombre fotosíntesis significa literalmente 'componer con luz' (foto=luz, síntesis=composición).",
+              "La clorofila absorbe luz roja y azul, y refleja la luz verde, dando el color a las hojas.",
+              "Los tres ingredientes necesarios son luz (del Sol), agua (absorbida por las raíces) y dióxido de carbono (entrando por estomas).",
+              "La fotosíntesis se divide en dos grandes etapas, siendo una de ellas la fase luminosa."
+            ],
+            "proposed": 4,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1,
+              "short_answer": 1,
+              "true_false": 1
+            }
+          },
+          {
+            "seq": 1,
+            "words": 312,
+            "section": -1,
+            "status": "done",
+            "summary_words": 58,
+            "chunk_topic": "Fase Luminosa de la Fotosíntesis",
+            "main_ideas": [
+              "La fase luminosa de la fotosíntesis depende directamente de la luz y ocurre en los tilacoides del cloroplasto.",
+              "Durante la fase luminosa, la energía lumínica rompe moléculas de agua (fotólisis), liberando oxígeno.",
+              "La energía luminosa se almacena temporalmente en moléculas que alimentarán la etapa siguiente.",
+              "La fase oscura, o ciclo de Calvin, es la segunda etapa del proceso."
+            ],
+            "secondary_ideas": [
+              "El oxígeno liberado es un producto de desecho para la planta, pero vital para animales y personas.",
+              "Una gran parte del oxígeno atmosférico proviene de la fotosíntesis de plantas terrestres y algas microscópicas.",
+              "Los bosques y el fitoplancton marino son llamados a veces los pulmones del planeta.",
+              "Si una planta está en oscuridad, la fotólisis se detiene, no se fabrica combustible interno y la planta se debilita.",
+              "La fase oscura utiliza el combustible generado en la fase luminosa para transformar dióxido de carbono en azúcares."
+            ],
+            "proposed": 4,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1,
+              "short_answer": 1,
+              "true_false": 1
+            }
+          },
+          {
+            "seq": 2,
+            "words": 186,
+            "section": -1,
+            "status": "done",
+            "summary_words": 69,
+            "chunk_topic": "Fase Oscura (Ciclo de Calvin) y Fijación de Carbono",
+            "main_ideas": [
+              "La fase oscura no requiere luz directa, sino que usa energía almacenada de la fase luminosa.",
+              "En la fase oscura, la planta toma dióxido de carbono del aire y lo combina con energía guardada para formar glucosa.",
+              "El proceso de incorporar carbono del aire a una molécula orgánica se denomina fijación del carbono.",
+              "La fotosíntesis es vital porque produce oxígeno, retira dióxido de carbono de la atmósfera y fabrica alimento."
+            ],
+            "secondary_ideas": [
+              "La fase oscura ocurre en el estroma del cloroplasto.",
+              "La glucosa producida puede usarse como energía inmediata o almacenarse como almidón.",
+              "El resultado global de la fotosíntesis es transformar dióxido de carbono y agua en glucosa y oxígeno con ayuda de la luz."
+            ],
+            "proposed": 4,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1,
+              "short_answer": 1,
+              "true_false": 1
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "id": "cand-0001",
+            "chunk_seq": 0,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_choice",
+              "question_text": "¿Qué tipo de organismos son aquellos que realizan la fotosíntesis y cuál es su rol ecológico principal?",
+              "options": [
+                "Consumidores primarios, descomponedores",
+                "Productores o autótrofos, base de las cadenas alimentarias",
+                "Heterótrofos, recicladores de nutrientes",
+                "Detritívoros, reguladores de ecosistemas"
+              ],
+              "correct_answer": "Productores o autótrofos, base de las cadenas alimentarias",
+              "explanation": "Los organismos fotosintéticos son productores o autótrofos y forman la base de las cadenas alimentarias.",
+              "source_ideas": [
+                "Los organismos que realizan la fotosíntesis son llamados productores o autótrofos y son la base de las cadenas alimentarias."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0002",
+            "chunk_seq": 0,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_select",
+              "question_text": "¿Cuáles son los componentes o elementos esenciales que se transforman durante el proceso de fotosíntesis?",
+              "options": [
+                "Energía lumínica, oxígeno, glucosa",
+                "Agua, dióxido de carbono, glucosa",
+                "Dióxido de carbono, oxígeno, clorofila",
+                "Luz, agua, dióxido de carbono"
+              ],
+              "correct_answer": [
+                "Agua, dióxido de carbono, glucosa",
+                "Luz, agua, dióxido de carbono"
+              ],
+              "explanation": "La fotosíntesis transforma materia inorgánica (agua y dióxido de carbono) en materia orgánica energética (glucosa) usando energía lumínica.",
+              "source_ideas": [
+                "La fotosíntesis transforma materia inorgánica (agua y dióxido de carbono) en materia orgánica energética (glucosa) y libera oxígeno.",
+                "Los tres ingredientes necesarios son luz (del Sol), agua (absorbida por las raíces) y dióxido de carbono (entrando por estomas)."
+              ]
+            },
+            "answer_in_chunk": [
+              "full",
+              "full"
+            ],
+            "source_ideas": 2,
+            "source_ideas_given": 2
+          },
+          {
+            "id": "cand-0003",
+            "chunk_seq": 0,
+            "section": -1,
+            "status": "selected",
+            "score": 0.5,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "true_false",
+              "question_text": "El proceso de fotosíntesis ocurre exclusivamente en las raíces de las plantas, donde se encuentran los cloroplastos.",
+              "correct_answer": "false",
+              "explanation": "El proceso ocurre principalmente en las hojas y se lleva a cabo dentro de los cloroplastos.",
+              "source_ideas": [
+                "El proceso ocurre principalmente en las hojas y se lleva a cabo dentro de los cloroplastos, que contienen clorofila."
+              ]
+            },
+            "answer_in_chunk": [
+              "not_applicable"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0004",
+            "chunk_seq": 0,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "short_answer",
+              "question_text": "¿Qué significa literalmente el término 'fotosíntesis'?",
+              "correct_answer": "componer con luz",
+              "explanation": "El nombre fotosíntesis significa literalmente 'componer con luz' (foto=luz, síntesis=composición).",
+              "source_ideas": [
+                "El nombre fotosíntesis significa literalmente 'componer con luz' (foto=luz, síntesis=composición)."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0005",
+            "chunk_seq": 1,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_choice",
+              "question_text": "¿En qué parte del cloroplasto tiene lugar la fase luminosa de la fotosíntesis y qué factor es esencial para su ocurrencia?",
+              "options": [
+                "Estroma, y depende de la glucosa",
+                "Tilacoides, y depende de la luz",
+                "Membrana externa, y depende del dióxido de carbono",
+                "Citoplasma, y depende del agua"
+              ],
+              "correct_answer": "Tilacoides, y depende de la luz",
+              "explanation": "La fase luminosa ocurre en los tilacoides y requiere directamente la energía de la luz.",
+              "source_ideas": [
+                "La fase luminosa de la fotosíntesis depende directamente de la luz y ocurre en los tilacoides del cloroplasto."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0006",
+            "chunk_seq": 1,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_select",
+              "question_text": "¿Qué procesos o resultados están asociados con la fase luminosa de la fotosíntesis?",
+              "options": [
+                "Almacenamiento temporal de energía",
+                "Liberación de oxígeno mediante fotólisis",
+                "Transformación de dióxido de carbono en azúcares",
+                "Dependencia directa de la luz"
+              ],
+              "correct_answer": [
+                "Almacenamiento temporal de energía",
+                "Liberación de oxígeno mediante fotólisis",
+                "Dependencia directa de la luz"
+              ],
+              "explanation": "La fase luminosa implica la ruptura del agua liberando oxígeno y almacenando energía para la siguiente etapa.",
+              "source_ideas": [
+                "Durante la fase luminosa, la energía lumínica rompe moléculas de agua (fotólisis), liberando oxígeno.",
+                "La energía luminosa se almacena temporalmente en moléculas que alimentarán la etapa siguiente.",
+                "La fase luminosa de la fotosíntesis depende directamente de la luz y ocurre en los tilacoides del cloroplasto."
+              ]
+            },
+            "answer_in_chunk": [
+              "none",
+              "partial",
+              "none"
+            ],
+            "source_ideas": 3,
+            "source_ideas_given": 3
+          },
+          {
+            "id": "cand-0007",
+            "chunk_seq": 1,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "true_false",
+              "question_text": "La detención de la fotólisis en ausencia de luz impide la fabricación de combustible interno y debilita a la planta.",
+              "correct_answer": "true",
+              "explanation": "Si la planta está en oscuridad, la fotólisis se detiene, no se fabrica combustible interno y la planta se debilita.",
+              "source_ideas": [
+                "Si una planta está en oscuridad, la fotólisis se detiene, no se fabrica combustible interno y la planta se debilita."
+              ]
+            },
+            "answer_in_chunk": [
+              "not_applicable"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0008",
+            "chunk_seq": 1,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "short_answer",
+              "question_text": "¿Qué etapa del proceso fotosintético utiliza el combustible generado en la fase luminosa para convertir dióxido de carbono en azúcares?",
+              "correct_answer": "Fase oscura (o ciclo de Calvin)",
+              "explanation": "La fase oscura utiliza el combustible generado en la fase luminosa para transformar dióxido de carbono en azúcares.",
+              "source_ideas": [
+                "La fase oscura, o ciclo de Calvin, es la segunda etapa del proceso.",
+                "La fase oscura utiliza el combustible generado en la fase luminosa para transformar dióxido de carbono en azúcares."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 2,
+            "source_ideas_given": 2
+          },
+          {
+            "id": "cand-0009",
+            "chunk_seq": 2,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_choice",
+              "question_text": "¿Qué tipo de energía utiliza la fase oscura para llevar a cabo sus procesos, en lugar de depender de la luz directa?",
+              "options": [
+                "Energía química almacenada",
+                "Energía térmica",
+                "Energía cinética",
+                "Energía lumínica"
+              ],
+              "correct_answer": "Energía química almacenada",
+              "explanation": "La fase oscura utiliza la energía que fue almacenada durante la fase luminosa para operar.",
+              "source_ideas": [
+                "La fase oscura no requiere luz directa, sino que usa energía almacenada de la fase luminosa."
+              ]
+            },
+            "answer_in_chunk": [
+              "partial"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0010",
+            "chunk_seq": 2,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "short_answer",
+              "question_text": "¿Cómo se denomina el proceso mediante el cual la planta incorpora el dióxido de carbono del aire a una molécula orgánica?",
+              "correct_answer": "fijación del carbono",
+              "explanation": "La incorporación de carbono del aire a una molécula orgánica se define como fijación del carbono.",
+              "source_ideas": [
+                "El proceso de incorporar carbono del aire a una molécula orgánica se denomina fijación del carbono."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0011",
+            "chunk_seq": 2,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_select",
+              "question_text": "¿Cuáles son los resultados globales o funciones vitales de la fotosíntesis?",
+              "options": [
+                "Producir dióxido de carbono",
+                "Liberar oxígeno",
+                "Fabricar alimento",
+                "Consumir energía lumínica"
+              ],
+              "correct_answer": [
+                "Liberar oxígeno",
+                "Fabricar alimento"
+              ],
+              "explanation": "La fotosíntesis es esencial porque genera oxígeno, consume dióxido de carbono y produce alimento.",
+              "source_ideas": [
+                "La fotosíntesis es vital porque produce oxígeno, retira dióxido de carbono de la atmósfera y fabrica alimento."
+              ]
+            },
+            "answer_in_chunk": [
+              "partial",
+              "partial"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0012",
+            "chunk_seq": 2,
+            "section": -1,
+            "status": "selected",
+            "score": 0.5,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "true_false",
+              "question_text": "La glucosa producida durante la fotosíntesis solo puede ser utilizada inmediatamente como fuente de energía y no puede almacenarse.",
+              "correct_answer": "false",
+              "explanation": "La glucosa puede ser utilizada como energía inmediata o puede ser almacenada en forma de almidón.",
+              "source_ideas": [
+                "La glucosa producida puede usarse como energía inmediata o almacenarse como almidón."
+              ]
+            },
+            "answer_in_chunk": [
+              "not_applicable"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          }
+        ]
+      },
+      {
+        "id": "ciclo_del_agua",
+        "title": "El ciclo del agua",
+        "pdf": "ciclo_del_agua.pdf",
+        "pdf_sha256": "9b20ca866ae0c01016a583563a1c9f8977df77e7f6266a70dde49c68f92f5266",
+        "outcome": "complete",
+        "attempts": [
+          {
+            "elapsed_ms": 94164
+          }
+        ],
+        "job_status": "done",
+        "job_phase": 2,
+        "metrics": {
+          "generation": {
+            "chunks": 1,
+            "chunks_failed": 0,
+            "proposed_per_chunk": {
+              "values": [
+                4
+              ],
+              "min": 4,
+              "median": 4,
+              "max": 4,
+              "histogram": {
+                "4": 1
+              }
+            },
+            "proposed_total": 4,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1,
+              "short_answer": 1,
+              "true_false": 1
+            },
+            "chunks_without_open_ended": 1,
+            "discarded_by_contract": [
+              {
+                "chunk_seq": 0,
+                "question_type": "multiple_select",
+                "issues": [
+                  "[correct_answer] \"Evaporación\" no coincide con ninguna opción"
+                ]
+              }
+            ],
+            "deictic_statements": 0
+          },
+          "support": {
+            "answer_in_chunk_by_type": {
+              "multiple_choice": {
+                "full": 1
+              },
+              "short_answer": {
+                "full": 1
+              },
+              "true_false": {
+                "not_applicable": 1
+              }
+            },
+            "source_ideas": 3,
+            "source_ideas_given": 3,
+            "candidates_all_source_ideas_given": 3,
+            "candidates": 3
+          },
+          "reduction": {
+            "dedupe_ran": true,
+            "pairs_text": 0,
+            "pairs_embed": 2,
+            "pairs_llm": 1,
+            "clusters": 0,
+            "dropped_dup": 0,
+            "relevance_ran": true,
+            "scored": 3,
+            "dropped_irrelevant": 0,
+            "unscored": 0,
+            "quality_ran": true,
+            "dropped_invalid": 0,
+            "final_status": {
+              "selected": 3
+            }
+          },
+          "draft": {
+            "selected": 3,
+            "target": 20,
+            "selected_types": {
+              "multiple_choice": 1,
+              "short_answer": 1,
+              "true_false": 1
+            },
+            "selection_ran": true,
+            "ideas_covered": 1,
+            "ideas_uncovered": 2,
+            "sections": 0,
+            "sections_with_selected": 0,
+            "selected_questions": [
+              {
+                "chunk_seq": 0,
+                "section": -1,
+                "question_type": "multiple_choice",
+                "question_text": "¿Qué proceso describe la transformación de agua líquida en vapor al ser calentada por el Sol y ascender a la atmósfera?"
+              },
+              {
+                "chunk_seq": 0,
+                "section": -1,
+                "question_type": "true_false",
+                "question_text": "El ciclo del agua es un ciclo abierto, lo que significa que la cantidad total de agua del planeta no se mantiene constante."
+              },
+              {
+                "chunk_seq": 0,
+                "section": -1,
+                "question_type": "short_answer",
+                "question_text": "¿Cómo se denomina la suma de la evaporación del suelo y la transpiración de la vegetación?"
+              }
+            ]
+          },
+          "cost": {
+            "digest": {
+              "calls": 1,
+              "elapsed_ms": 40577,
+              "invalid_outputs": 0,
+              "provider_errors": 0
+            },
+            "propose": {
+              "calls": 1,
+              "elapsed_ms": 33518,
+              "invalid_outputs": 0,
+              "provider_errors": 0
+            },
+            "judge": {
+              "calls": 1,
+              "elapsed_ms": 7925,
+              "invalid_outputs": 0,
+              "provider_errors": 0
+            },
+            "relevance": {
+              "calls": 3,
+              "elapsed_ms": 10774,
+              "invalid_outputs": 0,
+              "provider_errors": 0
+            },
+            "embed": {
+              "calls": 1,
+              "texts": 3,
+              "elapsed_ms": 1362,
+              "errors": 0
+            },
+            "phase0_ms": 2,
+            "phase1_ms": 74096,
+            "dedupe_ms": 9288,
+            "relevance_ms": 10775,
+            "quality_ms": 0,
+            "selection_ms": 1,
+            "total_ms": 94164,
+            "redeliveries": 0
+          }
+        },
+        "passes": {
+          "dedupe": [
+            {
+              "report": {
+                "Candidates": 3,
+                "Processed": 3,
+                "Clusters": 0,
+                "DroppedDup": 0,
+                "EmbeddingsComputed": 3,
+                "LLMCalls": 1,
+                "PairsText": 0,
+                "PairsEmbed": 2,
+                "PairsLLM": 1,
+                "PairsUndecided": 0
+              },
+              "elapsed_ms": 9288
+            }
+          ],
+          "relevance": [
+            {
+              "report": {
+                "Candidates": 3,
+                "Processed": 3,
+                "SkippedScored": 0,
+                "Scored": 3,
+                "DroppedIrrelevant": 0,
+                "Unscored": 0,
+                "LLMCalls": 3,
+                "LocalForced": 0,
+                "IdeasFromSource": true
+              },
+              "elapsed_ms": 10775
+            }
+          ],
+          "quality": [
+            {
+              "report": {
+                "Candidates": 3,
+                "Processed": 3,
+                "Valid": 3,
+                "DroppedInvalid": 0
+              },
+              "elapsed_ms": 0
+            }
+          ],
+          "selection": [
+            {
+              "report": {
+                "Selected": 3,
+                "PorTipo": {
+                  "multiple_choice": 1,
+                  "short_answer": 1,
+                  "true_false": 1
+                },
+                "IdeasCubiertas": 1,
+                "IdeasSinCubrir": [
+                  "El ciclo del agua, o ciclo hidrológico, describe el movimiento continuo del agua sobre, dentro y por encima de la superficie terrestre.",
+                  "El ciclo es esencial para la vida porque distribuye agua dulce, regula el clima y provee agua a seres vivos."
+                ],
+                "TargetQuestions": 20,
+                "CandidatasVivas": 3,
+                "AlreadySelected": false,
+                "IdeasFromSource": false
+              },
+              "elapsed_ms": 1
+            }
+          ]
+        },
+        "chunks": [
+          {
+            "seq": 0,
+            "words": 354,
+            "section": -1,
+            "status": "done",
+            "summary_words": 74,
+            "chunk_topic": "Ciclo del Agua (Ciclo Hidrológico)",
+            "main_ideas": [
+              "El ciclo del agua, o ciclo hidrológico, describe el movimiento continuo del agua sobre, dentro y por encima de la superficie terrestre.",
+              "El ciclo del agua es un ciclo cerrado donde la cantidad total de agua del planeta se mantiene constante, cambiando de estado y lugar impulsado por el Sol y la gravedad.",
+              "El ciclo es esencial para la vida porque distribuye agua dulce, regula el clima y provee agua a seres vivos."
+            ],
+            "secondary_ideas": [
+              "La evaporación es la transformación de agua líquida en vapor al ser calentada por el Sol, ascendiendo a la atmósfera.",
+              "La transpiración es el aporte de vapor de agua a la atmósfera por las hojas de las plantas.",
+              "La evapotranspiración es la suma de la evaporación del suelo y agua con la transpiración de la vegetación.",
+              "La condensación ocurre cuando el vapor de agua se enfría en capas de aire más frías, volviéndose gotas o cristales que forman nubes y niebla.",
+              "La precipitación es la caída de agua desde las nubes (lluvia, nieve, granizo o aguanieve) cuando las gotas son demasiado pesadas.",
+              "El agua puede infiltrarse en el suelo alimentando acuíferos o escurrir por la superficie en un proceso llamado escorrentía, regresando a cuerpos de agua."
+            ],
+            "proposed": 4,
+            "proposed_types": {
+              "multiple_choice": 1,
+              "multiple_select": 1,
+              "short_answer": 1,
+              "true_false": 1
+            }
+          }
+        ],
+        "candidates": [
+          {
+            "id": "cand-0001",
+            "chunk_seq": 0,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "multiple_choice",
+              "question_text": "¿Qué proceso describe la transformación de agua líquida en vapor al ser calentada por el Sol y ascender a la atmósfera?",
+              "options": [
+                "Condensación",
+                "Precipitación",
+                "Evaporación",
+                "Infiltración"
+              ],
+              "correct_answer": "Evaporación",
+              "explanation": "La evaporación es la transformación de agua líquida en vapor impulsada por el calor solar.",
+              "source_ideas": [
+                "La evaporación es la transformación de agua líquida en vapor al ser calentada por el Sol, ascendiendo a la atmósfera."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0002",
+            "chunk_seq": 0,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "true_false",
+              "question_text": "El ciclo del agua es un ciclo abierto, lo que significa que la cantidad total de agua del planeta no se mantiene constante.",
+              "correct_answer": "false",
+              "explanation": "El ciclo del agua es un ciclo cerrado donde la cantidad total de agua del planeta se mantiene constante.",
+              "source_ideas": [
+                "El ciclo del agua es un ciclo cerrado donde la cantidad total de agua del planeta se mantiene constante, cambiando de estado y lugar impulsado por el Sol y la gravedad."
+              ]
+            },
+            "answer_in_chunk": [
+              "not_applicable"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          },
+          {
+            "id": "cand-0003",
+            "chunk_seq": 0,
+            "section": -1,
+            "status": "selected",
+            "score": 1,
+            "dedupe_group": null,
+            "payload": {
+              "version": 1,
+              "question_type": "short_answer",
+              "question_text": "¿Cómo se denomina la suma de la evaporación del suelo y la transpiración de la vegetación?",
+              "correct_answer": "Evapotranspiración",
+              "explanation": "La evapotranspiración es la suma de la evaporación del suelo y la transpiración de la vegetación.",
+              "source_ideas": [
+                "La evapotranspiración es la suma de la evaporación del suelo y agua con la transpiración de la vegetación."
+              ]
+            },
+            "answer_in_chunk": [
+              "full"
+            ],
+            "source_ideas": 1,
+            "source_ideas_given": 1
+          }
+        ]
+      }
+    ]
+  }
+}
