@@ -102,6 +102,17 @@ llm:
     max_tokens: 4096
     max_in_flight: 4 # tope de peticiones simultáneas al proveedor de pago (HU-IA.10); LLM_API_MAX_IN_FLIGHT
 
+# Rescate de lo fallado en el carril de IA (HU-IA.6, ADR 0050). El worker es el reloj:
+# cada sweep_interval llama al barrido de learning con estos números; learning es la
+# dueña del estado (assessment.ai_failure) y de la republicación. Variables AI_RESCUE_*.
+ai_rescue:
+  enabled: true # AI_RESCUE_ENABLED
+  sweep_interval: "5m" # AI_RESCUE_SWEEP_INTERVAL
+  min_age: "15m" # AI_RESCUE_MIN_AGE; debe superar los 10 minutos del candado
+  max_retries: 5 # AI_RESCUE_MAX_RETRIES
+  retry_backoff: "2m,10m,30m,2h,6h" # AI_RESCUE_RETRY_BACKOFF; la espera antes de cada republicación
+  job_pending_stale_after: "6h" # AI_RESCUE_JOB_PENDING_STALE_AFTER; job de PDF pending que nadie tomó
+
 # Health Checks
 health:
   timeouts:

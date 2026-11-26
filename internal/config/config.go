@@ -23,6 +23,7 @@ type Config struct {
 	CircuitBreakers  CircuitBreakersConfig  `mapstructure:"circuit_breakers"`
 	RateLimiter      RateLimiterConfig      `mapstructure:"rate_limiter"`
 	Shutdown         ShutdownConfig         `mapstructure:"shutdown"`
+	AIRescue         AIRescueConfig         `mapstructure:"ai_rescue"`
 }
 
 type MessagingConfig struct {
@@ -306,7 +307,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("RABBITMQ_URL is required")
 	}
 	// NLP.APIKey es opcional - si no está, usamos SmartFallback
-	return c.LLM.validateInferenceCaps()
+	if err := c.LLM.validateInferenceCaps(); err != nil {
+		return err
+	}
+	_, err := c.AIRescue.Settings()
+	return err
 }
 
 // GetActiveNLPConfig retorna la configuración del provider NLP activo con valores por defecto

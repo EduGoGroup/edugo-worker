@@ -1248,3 +1248,35 @@ func TestAttemptReview_CancelledMidReview_StopsAndReleases(t *testing.T) {
 		t.Fatalf("no debe finalizar, hubo %d", learning.finalizeCalls)
 	}
 }
+
+// TestAttemptReview_ReviewOffReportsNotApplicable (HU-IA.6): con la revisión apagada el
+// worker avisa «no aplica» del intento y sigue confirmando, también si el aviso falla.
+func TestAttemptReview_ReviewOffReportsNotApplicable(t *testing.T) {
+	for _, reportErr := range []error{nil, errors.New("learning caído")} {
+		reader := &mockSettingsReader{settings: settingsWith(settingKeyReviewMode, reviewModeOff)}
+		learning := &mockLearningClient{}
+		rep := &recordingReporter{err: reportErr}
+		p := newProcessor(reader, learning, &mockLLMProvider{}).WithFailureReporter(rep)
+
+		if err := p.Process(context.Background(), validEventPayload(t)); err != nil {
+			t.Fatalf("mode=off confirma aunque el aviso falle (%v): %v", reportErr, err)
+		}
+		want := m2m.FailureReportRequest{TargetType: m2m.RescueTargetAttempt, TargetID: "attempt-1",
+			Kind: m2m.RescueKindNotApplicable}
+		if len(rep.reports) != 1 || rep.reports[0] != want {
+			t.Fatalf("esperaba un aviso «no aplica» del intento, got %+v", rep.reports)
+		}
+		if learning.finalizeCalls != 0 || len(learning.reviewCalls) != 0 {
+			t.Fatalf("mode=off no toca la revisión")
+		}
+	}
+
+	// Con la revisión encendida, el corto-circuito no aplica y no hay aviso.
+	reader := &mockSettingsReader{settings: settingsWith(settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowTeacher)}
+	rep := &recordingReporter{}
+	p := newProcessor(reader, &mockLearningClient{}, &mockLLMProvider{}).WithFailureReporter(rep)
+	_ = p.Process(context.Background(), validEventPayload(t))
+	if len(rep.reports) != 0 {
+		t.Fatalf("con la revisión encendida no se avisa «no aplica»: %+v", rep.reports)
+	}
+}

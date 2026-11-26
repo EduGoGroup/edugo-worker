@@ -110,6 +110,8 @@ type AttemptReviewProcessor struct {
 	// turns maps the mode ("local"/"api") to its inference cap (HU-IA.10). A mode
 	// without limiter does not wait.
 	turns map[string]*inferencecap.Limiter
+	// failures recibe el «no aplica» de la revisión apagada (HU-IA.6); nil no avisa.
+	failures FailureReporter
 }
 
 // NewAttemptReviewProcessor construye el processor. providers mapea el mode
@@ -192,6 +194,7 @@ func (p *AttemptReviewProcessor) Process(ctx context.Context, payload []byte) er
 			"school_id", evt.Payload.SchoolID,
 			"mode", mode,
 		)
+		reportNotApplicable(ctx, p.failures, p.logger, m2m.RescueTargetAttempt, evt.Payload.AttemptID)
 		return nil
 	}
 

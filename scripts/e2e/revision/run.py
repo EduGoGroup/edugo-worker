@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Injection script for the preparation (P1-P3, P3n) and review (R1-R13) cases.
+"""Injection script for the preparation (P1-P3, P3n), review (R1-R13) and rescue (R14n) cases.
 
     python3 scripts/e2e/revision/run.py --list
     EDUGO_BASE_PASSWORD=... python3 scripts/e2e/revision/run.py --cases P1,R1 --out-dir DIR
@@ -10,7 +10,9 @@ environment and writes <DIR>/<run>/<CASE>.json. It refuses to run outside the lo
 environment (exit code 3). See ../README.md.
 """
 import argparse
+import datetime
 import json
+import os
 import sys
 import time
 import uuid
@@ -32,6 +34,20 @@ HANDLER_ERROR_MSG = "Error procesando evento"
 # The two lines of internal/bootstrap/consumer_hooks.go (HU-IA.3).
 RETRY_MSG = "Mensaje fallido: se reintenta"
 DEAD_LETTER_MSG = "Mensaje enviado a la cola muerta"
+# The rescue (HU-IA.6): internal/application/processor/failure_report.go and
+# internal/application/rescue/sweeper.go.
+FAILURE_REPORTED_MSG = "aviso de fallo enviado a learning"
+NOT_APPLICABLE_MSG = "aviso «no aplica» enviado a learning"
+SWEEP_STARTED_MSG = "planificador del rescate arrancado"
+SWEPT_MSG = "barrido del rescate hecho"
+RESCUE_SCOPE = "ai_failures.rescue"
+# R12 restarts the worker with short waits; the minimum age cannot be short (it must
+# exceed the 10 minutes of the lock) and R12 does not need it: its row comes from the report.
+SHORT_RESCUE_ENV = {"AI_RESCUE_SWEEP_INTERVAL": "10s",
+                    "AI_RESCUE_RETRY_BACKOFF": "15s,15s,15s,15s,15s"}
+# The sweep numbers of R14n: the P9 waits, and a minimum age just above the lock.
+R14N_SWEEP = {"max_retries": 5, "retry_backoff_seconds": [120, 600, 1800, 7200, 21600],
+              "min_age_seconds": 610, "job_pending_stale_seconds": 21600}
 
 
 def offline_review(case, cfg, expected_pending_keys=None):
@@ -656,31 +672,89 @@ def review_until_dead_letter(case, cfg):
         case.check("cola muerta: x-dead-reason", "max_retries", headers.get("x-dead-reason"))
         case.check("cola muerta: x-error no vacío", True, bool(headers.get("x-error")),
                    evidence=headers.get("x-error"))
+    # HU-IA.6: on the last retry the worker reports a service failure and the row appears.
+    reported = case.tail.wait_for((FAILURE_REPORTED_MSG, "target_id=" + attempt_id,
+                                   "cause_class=service"), 30)
+    case.check("el worker avisa el fallo de servicio al morir el mensaje", 1, len(reported),
+               evidence=reported[-1] if reported else None)
+    row = ai_failure_row(attempt_id)
+    case.check("aparece la fila en assessment.ai_failure", True, row is not None, evidence=row)
+    case.check("la fila nace retrying", "retrying", (row or {}).get("status"))
+    case.check("la fila es de clase service", "service", (row or {}).get("cause_class"))
     return exam, attempt_id, dead
 
 
 def case_r12n(case):
-    """R12 up to the dead-letter queue: no reinjection, so no call to the model."""
+    """R12 up to the dead-letter queue and the rescue row: no call to the model."""
     review_until_dead_letter(case, CASES["R12n"])
-    case.note("el mensaje queda en la cola muerta de revisión y el intento en pending_review: "
-              "no se reinyecta")
+    case.note("el mensaje queda en la cola muerta de revisión y el intento en pending_review; la "
+              "fila queda retrying y el planificador del worker lo republicará (HU-IA.6)")
+
+
+def ai_failure_row(target_id):
+    rows = c.sql_rows(
+        "SELECT id, target_type, status, cause_class, last_error, retry_count, next_retry_at, "
+        "closed_at FROM assessment.ai_failure WHERE target_id='" + c.uid(target_id) + "'")
+    return rows[0] if rows else None
+
+
+def rescue_sweep(body):
+    """The sweep the worker's clock asks for, called by the script (R14n keeps the worker stopped)."""
+    token = c.service_token(scopes=(RESCUE_SCOPE,))
+    _, payload = c.call("POST", f"{c.LEARNING}/api/v1/internal/ai-failures/sweep", body, token)
+    return c.unwrap(payload) or {}
+
+
+def restart_worker_with(case, env):
+    """Restarts the worker with extra variables; the cleanup gives the usual ones back."""
+    previous = {key: os.environ.get(key) for key in env}
+
+    def usual():
+        for key, value in previous.items():
+            if value is None:
+                os.environ.pop(key, None)
+            else:
+                os.environ[key] = value
+        c.stop_worker(case.tail)  # restore_environment starts it again with the usual ones
+
+    case.defer("worker con la configuración de siempre", usual)
+    c.stop_worker(case.tail)
+    os.environ.update(env)
+    c.start_worker(case.tail)
 
 
 def case_r12(case):
-    exam, attempt_id, dead = review_until_dead_letter(case, CASES["R12"])
-    # Back up, and reinjected WITHOUT x-retry-count.
+    """R12 inverted (HU-IA.6): nobody reinjects; the rescue corrects the attempt by itself."""
+    exam, attempt_id, _ = review_until_dead_letter(case, CASES["R12"])
     c.start_ollama()
     case.check("Ollama vuelve", True, c.ollama_up())
-    if dead:
-        c.publish(c.REVIEW_QUEUE, dead[0]["payload"], headers={})
-        f.wait_reviewed(case, attempt_id, 1)
-        rows = f.answer_rows(attempt_id)
-        f.record_lanes(case, rows)
-        f.measure_proposals(case, exam, rows)
-        f.assert_ai_reviewed(case, "abierta (reinyectada sin x-retry-count)", rows[0])
-        case.check("candado liberado tras corregir", None,
-                   f.attempt_row(attempt_id)["ai_review_claimed_at"])
-        case.note("la copia original sigue en la cola muerta de revisión: no se retira")
+    # The worker restarts with short waits: its clock is what republishes, not the script.
+    restart_worker_with(case, SHORT_RESCUE_ENV)
+    case.measure("rescue_env", SHORT_RESCUE_ENV)
+    since = len(case.tail.drain())
+    started = case.tail.grep(SWEEP_STARTED_MSG)
+    case.check("el planificador arranca con las esperas cortas", True,
+               bool(started) and "sweep_interval=10s" in started[-1],
+               evidence=started[-1] if started else None)
+    resolved = c.poll_soft(lambda: (ai_failure_row(attempt_id) or {}).get("status") == "resolved",
+                           c.PER_ANSWER_TIMEOUT * 2 + 120, 5)
+    f.wait_reviewed(case, attempt_id, 1)
+    swept = [ln for ln in case.tail.drain()[since:] if SWEPT_MSG in ln]
+    republished = [ln for ln in swept if int(c.parse_line(ln).get("republished", "0") or 0) >= 1]
+    case.measure("sweep_lines", swept[-10:])
+    case.check("log: un barrido del worker republica", True, bool(republished),
+               evidence=republished[0] if republished else None)
+    rows = f.answer_rows(attempt_id)
+    f.record_lanes(case, rows)
+    f.measure_proposals(case, exam, rows)
+    f.assert_ai_reviewed(case, "abierta (rescatada sin reinyectar)", rows[0])
+    case.check("candado liberado tras corregir", None,
+               f.attempt_row(attempt_id)["ai_review_claimed_at"])
+    row = ai_failure_row(attempt_id)
+    case.check("la fila acaba resolved", True, bool(resolved), evidence=row)
+    case.measure("ai_failure_row", row)
+    case.note("nadie reinyecta: la copia original sigue en la cola muerta de revisión; los "
+              "huérfanos anteriores al caso también se republican (el barrido es retroactivo)")
 
 
 def case_r12b(case):
@@ -786,10 +860,95 @@ def case_r13(case):
               + suffix + "); la evaluación de la sonda queda en borrador")
 
 
+def wait_min_age(case, attempt_id, min_age_seconds):
+    """Sleeps until the attempt was submitted more than the minimum age ago (UTC in the row)."""
+    completed = f.parse_ts(f.attempt_row(attempt_id)["completed_at"])
+    if completed is None:
+        raise c.EnvError("the attempt has no completed_at")
+    if completed.tzinfo is None:
+        completed = completed.replace(tzinfo=datetime.timezone.utc)
+    due = completed.timestamp() + min_age_seconds + 5
+    case.measure("seconds_waited_for_min_age", round(max(0.0, due - time.time()), 1))
+    while time.time() < due:
+        time.sleep(min(30.0, max(0.0, due - time.time())))
+
+
+def case_r14n(case):
+    """An attempt submitted without its message comes back after the minimum age (no model).
+
+    The worker stays stopped while the script asks for the sweep with the worker's body, so
+    the republished message can be seen in the queue. The Academia has the AI off: once the
+    worker is back, it reports «no aplica» and the row is closed, without a model call.
+    """
+    cfg = CASES["R14n"]
+    actors = ACTORS[cfg["actors"]]
+    settings = c.school_settings(actors["school"])
+    case.check("precondición: la Academia resuelve llm.review.mode=off", "off",
+               settings.get("llm.review.mode"), evidence=settings)
+    _, exam, attempt_id, message = offline_review(case, cfg, ["abierta"])
+    if not message:
+        raise c.EnvError("no review message to purge")
+    if len(c.peek(c.REVIEW_QUEUE)) != 1:
+        raise c.EnvError("the review queue holds foreign messages: it is not purged")
+    c.purge(c.REVIEW_QUEUE)  # the lost message
+    case.check("el mensaje del intento ya no está en la cola", 0,
+               len(c.find_messages(c.REVIEW_QUEUE, attempt_id)))
+    case.check("sin fila antes del barrido", None, ai_failure_row(attempt_id))
+
+    early = rescue_sweep(R14N_SWEEP)
+    case.measure("sweep_before_min_age", early)
+    case.check("antes de la edad mínima: sin fila", None, ai_failure_row(attempt_id))
+    case.check("antes de la edad mínima: nada en la cola", 0,
+               len(c.find_messages(c.REVIEW_QUEUE, attempt_id)))
+
+    wait_min_age(case, attempt_id, R14N_SWEEP["min_age_seconds"])
+    late = rescue_sweep(R14N_SWEEP)
+    case.measure("sweep_after_min_age", late)
+    case.check("el barrido cuenta al menos un huérfano", True, (late.get("orphans") or 0) >= 1,
+               evidence=late)
+    row = ai_failure_row(attempt_id)
+    case.check("aparece la fila del intento", True, row is not None, evidence=row)
+    case.check("la fila nace retrying", "retrying", (row or {}).get("status"))
+    case.check("la fila es de clase service", "service", (row or {}).get("cause_class"))
+    case.check("la publicación cuenta como el primer reintento", 1, (row or {}).get("retry_count"))
+    back = c.find_messages(c.REVIEW_QUEUE, attempt_id)
+    case.check("el mensaje vuelve a la cola de revisión", 1, len(back))
+    if back:
+        event = f.message_json(back[0])
+        case.check("el mensaje republicado cumple su esquema", [], f.review_event_problems(event),
+                   evidence=back[0]["payload"])
+    others = [m for m in c.peek(c.REVIEW_QUEUE, 500) if attempt_id not in (m.get("payload") or "")]
+    case.measure("other_messages_republished", len(others))
+
+    # Messages of other schools republished ahead of ours can hold the worker (and the
+    # model turn) for a long while: then the closing is measured, not asserted.
+    alone = not others
+    expect = case.check if alone else (lambda name, _expected, actual, evidence=None:
+                                       case.measure(name, {"actual": actual, "evidence": evidence}))
+    c.start_worker(case.tail)
+    wait = 90 if alone else 90 + c.PER_ANSWER_TIMEOUT * len(others)
+    lines = case.tail.wait_for((REVIEW_OFF_MSG, "attempt_id=" + attempt_id), wait)
+    expect(f"el worker lo recibe y confirma con «{REVIEW_OFF_MSG}»", True, bool(lines),
+           evidence=lines[-1] if lines else None)
+    lines = case.tail.wait_for((NOT_APPLICABLE_MSG, "target_id=" + attempt_id), 30)
+    expect("el worker avisa «no aplica»", True, bool(lines), evidence=lines[-1] if lines else None)
+    closed = c.poll_soft(lambda: (ai_failure_row(attempt_id) or {}).get("status") == "resolved", 30, 2)
+    expect("la fila queda resolved (no aplicaba)", True, bool(closed),
+           evidence=ai_failure_row(attempt_id))
+    if not alone:
+        case.note(f"el barrido republicó {len(others)} mensaje(s) ajeno(s) delante del nuestro: el "
+                  "cierre por «no aplica» se mide, no se afirma")
+    attempt = f.attempt_row(attempt_id)
+    case.check("el intento sigue pending_review", "pending_review", attempt["status"])
+    case.note("no afirma la corrección: la Academia tiene la IA apagada; si el barrido republicó "
+              "huérfanos de otras escuelas, el worker los atiende al volver")
+
+
 FUNCTIONS = {"P1": case_p1, "P2": case_p2, "P3": case_p3, "P3n": case_p3n, "R1": case_r1, "R2": case_r2,
              "R3": case_r3, "R4": case_r4, "R5": case_r5, "R6": case_r6, "R7": case_r7,
              "R7n": case_r7n, "R8": case_r8, "R9": case_r9, "R10": case_r10, "R11": case_r11,
-             "R12": case_r12, "R12n": case_r12n, "R12b": case_r12b, "R13": case_r13}
+             "R12": case_r12, "R12n": case_r12n, "R12b": case_r12b, "R13": case_r13,
+             "R14n": case_r14n}
 
 
 def main(argv):

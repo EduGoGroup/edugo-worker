@@ -426,3 +426,38 @@ func TestQuestionPrep_PrepSourceError_Transient(t *testing.T) {
 		t.Fatal("un fallo de red no debe ser permanente")
 	}
 }
+
+// TestQuestionPrep_AIOffReportsNotApplicable (HU-IA.6): con la IA apagada, tras escribir
+// none, el worker avisa «no aplica» de la pregunta y sigue confirmando aunque el aviso
+// falle. Si none no se pudo escribir, no hay aviso: el mensaje se reintenta.
+func TestQuestionPrep_AIOffReportsNotApplicable(t *testing.T) {
+	for _, reportErr := range []error{nil, errors.New("learning caído")} {
+		settings := &mockSettingsReader{settings: settingsWith(settingKeyReviewMode, reviewModeOff)}
+		learning := &mockPrepLearning{source: prepSource(llm.QuestionTypeShortAnswer, "h1")}
+		rep := &recordingReporter{err: reportErr}
+		p := newPrepProcessor(settings, learning, &mockPrepProvider{}).WithFailureReporter(rep)
+
+		if err := p.Process(context.Background(), prepEvent("q1", "a1", "created")); err != nil {
+			t.Fatalf("la IA apagada confirma aunque el aviso falle (%v): %v", reportErr, err)
+		}
+		if len(learning.outcomes) != 1 || learning.outcomes[0].Status != m2m.PrepStatusNone {
+			t.Fatalf("antes del aviso se escribe none: %+v", learning.outcomes)
+		}
+		want := m2m.FailureReportRequest{TargetType: m2m.RescueTargetQuestion, TargetID: "q1",
+			Kind: m2m.RescueKindNotApplicable}
+		if len(rep.reports) != 1 || rep.reports[0] != want {
+			t.Fatalf("esperaba un aviso «no aplica» de la pregunta, got %+v", rep.reports)
+		}
+	}
+
+	settings := &mockSettingsReader{settings: settingsWith(settingKeyReviewMode, reviewModeOff)}
+	learning := &mockPrepLearning{source: prepSource(llm.QuestionTypeShortAnswer, "h1"), outcomeErr: errors.New("caído")}
+	rep := &recordingReporter{}
+	p := newPrepProcessor(settings, learning, &mockPrepProvider{}).WithFailureReporter(rep)
+	if err := p.Process(context.Background(), prepEvent("q1", "a1", "created")); err == nil {
+		t.Fatal("un fallo al escribir none sale como error")
+	}
+	if len(rep.reports) != 0 {
+		t.Fatalf("sin none escrito no se avisa: %+v", rep.reports)
+	}
+}

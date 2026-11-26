@@ -63,6 +63,8 @@ type QuestionPrepProcessor struct {
 	learning  LearningPrepClient
 	providers map[string]llm.LLMProvider
 	logger    logger.Logger
+	// failures recibe el «no aplica» de la IA apagada (HU-IA.6); nil no avisa.
+	failures FailureReporter
 }
 
 // NewQuestionPrepProcessor construye el processor. providers mapea el mode
@@ -134,6 +136,7 @@ func (p *QuestionPrepProcessor) Process(ctx context.Context, payload []byte) err
 		}
 		p.logger.Info("preparación apagada para la escuela (llm.review.mode=off), se ignora (ACK)",
 			"question_id", questionID, "school_id", src.SchoolID, "reason", evt.Payload.Reason)
+		reportNotApplicable(ctx, p.failures, p.logger, m2m.RescueTargetQuestion, questionID)
 		return nil
 	}
 
