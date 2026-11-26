@@ -6,7 +6,7 @@ y dejan un JSON por caso. Nacieron en la corrida del 2026-11-24 (ecosistema,
 
 | Guion | Casos |
 |---|---|
-| `revision/run.py` | P1 a P3 (preparación), R1 a R13, R7n, R12n y R12b (revisión) |
+| `revision/run.py` | P1 a P3 y P3n (preparación), R1 a R13, R7n, R12n y R12b (revisión) |
 | `material/run.py` | M1 a M5 (material → evaluación) |
 | `concurrency/run.py` | C1 (el tope de inferencias: tres revisiones y dos PDF cortos a la vez) |
 
@@ -96,7 +96,7 @@ Falla cerrado: lo que no se pudo leer cuenta como problema.
 
 ## La marca y el código de salida
 
-Cada caso lleva `needs_model` (en `--list` y en su JSON). Sin modelo: R5, R7n, R8, R11, R12n, R13 y M3.
+Cada caso lleva `needs_model` (en `--list` y en su JSON). Sin modelo: P3n, R5, R7n, R8, R11, R12n, R13 y M3.
 Solo esos pueden ser un gate (ADR 0048 del ecosistema: la salida de un modelo se mide, no se prueba).
 
 | `rc` | Qué significa |
@@ -112,13 +112,14 @@ En un caso con modelo, las afirmaciones en rojo y las esperas agotadas se cuenta
 ## Las variantes sin modelo
 
 Afirmaban la conducta con defecto; cada HU que arregló el suyo cambió el valor esperado en un solo sitio.
-Hoy las tres afirman la conducta corregida.
+Hoy afirman la conducta corregida.
 
 | Caso | Función común | Qué afirma hoy | La invirtió |
 |---|---|---|---|
+| P3n (y P3) | `case_p3n`, `case_p3` | El mensaje de una pregunta ya `ready` deja la línea `preparación ya lista, no se repite`, no llama al modelo y no cambia la fila; el 409 por hash viejo sigue | HU-IA.4 |
 | R7n (y R7) | `direct_flow_review` | El candado queda liberado tras finalizar | HU-IA.1 |
 | R12n (y R12) | `review_until_dead_letter` | El mensaje muerto es persistente y lleva `x-error` y `x-dead-reason=max_retries`; siguen las cuatro fallas y `x-retry-count=3` | HU-IA.3 |
-| R13 | `case_r13` | Cada mensaje falla una sola vez y muere al momento: `x-retry-count=0`, `x-dead-reason=permanent`, `x-error` no vacío y persistente | HU-IA.3 |
+| R13 | `case_r13` | Cada mensaje falla una sola vez y muere al momento: `x-retry-count=0`, `x-dead-reason=permanent`, `x-error` no vacío y persistente; con la IA apagada, la sonda queda `none` | HU-IA.3 y HU-IA.4 |
 
 R12n **para Ollama** si está arriba (y lo vuelve a levantar al terminar); si ya está abajo, no toca nada.
 Si lo que escucha en `:11434` es el Ollama de escritorio, lo mata: se corre con permiso. Un caso sin modelo

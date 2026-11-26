@@ -90,6 +90,10 @@ CASES = {
            "questions": [short("corta", "¿Cuál es el planeta más cercano al Sol? (P3)",
                                "Mercurio", None)],
            "stale_hash": "0" * 64},
+    "P3n": {"title": "Preparación: el mensaje de una ya lista no llama al modelo (sin modelo)",
+            "actors": "science_5b",
+            "questions": [short("corta", GRAN_COLOMBIA_TEXT + " (P3n).", GRAN_COLOMBIA_EXPECTED,
+                                None, prep=GRAN_COLOMBIA_PREP)]},
     "R1": {"title": "Revisión: corta con la lista fijada, tres respuestas",
            "actors": "science_5b", "prep_mode": "offline",
            "questions": [
@@ -194,11 +198,11 @@ CASES = {
                                      rubric="One correct sentence.")},
 }
 
-ORDER = ["P1", "P2", "P3", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R7n", "R8", "R9", "R10",
+ORDER = ["P1", "P2", "P3", "P3n", "R1", "R2", "R3", "R4", "R5", "R6", "R7", "R7n", "R8", "R9", "R10",
          "R11", "R12", "R12n", "R12b", "R13"]
 
 # The cases whose green does not depend on what a model writes (ADR 0048): the only ones
 # that can be a gate. Every other case is measured. `needs_model` is set on each case.
-NO_MODEL = ("R5", "R7n", "R8", "R11", "R12n", "R13")
+NO_MODEL = ("P3n", "R5", "R7n", "R8", "R11", "R12n", "R13")
 for _name, _cfg in CASES.items():
     _cfg["needs_model"] = _name not in NO_MODEL

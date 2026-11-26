@@ -166,6 +166,10 @@ type PrepRequest struct {
 	Feedback string
 	// Language del contenido (default "es").
 	Language string
+	// Temperature, si viene, fija la temperatura de esta llamada; nil usa la del
+	// proveedor. Solo la lleva el reintento por salida inválida (HU-IA.4). El
+	// proveedor de pago la ignora, como en sus otras llamadas.
+	Temperature *float64
 }
 
 // PairEquivalenceRequest es la petición BINARIA de equivalencia de UN par (plan 042

@@ -112,3 +112,62 @@ func TestLearningPrepClient_SavePrep_500Transient(t *testing.T) {
 		t.Fatalf("esperaba error transitorio (sin sentinel), got: %v", err)
 	}
 }
+
+// TestLearningPrepClient_SetPrepOutcome_Statuses (HU-IA.4): 200 con y sin applied; el
+// 409 no es fallo; 4xx permanente; 5xx transitorio.
+func TestLearningPrepClient_SetPrepOutcome_Statuses(t *testing.T) {
+	cases := []struct {
+		name      string
+		code      int
+		body      string
+		applied   bool
+		conflict  bool
+		wantErr   bool
+		permanent bool
+	}{
+		{name: "200_applied", code: 200, body: `{"question_id":"q1","status":"failed","applied":true}`, applied: true},
+		{name: "200_not_applied", code: 200, body: `{"question_id":"q1","status":"ready","applied":false}`},
+		{name: "409_conflict", code: 409, body: `{"code":"PREP_HASH_MISMATCH"}`, conflict: true},
+		{name: "400_permanent", code: 400, body: `{}`, wantErr: true, permanent: true},
+		{name: "503_transient", code: 503, body: `{}`, wantErr: true},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if r.Method != http.MethodPut || r.URL.Path != "/api/v1/internal/questions/q1/prep-status" {
+					t.Errorf("petición inesperada: %s %s", r.Method, r.URL.Path)
+				}
+				var req SetPrepStatusRequest
+				_ = json.NewDecoder(r.Body).Decode(&req)
+				if req.Status != PrepStatusFailed || req.SourceHash != "h1" {
+					t.Errorf("cuerpo inesperado: %+v", req)
+				}
+				w.WriteHeader(c.code)
+				_, _ = w.Write([]byte(c.body))
+			}))
+			defer srv.Close()
+
+			cl := NewLearningPrepClient(LearningPrepClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"tok"}})
+			out, err := cl.SetPrepOutcome(context.Background(), "q1", SetPrepStatusRequest{Status: PrepStatusFailed, SourceHash: "h1"})
+			if (err != nil) != c.wantErr || errors.Is(err, ErrLearningPermanent) != c.permanent {
+				t.Fatalf("err=%v", err)
+			}
+			if out.Applied != c.applied || out.Conflict != c.conflict {
+				t.Fatalf("out=%+v", out)
+			}
+		})
+	}
+}
+
+// TestLearningPrepClient_GetPrepSource_Status: el estado viaja en la fuente.
+func TestLearningPrepClient_GetPrepSource_Status(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		_, _ = w.Write([]byte(`{"question_id":"q1","source_hash":"h","llm_prep_status":"ready"}`))
+	}))
+	defer srv.Close()
+	cl := NewLearningPrepClient(LearningPrepClientConfig{BaseURL: srv.URL, TokenProvider: staticToken{"tok"}})
+	got, err := cl.GetPrepSource(context.Background(), "q1")
+	if err != nil || got.LLMPrepStatus != PrepStatusReady {
+		t.Fatalf("got=%+v err=%v", got, err)
+	}
+}

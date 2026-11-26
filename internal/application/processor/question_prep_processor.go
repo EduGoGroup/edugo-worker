@@ -33,9 +33,10 @@ const prepLanguage = "es"
 // como ErrMalformedEvent (mismo carril permanente) porque lo envuelve.
 var ErrMalformedPrepEvent = fmt.Errorf("%w: evento question.prep_requested", ErrMalformedEvent)
 
-// ErrInvalidPrep marca un artefacto del LLM que no cumple el contrato v1. Se trata
-// como fallo del provider (transitorio): reintentar puede dar un prep válido; NUNCA
-// se hace PUT de un prep malformado (envenenaría la corrección, D-042.2).
+// ErrInvalidPrep marca un artefacto del LLM que no cumple el contrato v1 tras el único
+// reintento a llm.InvalidOutputRetryTemperature (HU-IA.4, P9.2): fallo de dato,
+// permanente (cola muerta sin reintentos) y la pregunta queda failed. NUNCA se hace
+// PUT de un prep malformado (envenenaría la corrección, D-042.2).
 var ErrInvalidPrep = errors.New("prep del LLM inválido (no cumple el contrato v1)")
 
 // LearningPrepReader/Writer es la porción del LearningPrepClient M2M que usa el
@@ -48,6 +49,8 @@ type LearningPrepClient interface {
 	// SavePrep persiste el prep con concurrencia optimista por hash. Un
 	// m2m.ErrPrepHashConflict (409) obliga a abstenerse (no es fallo).
 	SavePrep(ctx context.Context, questionID string, req m2m.SavePrepRequest) error
+	// SetPrepOutcome cierra la preparación en failed o none sin artefacto (HU-IA.4).
+	SetPrepOutcome(ctx context.Context, questionID string, req m2m.SetPrepStatusRequest) (m2m.SetPrepStatusResponse, error)
 }
 
 // QuestionPrepProcessor consume question.prep_requested y orquesta la preparación
@@ -98,10 +101,20 @@ func (p *QuestionPrepProcessor) Process(ctx context.Context, payload []byte) err
 	questionID := evt.Payload.QuestionID
 
 	// Fuente fresca: el evento no trae contenido (D-042.3), se lee por M2M. Un fallo
-	// aquí es transitorio salvo 404 (pregunta borrada → ErrLearningPermanent).
+	// aquí es transitorio salvo 404 (pregunta borrada → ErrLearningPermanent). Sin
+	// fuente no hay hash: no se escribe ningún estado.
 	src, err := p.learning.GetPrepSource(ctx, questionID)
 	if err != nil {
 		return fmt.Errorf("leyendo prep-source de la pregunta %s: %w", questionID, err)
+	}
+
+	// Solo se salta lo ready (HU-IA.4): ready equivale a «el artefacto guardado es el
+	// de este hash», porque todo camino que pide trabajo pone pending antes de
+	// publicar. Una pending o una failed se ejecutan aunque el hash coincida.
+	if src.LLMPrepStatus == m2m.PrepStatusReady {
+		p.logger.Info("preparación ya lista, no se repite",
+			"question_id", questionID, "reason", evt.Payload.Reason)
+		return nil
 	}
 
 	// Política de la escuela (misma llave que el carril de corrección, D-042.8).
@@ -111,14 +124,42 @@ func (p *QuestionPrepProcessor) Process(ctx context.Context, payload []byte) err
 	}
 	mode := settingValueOr(settings, settingKeyPrepMode, reviewModeOff)
 
-	// Corto-circuito: corrección IA apagada ⇒ preparar es trabajo inútil (ACK).
+	// Corto-circuito: corrección IA apagada ⇒ preparar es trabajo inútil. La
+	// pregunta queda none (HU-IA.4); si esa escritura falla, el mensaje se reintenta.
 	if mode == reviewModeOff {
+		if _, err := p.learning.SetPrepOutcome(ctx, questionID, m2m.SetPrepStatusRequest{
+			Status: m2m.PrepStatusNone, SourceHash: src.SourceHash,
+		}); err != nil {
+			return fmt.Errorf("marcando none la pregunta %s: %w", questionID, err)
+		}
 		p.logger.Info("preparación apagada para la escuela (llm.review.mode=off), se ignora (ACK)",
 			"question_id", questionID, "school_id", src.SchoolID, "reason", evt.Payload.Reason)
 		return nil
 	}
 
-	return p.orchestrate(ctx, mode, evt.Payload.Reason, src)
+	err = p.orchestrate(ctx, mode, evt.Payload.Reason, src)
+	if IsPermanent(err) {
+		// Fallo de dato: failed ANTES de devolver el error, para que el aviso de la
+		// HU-IA.6 llegue después. Un fallo de servicio deja pending (su dueño es la
+		// fila de lo fallado). Si la escritura falla, sale el error original.
+		p.markFailed(ctx, src, err)
+	}
+	return err
+}
+
+// markFailed escribe failed con el hash leído. Un fallo al escribir solo se loguea:
+// la pregunta queda pending para el barrido de la HU-IA.6.
+func (p *QuestionPrepProcessor) markFailed(ctx context.Context, src m2m.PrepSourceResponse, cause error) {
+	out, err := p.learning.SetPrepOutcome(ctx, src.QuestionID, m2m.SetPrepStatusRequest{
+		Status: m2m.PrepStatusFailed, SourceHash: src.SourceHash,
+	})
+	if err != nil {
+		p.logger.Warn("no se pudo marcar failed la preparación (queda pending)",
+			"question_id", src.QuestionID, "error", err.Error(), "motivo", cause.Error())
+		return
+	}
+	p.logger.Info("preparación marcada failed",
+		"question_id", src.QuestionID, "applied", out.Applied, "conflict", out.Conflict, "motivo", cause.Error())
 }
 
 // orchestrate ejecuta la preparación con la política resuelta. Idempotente por
@@ -147,22 +188,9 @@ func (p *QuestionPrepProcessor) orchestrate(ctx context.Context, mode, reason st
 		Language:      prepLanguage,
 	}
 
-	rawPrep, err := provider.PrepareQuestion(ctx, req)
+	rawPrep, err := p.prepareValid(ctx, provider, req, src)
 	if err != nil {
-		// Fallo del LLM: transitorio. Aún no escribimos nada; reintentar es seguro.
-		return fmt.Errorf("LLM preparando pregunta %s: %w", src.QuestionID, err)
-	}
-
-	// Validación de contrato ANTES del PUT: un prep inválido jamás se persiste
-	// (envenenaría la corrección). Se trata como fallo del provider (transitorio).
-	if _, verr := questionprep.Validate(rawPrep, src.QuestionType); verr != nil {
-		p.logger.Warn("prep del LLM inválido, se descarta (no se persiste)",
-			"question_id", src.QuestionID,
-			"question_type", src.QuestionType,
-			"provider", provider.Name(),
-			"motivo", verr.Error(),
-		)
-		return fmt.Errorf("preparando pregunta %s: %w: %v", src.QuestionID, ErrInvalidPrep, verr)
+		return err
 	}
 
 	// PUT con el source_hash CON EL QUE TRABAJAMOS (concurrencia optimista, D-042.5) y
@@ -193,6 +221,39 @@ func (p *QuestionPrepProcessor) orchestrate(ctx context.Context, mode, reason st
 		"provider", provider.Name(),
 	)
 	return nil
+}
+
+// prepareValid pide el artefacto y lo valida contra el contrato v1. Una salida
+// inválida o un fallo de calidad (llm.ErrLLMQuality, p. ej. el bucle de repetición)
+// se reintenta UNA vez a llm.InvalidOutputRetryTemperature; si persiste, ErrInvalidPrep
+// (fallo de dato). Un fallo de transporte sale tal cual (transitorio).
+func (p *QuestionPrepProcessor) prepareValid(ctx context.Context, provider llm.LLMProvider, req llm.PrepRequest, src m2m.PrepSourceResponse) (json.RawMessage, error) {
+	var cause error
+	for attempt := 0; attempt < 2; attempt++ {
+		if attempt == 1 {
+			t := llm.InvalidOutputRetryTemperature
+			req.Temperature = &t
+		}
+		rawPrep, err := provider.PrepareQuestion(ctx, req)
+		if err != nil {
+			if !errors.Is(err, llm.ErrLLMQuality) {
+				return nil, fmt.Errorf("LLM preparando pregunta %s: %w", src.QuestionID, err)
+			}
+			cause = err
+		} else if _, verr := questionprep.Validate(rawPrep, src.QuestionType); verr != nil {
+			cause = verr
+		} else {
+			return rawPrep, nil
+		}
+		p.logger.Warn("prep del LLM inválido, se descarta (no se persiste)",
+			"question_id", src.QuestionID,
+			"question_type", src.QuestionType,
+			"provider", provider.Name(),
+			"attempt", attempt+1,
+			"motivo", cause.Error(),
+		)
+	}
+	return nil, fmt.Errorf("preparando pregunta %s: %w: %v", src.QuestionID, ErrInvalidPrep, cause)
 }
 
 // validatePrepEvent comprueba los campos mínimos del evento del carril.
