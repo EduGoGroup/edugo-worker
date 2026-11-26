@@ -181,6 +181,9 @@ func BuildProposeCandidatesPrompt(in ProposeCandidatesInput) string {
 
 	b.WriteString(prepOutputRule)
 	b.WriteString("- Forma exacta: {\"candidates\":[{\"version\":1,\"question_type\":\"…\",\"question_text\":\"…\",\"options\":[\"…\"],\"correct_answer\":…,\"explanation\":\"…\",\"source_ideas\":[\"…\"]}]}.\n")
+	// Medido en la HU-IA.8: con los dos ejemplos a la vista el modelo numeraba "version"
+	// como un contador (1, 2, 3, 4) y el contrato descartaba todas menos la primera.
+	b.WriteString("- \"version\" es SIEMPRE 1 en TODAS las candidatas: no es un contador ni un número de orden.\n")
 	b.WriteString("- Propón entre 2 y 4 candidatas variadas; prioriza cubrir ideas DISTINTAS. Está bien sobregenerar (otro paso las filtrará).\n")
 	b.WriteString("- \"question_type\" ∈ {\"multiple_choice\",\"multiple_select\",\"true_false\",\"short_answer\",\"open_ended\"}.\n")
 	b.WriteString("- ELIGE el tipo según lo que dice cada idea:\n")

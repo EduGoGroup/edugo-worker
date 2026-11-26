@@ -127,6 +127,25 @@ func TestBuildProposeCandidatesPrompt_MultipleSelectFromIdeas(t *testing.T) {
 	}
 }
 
+// Medido en la HU-IA.8: sin esta línea el modelo numeraba "version" como un contador
+// dentro de cada respuesta y el contrato descartaba todas las candidatas menos la primera.
+func TestBuildProposeCandidatesPrompt_VersionIsAlwaysOne(t *testing.T) {
+	p := BuildProposeCandidatesPrompt(proposePromptFixture())
+	const rule = "\"version\" es SIEMPRE 1 en TODAS las candidatas: no es un contador ni un número de orden."
+	if !strings.Contains(p, rule) {
+		t.Errorf("the version rule is missing %q", rule)
+	}
+	// La forma y los dos ejemplos enseñan la misma versión, la única que admite el contrato.
+	if n := strings.Count(p, "\"version\":1"); n != 3 {
+		t.Errorf("the prompt shows \"version\":1 %d times, want 3 (the shape and the two examples)", n)
+	}
+	for _, other := range []string{"\"version\":2", "\"version\":0"} {
+		if strings.Contains(p, other) {
+			t.Errorf("the prompt shows %s", other)
+		}
+	}
+}
+
 // Un ejemplo roto enseñaría al modelo a romper el contrato: cada ejemplo que el
 // prompt muestra pasa el mismo validador que las candidatas del modelo.
 func TestBuildProposeCandidatesPrompt_ExamplesPassContract(t *testing.T) {
@@ -162,10 +181,10 @@ func TestBuildProposeCandidatesPrompt_ExamplesPassContract(t *testing.T) {
 }
 
 // proposePromptMaxRunes es el tope de largo del prompt B con proposePromptFixture
-// (ADR 0048, punto 3). El prompt medía 2.924 runas antes de la HU-IA.8 y mide 4.441
-// con ella; el tope deja un margen corto para que alargarlo sea una decisión y no un
+// (ADR 0048, punto 3). El prompt medía 2.924 runas antes de la HU-IA.8, 4.441 con su
+// primer texto y 4.532 con la regla de "version"; el tope deja un margen corto para que alargarlo sea una decisión y no un
 // descuido: cada línea de más alarga la llamada de «preguntar».
-const proposePromptMaxRunes = 4500
+const proposePromptMaxRunes = 4600
 
 func TestBuildProposeCandidatesPrompt_LengthCap(t *testing.T) {
 	p := BuildProposeCandidatesPrompt(proposePromptFixture())
