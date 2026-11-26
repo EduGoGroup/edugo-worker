@@ -9,6 +9,7 @@ import (
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	pdfErrors "github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
+	"github.com/EduGoGroup/edugo-worker/internal/llm"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -33,6 +34,11 @@ func TestClassifyError(t *testing.T) {
 		err      error
 		expected ErrorType
 	}{
+		{
+			name:     "prep invalido tras su reintento es permanente (HU-IA.4)",
+			err:      fmt.Errorf("prep: %w", ErrInvalidPrep),
+			expected: ErrorTypePermanent,
+		},
 		{
 			name:     "PDF corrupto es permanente",
 			err:      pdfErrors.ErrPDFCorrupt,
@@ -108,7 +114,9 @@ func TestDefaultRetryConfig(t *testing.T) {
 func TestIsPermanent(t *testing.T) {
 	assert.False(t, IsPermanent(nil), "nil no es un fallo")
 	assert.False(t, IsPermanent(errors.New("error generico de red")))
-	assert.False(t, IsPermanent(ErrInvalidPrep), "el artefacto invalido sigue transitorio (HU-IA.4)")
+	assert.True(t, IsPermanent(ErrInvalidPrep), "el artefacto invalido tras el reintento es fallo de dato (HU-IA.4)")
+	assert.True(t, IsPermanent(fmt.Errorf("prep: %w", ErrInvalidPrep)))
+	assert.False(t, IsPermanent(llm.ErrLLMQuality), "la calidad sola no cambia de clase fuera del prep")
 
 	assert.True(t, IsPermanent(ErrUnroutableMessage))
 	assert.True(t, IsPermanent(fmt.Errorf("%w: missing event_type", ErrUnroutableMessage)))

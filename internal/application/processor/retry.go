@@ -56,6 +56,11 @@ func classifyError(err error) ErrorType {
 		return ErrorTypePermanent
 	}
 
+	// Artefacto de preparación inválido tras su reintento: fallo de dato (HU-IA.4).
+	if errors.Is(err, ErrInvalidPrep) {
+		return ErrorTypePermanent
+	}
+
 	// 4xx permanente de learning (request malformada, answer inexistente, scope
 	// insuficiente): reintentar no lo arregla.
 	if errors.Is(err, m2m.ErrLearningPermanent) {

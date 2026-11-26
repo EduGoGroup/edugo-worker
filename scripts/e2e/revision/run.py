@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Injection script for the preparation (P1-P3) and review (R1-R13) cases.
+"""Injection script for the preparation (P1-P3, P3n) and review (R1-R13) cases.
 
     python3 scripts/e2e/revision/run.py --list
     EDUGO_BASE_PASSWORD=... python3 scripts/e2e/revision/run.py --cases P1,R1 --out-dir DIR
@@ -22,6 +22,7 @@ from common import e2e_env
 
 PREPARED_MSG = "pregunta preparada por LLM"
 PREP_OFF_MSG = "preparación apagada para la escuela"
+PREP_SKIP_MSG = "preparación ya lista, no se repite"
 REVIEW_OFF_MSG = "review apagado para la escuela"
 NOT_CLAIMABLE_MSG = "intento no reclamable, se abstiene (ACK)"
 NO_PENDING_MSG = "review sin pendientes"
@@ -162,13 +163,14 @@ def case_p2(case):
     emptied = c.wait_queue_empty(c.PREP_QUEUE, c.PER_ANSWER_TIMEOUT * max(1, len(enqueued)) + 60)
     case.check("la cola de preparación se vacía", True, emptied)
     for qid, school in enqueued:
-        expected = "pending" if modes.get(school) in (None, "off") else "ready"
-        if expected == "ready":
-            c.poll_soft(lambda q=qid: f.question_row(q)["llm_prep_status"] == "ready", 30, 2)
+        # HU-IA.4: con la IA apagada la pregunta queda none, no pending.
+        expected = "none" if modes.get(school) in (None, "off") else "ready"
+        c.poll_soft(lambda q=qid, e=expected: f.question_row(q)["llm_prep_status"] == e, 30, 2)
         case.check(f"encolada {qid} (escuela con llm.review.mode={modes.get(school)})", expected,
                    f.question_row(qid)["llm_prep_status"])
     case.measure("prep_dlq_delta", len(c.peek(c.dlq(c.PREP_QUEUE), 500)) - dead_before)
-    case.note("P2 no se restaura: las preguntas encoladas quedan pending o ready para siempre")
+    case.note("P2 no se restaura: las preguntas encoladas quedan ready, o none si su escuela "
+              "tiene la IA apagada (vuelven a ser candidatas del backfill)")
 
 
 def case_p3(case):
@@ -187,22 +189,23 @@ def case_p3(case):
     dead_before = len(c.find_messages(c.dlq(c.PREP_QUEUE), qid))
     t0 = time.time()
     c.publish(c.PREP_QUEUE, body)
-    lines = case.tail.wait_for((PREPARED_MSG, "question_id=" + qid), c.PER_ANSWER_TIMEOUT, 2)
+    # HU-IA.4: una ya ready no vuelve a llamar al modelo; el worker deja la línea del salto.
+    skip = case.tail.wait_for((PREP_SKIP_MSG, "question_id=" + qid), 60)
     case.measure("redelivery_seconds", round(time.time() - t0, 1))
-    case.check(f"el log dice «{PREPARED_MSG}» otra vez (2 líneas)", True, len(lines) >= 2,
-               evidence=lines[-1] if lines else None)
+    case.check(f"el log dice «{PREP_SKIP_MSG}»", True, bool(skip),
+               evidence=skip[-1] if skip else None)
     c.wait_queue_empty(c.PREP_QUEUE, 60)
+    prepared = case.tail.grep(PREPARED_MSG, "question_id=" + qid)
+    case.check(f"una sola línea «{PREPARED_MSG}» (la reentrega no prepara)", 1, len(prepared))
     second = f.question_row(qid)
-    t1, t2 = (f.parse_ts(first["llm_prep_updated_at"]), f.parse_ts(second["llm_prep_updated_at"]))
-    case.check("llm_prep_updated_at avanza (se reescribe)", True, bool(t1 and t2 and t2 > t1),
-               evidence=[first["llm_prep_updated_at"], second["llm_prep_updated_at"]])
+    case.check("llm_prep_updated_at igual (no se reescribe)", first["llm_prep_updated_at"],
+               second["llm_prep_updated_at"])
+    case.check("el artefacto igual", first["llm_prep"], second["llm_prep"])
     case.check("el estado sigue en ready", "ready", second["llm_prep_status"])
     case.check("el mensaje no vuelve: la cola queda vacía", 0,
                len(c.find_messages(c.PREP_QUEUE, qid)))
     case.check("el mensaje no va a la cola muerta", dead_before,
                len(c.find_messages(c.dlq(c.PREP_QUEUE), qid)))
-    case.measure("artifact_changed", first["llm_prep"] != second["llm_prep"])
-    case.measure("artifacts", {"first": first["llm_prep"], "second": second["llm_prep"]})
     # The 409: a PUT with an old hash does not write.
     status, payload = c.internal("PUT", f"/questions/{qid}/llm-prep",
                                  {"llm_prep": second["llm_prep"], "source_hash": cfg["stale_hash"],
@@ -212,6 +215,39 @@ def case_p3(case):
     third = f.question_row(qid)
     case.check("el PUT rechazado no escribe (llm_prep_updated_at igual)",
                second["llm_prep_updated_at"], third["llm_prep_updated_at"])
+
+
+def case_p3n(case):
+    """P3 without a model: the artifact is pinned while the worker is stopped, so the real
+    creation message finds the question ready and must not prepare it (HU-IA.4)."""
+    cfg = CASES["P3n"]
+    actors = ACTORS[cfg["actors"]]
+    c.stop_worker(case.tail)
+    exam = f.create_draft(case, actors, cfg["title"], cfg["questions"])
+    qid = exam["questions"][0]["id"]
+    case.ids["question_id"] = qid
+    case.check("mensaje real de la creación, en la cola", 1,
+               len(c.find_messages(c.PREP_QUEUE, qid)))
+    f.pin_prep(qid, cfg["questions"][0]["prep"])
+    before = f.question_row(qid)
+    case.check("precondición: el artefacto fijado deja la pregunta ready", "ready",
+               before["llm_prep_status"])
+    dead_before = len(c.find_messages(c.dlq(c.PREP_QUEUE), qid))
+    c.start_worker(case.tail)
+    skip = case.tail.wait_for((PREP_SKIP_MSG, "question_id=" + qid), 60)
+    case.check(f"el log dice «{PREP_SKIP_MSG}»", True, bool(skip),
+               evidence=skip[-1] if skip else None)
+    case.check("la cola de preparación queda vacía", True, c.wait_queue_empty(c.PREP_QUEUE, 60))
+    case.check(f"ninguna línea «{PREPARED_MSG}»", 0,
+               len(case.tail.grep(PREPARED_MSG, "question_id=" + qid)))
+    after = f.question_row(qid)
+    case.measure("row", {"before": {k: before[k] for k in ("llm_prep_status", "llm_prep_updated_at")},
+                         "after": {k: after[k] for k in ("llm_prep_status", "llm_prep_updated_at")}})
+    case.check("la fila no cambia (estado y llm_prep_updated_at)",
+               (before["llm_prep_status"], before["llm_prep_updated_at"]),
+               (after["llm_prep_status"], after["llm_prep_updated_at"]))
+    case.check("la cola muerta igual", dead_before, len(c.find_messages(c.dlq(c.PREP_QUEUE), qid)))
+    case.note("la evaluación de P3n queda en borrador, con su pregunta ready")
 
 
 # ================================================================ review
@@ -713,6 +749,11 @@ def case_r13(case):
     case.check("el worker sigue atendiendo: la sonda de preparación se procesa", True,
                bool(probe_lines),
                evidence=probe_lines[-1] if probe_lines else None)
+    if probe_off:
+        # HU-IA.4: con la IA apagada la sonda queda none.
+        c.poll_soft(lambda: f.question_row(probe["id"])["llm_prep_status"] == "none", 30, 2)
+        case.check("la sonda queda none (IA apagada)", "none",
+                   f.question_row(probe["id"])["llm_prep_status"])
     dead = c.poll_soft(lambda: (lambda found: found if len(found) >= 2 else None)(
         c.find_messages(c.dlq(c.REVIEW_QUEUE), suffix, 500)), 240, 3) or \
         c.find_messages(c.dlq(c.REVIEW_QUEUE), suffix, 500)
@@ -745,7 +786,7 @@ def case_r13(case):
               + suffix + "); la evaluación de la sonda queda en borrador")
 
 
-FUNCTIONS = {"P1": case_p1, "P2": case_p2, "P3": case_p3, "R1": case_r1, "R2": case_r2,
+FUNCTIONS = {"P1": case_p1, "P2": case_p2, "P3": case_p3, "P3n": case_p3n, "R1": case_r1, "R2": case_r2,
              "R3": case_r3, "R4": case_r4, "R5": case_r5, "R6": case_r6, "R7": case_r7,
              "R7n": case_r7n, "R8": case_r8, "R9": case_r9, "R10": case_r10, "R11": case_r11,
              "R12": case_r12, "R12n": case_r12n, "R12b": case_r12b, "R13": case_r13}

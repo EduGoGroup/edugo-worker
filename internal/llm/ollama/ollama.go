@@ -145,7 +145,7 @@ func (p *Provider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest) (llm
 // thinking. El caller valida el JSON contra el contrato antes de persistirlo.
 func (p *Provider) PrepareQuestion(ctx context.Context, req llm.PrepRequest) (json.RawMessage, error) {
 	prompt := llm.BuildPrepPrompt(req)
-	out, err := p.generate(ctx, prompt)
+	out, err := p.generateFormat(ctx, prompt, p.temperatureFor(req.Temperature), jsonFormat)
 	if err != nil {
 		return nil, err
 	}

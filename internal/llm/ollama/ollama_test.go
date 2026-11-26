@@ -599,3 +599,27 @@ func TestGenerate_CancelledWhileWaitingNeverCalls(t *testing.T) {
 		t.Fatalf("el servidor recibió %d peticiones de una llamada cancelada en la fila", g.hits.Load())
 	}
 }
+
+// TestPrepareQuestion_TemperatureOverride (HU-IA.4): sin temperatura, el cuerpo de
+// hoy (la del proveedor, sin seed); con ella, options.temperature 0,3.
+func TestPrepareQuestion_TemperatureOverride(t *testing.T) {
+	var bodies []map[string]any
+	srv := capturingServer(t, `{"version":1}`, &bodies)
+	defer srv.Close()
+	p := New(Config{BaseURL: srv.URL, Model: "m"})
+	retry := llm.InvalidOutputRetryTemperature
+
+	if _, err := p.PrepareQuestion(context.Background(), llm.PrepRequest{}); err != nil {
+		t.Fatal(err)
+	}
+	if _, err := p.PrepareQuestion(context.Background(), llm.PrepRequest{Temperature: &retry}); err != nil {
+		t.Fatal(err)
+	}
+	base, over := bodies[0]["options"].(map[string]any), bodies[1]["options"].(map[string]any)
+	if base["temperature"] != p.temperature || base["seed"] != nil {
+		t.Errorf("sin override: options %v", base)
+	}
+	if over["temperature"] != retry || over["seed"] != nil {
+		t.Errorf("con override: options %v", over)
+	}
+}
