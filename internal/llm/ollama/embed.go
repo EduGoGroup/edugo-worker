@@ -9,6 +9,8 @@ import (
 	"net/http"
 	"strings"
 	"time"
+
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 )
 
 // EmbedConfig configura el cliente de embeddings Ollama. Se inyecta desde
@@ -22,6 +24,9 @@ type EmbedConfig struct {
 	Model string
 	// Timeout de la request HTTP. Embeder un lote chico es rápido: default 60s.
 	Timeout time.Duration
+	// Limiter is the local inference cap, shared with the generation provider: an
+	// embedding batch takes one turn (HU-IA.10). nil is "no cap".
+	Limiter *inferencecap.Limiter
 }
 
 // EmbedProvider es la implementación Ollama de llm.Embedder. Pega a POST
@@ -30,6 +35,7 @@ type EmbedProvider struct {
 	baseURL    string
 	model      string
 	httpClient *http.Client
+	limiter    *inferencecap.Limiter
 }
 
 // NewEmbedder construye el cliente de embeddings Ollama a partir de su config.
@@ -42,6 +48,7 @@ func NewEmbedder(cfg EmbedConfig) *EmbedProvider {
 		baseURL:    strings.TrimRight(cfg.BaseURL, "/"),
 		model:      cfg.Model,
 		httpClient: &http.Client{Timeout: timeout},
+		limiter:    cfg.Limiter,
 	}
 }
 
@@ -79,6 +86,13 @@ func (p *EmbedProvider) Embed(ctx context.Context, texts []string) ([][]float32,
 		return nil, fmt.Errorf("creating ollama embed request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
+
+	// Turn asked right before the request opens: the wait is off the client clock.
+	release, err := p.limiter.Acquire(ctx)
+	if err != nil {
+		return nil, fmt.Errorf("ollama embed request not sent: %w", err)
+	}
+	defer release()
 
 	resp, err := p.httpClient.Do(httpReq)
 	if err != nil {

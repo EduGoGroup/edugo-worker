@@ -9,6 +9,8 @@ import (
 
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	rabbit "github.com/EduGoGroup/edugo-shared/messaging/rabbit"
+	"github.com/EduGoGroup/edugo-worker/internal/application/processor"
+	"github.com/EduGoGroup/edugo-worker/internal/application/rescue"
 	"github.com/EduGoGroup/edugo-worker/internal/bootstrap"
 	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/metrics"
@@ -94,6 +96,9 @@ func main() {
 
 	dlqCfg := cfg.GetDLQConfigWithDefaults().ToShared()
 
+	// Los tres consumers pasan por bootstrap.WithFailureHooks: lo permanente va a la cola
+	// muerta sin reintentos, y cada reintento y cada envío dejan una línea de log.
+
 	consumerCfg := rabbit.ConsumerConfig{
 		Name:          "edugo-worker",
 		AutoAck:       false,
@@ -101,7 +106,7 @@ func main() {
 		DLQ:           dlqCfg,
 	}
 
-	consumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, consumerCfg).(*rabbit.RabbitMQConsumer)
+	consumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, bootstrap.WithFailureHooks(consumerCfg, resources.Logger)).(*rabbit.RabbitMQConsumer)
 	if !ok {
 		log.Fatal("failed to create RabbitMQ consumer: unexpected type")
 	}
@@ -118,7 +123,7 @@ func main() {
 		PrefetchCount: prefetchCount,
 		DLQ:           prepDLQCfg,
 	}
-	prepConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, prepConsumerCfg).(*rabbit.RabbitMQConsumer)
+	prepConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, bootstrap.WithFailureHooks(prepConsumerCfg, resources.Logger)).(*rabbit.RabbitMQConsumer)
 	if !ok {
 		log.Fatal("failed to create RabbitMQ prep consumer: unexpected type")
 	}
@@ -134,12 +139,15 @@ func main() {
 		PrefetchCount: prefetchCount,
 		DLQ:           materialDLQCfg,
 	}
-	materialConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, materialConsumerCfg).(*rabbit.RabbitMQConsumer)
+	materialConsumer, ok := rabbit.NewConsumer(resources.RabbitMQConn, bootstrap.WithFailureHooks(materialConsumerCfg, resources.Logger)).(*rabbit.RabbitMQConsumer)
 	if !ok {
 		log.Fatal("failed to create RabbitMQ material consumer: unexpected type")
 	}
 
-	// 6. Crear handler con rate limiting integrado
+	// 6. Crear handler con rate limiting integrado. El registry va envuelto en el aviso
+	// del fallo (HU-IA.6): cuando un mensaje de revisión o de preparación va a morir, el
+	// worker lo avisa a learning sin cambiar el error que ve el consumer.
+	messages := processor.NewFailureReportingProcessor(resources.ProcessorRegistry, resources.LearningRescueClient, resources.Logger)
 	handler := func(ctx context.Context, body []byte) error {
 		if rateLimiter != nil {
 			eventType := "unknown"
@@ -163,7 +171,7 @@ func main() {
 		}
 
 		resources.Logger.Info("Mensaje recibido", "size", len(body))
-		if err := resources.ProcessorRegistry.Process(ctx, body); err != nil {
+		if err := messages.Process(ctx, body); err != nil {
 			resources.Logger.Error("Error procesando evento", "error", err.Error())
 			return err
 		}
@@ -197,6 +205,15 @@ func main() {
 		"prefetch_count", prefetchCount,
 		"dlq_enabled", dlqCfg.Enabled,
 		"max_retries", dlqCfg.MaxRetries)
+
+	// 7b. Planificador del rescate (HU-IA.6): cada ai_rescue.sweep_interval pide el
+	// barrido a learning. Con ai_rescue.enabled=false no arranca.
+	rescueSettings, err := cfg.AIRescue.Settings()
+	if err != nil {
+		log.Fatal("❌ Configuración ai_rescue inválida:", err)
+	}
+	sweeperCtx, cancelSweeper := context.WithCancel(ctx)
+	sweeperDone, sweeperStarted := rescue.NewSweeper(resources.LearningRescueClient, rescueSettings, resources.Logger).Start(sweeperCtx)
 
 	// 8. Configurar graceful shutdown
 	shutdownCfg := cfg.GetShutdownConfigWithDefaults()
@@ -243,6 +260,21 @@ func main() {
 	gracefulShutdown.Register("infrastructure_cleanup", func(shutdownCtx context.Context) error {
 		resources.Logger.Info("Ejecutando cleanup de infraestructura...")
 		return cleanup()
+	})
+
+	// 9.4 Detener el planificador del rescate. Se registra el último para que, en LIFO,
+	// sea lo primero en pararse: ningún barrido nuevo durante el apagado.
+	gracefulShutdown.Register("rescue_sweeper", func(shutdownCtx context.Context) error {
+		cancelSweeper()
+		if !sweeperStarted {
+			return nil
+		}
+		select {
+		case <-sweeperDone:
+			return nil
+		case <-shutdownCtx.Done():
+			return fmt.Errorf("el planificador del rescate no se detuvo a tiempo: %w", shutdownCtx.Err())
+		}
 	})
 
 	// 10. Esperar senal de shutdown y ejecutar

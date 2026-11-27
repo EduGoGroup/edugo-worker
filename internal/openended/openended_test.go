@@ -3,6 +3,7 @@ package openended
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"math"
 	"testing"
 
@@ -18,6 +19,10 @@ type mockProvider struct {
 	met       map[string]bool
 	calls     int
 	critError error
+	// critOuts, si no está vacío, fija la salida llamada a llamada (la última se repite);
+	// critTemps guarda la temperatura que pidió cada llamada (HU-INF.5).
+	critOuts  []llm.ReviewResult
+	critTemps []*float64
 
 	// extracción de ideas (F4/D-045.9).
 	ideas        []string
@@ -42,8 +47,12 @@ func (m *mockProvider) JudgePairEquivalence(_ context.Context, _ llm.PairEquival
 func (m *mockProvider) CheckCriterion(_ context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
 	m.calls++
 	m.gotIdeas = append(m.gotIdeas, req.ExtractedIdeas)
+	m.critTemps = append(m.critTemps, req.Temperature)
 	if m.critError != nil {
 		return llm.ReviewResult{}, m.critError
+	}
+	if len(m.critOuts) > 0 {
+		return m.critOuts[min(m.calls, len(m.critOuts))-1], nil
 	}
 	v := llm.VerdictIncorrect
 	if m.met[req.Criterion] {
@@ -278,5 +287,74 @@ func TestGrade_ExtraccionError_NoRompeYCaeARaw(t *testing.T) {
 	}
 	if res.Verdict != llm.VerdictCorrect {
 		t.Fatalf("esperaba correct (2/2), hubo %s", res.Verdict)
+	}
+}
+
+// HU-INF.5: un criterio con salida inválida se reintenta UNA vez con otra temperatura;
+// si la segunda vale, se usa.
+func TestGrade_InvalidCriterion_RetriedOnce(t *testing.T) {
+	m := &mockProvider{critOuts: []llm.ReviewResult{{Verdict: "partial"}, {Verdict: llm.VerdictCorrect, Score: 1}}}
+	res, err := Grade(context.Background(), m, fotosintesis([]string{"menciona la luz"}))
+	if err != nil {
+		t.Fatalf("el reintento válido no debe fallar: %v", err)
+	}
+	if res.Verdict != llm.VerdictCorrect {
+		t.Fatalf("la segunda salida (correct) decide, salió %q", res.Verdict)
+	}
+	if m.calls != 2 || m.critTemps[0] != nil || m.critTemps[1] == nil || *m.critTemps[1] != llm.InvalidOutputRetryTemperature {
+		t.Fatalf("se esperaban 2 llamadas, la segunda a %.1f; llamadas=%d", llm.InvalidOutputRetryTemperature, m.calls)
+	}
+}
+
+// HU-INF.5: si sigue inválida tras el reintento, la revisión es un error, nunca un
+// «no cumple».
+func TestGrade_InvalidCriterionTwice_IsError(t *testing.T) {
+	m := &mockProvider{critOuts: []llm.ReviewResult{{Verdict: ""}}}
+	_, err := Grade(context.Background(), m, fotosintesis([]string{"uno", "dos"}))
+	if !errors.Is(err, llm.ErrInvalidOutput) {
+		t.Fatalf("se esperaba un error que envuelva ErrInvalidOutput, salió %v", err)
+	}
+	if m.calls != 2 {
+		t.Fatalf("un solo reintento y se corta: se esperaban 2 llamadas, hubo %d", m.calls)
+	}
+}
+
+// Un error de transporte en el criterio se propaga igual, sin reintento propio.
+func TestGrade_CriterionTransportError_NoRetry(t *testing.T) {
+	boom := errors.New("connection refused")
+	m := &mockProvider{critError: boom}
+	_, err := Grade(context.Background(), m, fotosintesis([]string{"uno"}))
+	if !errors.Is(err, boom) || m.calls != 1 {
+		t.Fatalf("se esperaba el error tal cual y una llamada: %v (%d)", err, m.calls)
+	}
+}
+
+// HU-INF.5 (decisión 6): la extracción de ideas que falla no detiene la revisión, y el
+// resultado lo marca, distinto de «no había ideas».
+func TestGrade_IdeasExtractionMark(t *testing.T) {
+	crit := []string{"menciona la luz"}
+	met := map[string]bool{"menciona la luz": true}
+	cases := []struct {
+		name string
+		m    *mockProvider
+		want llm.IdeasOutcome
+	}{
+		{"falla", &mockProvider{met: met, extractErr: llm.ErrInvalidOutput}, llm.IdeasFailed},
+		{"vacía", &mockProvider{met: met, ideas: []string{}}, llm.IdeasEmpty},
+		{"con ideas", &mockProvider{met: met, ideas: []string{"la luz"}}, llm.IdeasUsed},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			res, err := Grade(context.Background(), c.m, fotosintesis(crit))
+			if err != nil {
+				t.Fatalf("la extracción no detiene la revisión: %v", err)
+			}
+			if res.Verdict != llm.VerdictCorrect || c.m.calls != 1 {
+				t.Fatalf("el criterio se comprueba igual: %q (%d llamadas)", res.Verdict, c.m.calls)
+			}
+			if res.Ideas != c.want {
+				t.Fatalf("marca %q, se esperaba %q", res.Ideas, c.want)
+			}
+		})
 	}
 }

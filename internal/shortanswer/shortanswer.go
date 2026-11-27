@@ -55,14 +55,19 @@ type llmPairStrategy struct {
 func (llmPairStrategy) Name() string { return "llm-pair" }
 
 // Compare pide al modelo la equivalencia binaria del par y la mapea a un
-// textmatch.Result: VerdictCorrect ⇒ Match/1.0, cualquier otro ⇒ NoMatch/0.0. El
-// error del provider (transitorio) se propaga para que el caller reintente el intento.
+// textmatch.Result: VerdictCorrect ⇒ Match/1.0, VerdictIncorrect ⇒ NoMatch/0.0. La
+// salida se revalida contra su esquema (HU-INF.5): una inválida se reintenta una vez
+// con otra temperatura y, si sigue inválida, es un error, nunca un «no». El error del
+// provider (transitorio) se propaga igual para que el caller reintente el intento.
 func (s llmPairStrategy) Compare(ctx context.Context, expected, candidate string) (textmatch.Result, error) {
-	res, err := s.provider.JudgePairEquivalence(ctx, llm.PairEquivalenceRequest{
-		QuestionText: s.questionText,
-		Expected:     expected,
-		Candidate:    candidate,
-		Language:     s.language,
+	res, err := llm.CallVerdict(ctx, llm.BinaryVerdicts, func(ctx context.Context, temperature *float64) (llm.ReviewResult, error) {
+		return s.provider.JudgePairEquivalence(ctx, llm.PairEquivalenceRequest{
+			QuestionText: s.questionText,
+			Expected:     expected,
+			Candidate:    candidate,
+			Language:     s.language,
+			Temperature:  temperature,
+		})
 	})
 	if err != nil {
 		return textmatch.Result{}, err

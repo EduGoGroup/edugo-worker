@@ -13,6 +13,7 @@ package reduce
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"math"
 	"sort"
@@ -96,10 +97,11 @@ type DedupeReport struct {
 	Clusters           int // grupos de duplicados con ≥2 miembros
 	DroppedDup         int // candidatas marcadas dropped_dup (perdedoras del grupo)
 	EmbeddingsComputed int // embeddings nuevos calculados y persistidos
-	LLMCalls           int // llamadas a JudgePairEquivalence (solo zona gris)
+	LLMCalls           int // llamadas a JudgePairEquivalence (solo zona gris; cuenta el reintento de calidad)
 	PairsText          int // pares resueltos en el escalón de letras (textmatch)
 	PairsEmbed         int // pares resueltos en el escalón de significado (coseno)
 	PairsLLM           int // pares resueltos por el juez LLM (zona gris)
+	PairsUndecided     int // pares que el juez no decidió tras el reintento de calidad (no se agrupan)
 }
 
 // item es una candidata en proceso: el registro crudo + su payload parseado + el
@@ -117,7 +119,9 @@ type item struct {
 // re-invocar sobre un job ya depurado no re-agrupa ni re-escribe. Nada se borra.
 //
 // Errores: propaga los del store/embedder/juez tal cual (el caller los clasifica —
-// ErrPipelineConflict, ErrLearningPermanent o transitorio— con su semántica del carril).
+// ErrPipelineConflict, ErrLearningPermanent o transitorio— con su semántica del carril),
+// salvo un fallo de CALIDAD del juez: ese se reintenta una vez y, si persiste, el par
+// queda sin decidir (PairsUndecided) y la pasada sigue.
 func (d *DedupePass) Run(ctx context.Context, jobID string) (DedupeReport, error) {
 	records, err := d.store.ListCandidates(ctx, jobID)
 	if err != nil {
@@ -168,10 +172,11 @@ func (d *DedupePass) Run(ctx context.Context, jobID string) (DedupeReport, error
 	cascade := textmatch.NewCascade(textmatch.Exact{}, textmatch.NewFuzzy(fuzzyThreshold))
 	for i := 0; i < len(items); i++ {
 		for j := i + 1; j < len(items); j++ {
-			dup, tier, jerr := d.arePairDuplicate(ctx, cascade, items[i], items[j])
+			dup, tier, calls, jerr := d.arePairDuplicate(ctx, jobID, cascade, items[i], items[j])
 			if jerr != nil {
 				return report, jerr
 			}
+			report.LLMCalls += calls
 			switch tier {
 			case tierText:
 				report.PairsText++
@@ -179,7 +184,8 @@ func (d *DedupePass) Run(ctx context.Context, jobID string) (DedupeReport, error
 				report.PairsEmbed++
 			case tierLLM:
 				report.PairsLLM++
-				report.LLMCalls++
+			case tierUndecided:
+				report.PairsUndecided++
 			}
 			if dup {
 				uf.union(i, j)
@@ -205,7 +211,8 @@ func (d *DedupePass) Run(ctx context.Context, jobID string) (DedupeReport, error
 		"grupos", report.Clusters,
 		"dropped_dup", report.DroppedDup,
 		"embeddings_nuevos", report.EmbeddingsComputed,
-		"llm_calls", report.LLMCalls)
+		"llm_calls", report.LLMCalls,
+		"pares_sin_decidir", report.PairsUndecided)
 	return report, nil
 }
 
@@ -262,49 +269,72 @@ const (
 	tierText  tier = iota // letras (textmatch)
 	tierEmbed             // significado (coseno)
 	tierLLM               // juez LLM (zona gris)
+	// tierUndecided: the judge failed on quality twice; the pair is not grouped.
+	tierUndecided
 )
 
 // arePairDuplicate aplica la escalera a UN par y devuelve si son duplicados y en qué
 // escalón se decidió. Letras primero (gratis): si el texto empata, desempata por
 // correct_answer (respuestas equivalentes ⇒ duplicado; distintas ⇒ NO). Si el texto no
-// empata, coseno; y solo la zona gris llega al juez LLM.
-func (d *DedupePass) arePairDuplicate(ctx context.Context, cascade *textmatch.Cascade, a, b *item) (bool, tier, error) {
+// empata, coseno; y solo la zona gris llega al juez LLM. Devuelve también cuántas
+// llamadas al juez gastó el par (0, 1 o 2 con el reintento de calidad).
+func (d *DedupePass) arePairDuplicate(ctx context.Context, jobID string, cascade *textmatch.Cascade, a, b *item) (bool, tier, int, error) {
 	// Escalón 1 — letras. textmatch normaliza internamente (Exact/Fuzzy sobre Normalize).
 	res, err := cascade.Compare(ctx, a.payload.QuestionText, b.payload.QuestionText)
 	if err != nil {
-		return false, tierText, fmt.Errorf("comparando textos en dedupe: %w", err)
+		return false, tierText, 0, fmt.Errorf("comparando textos en dedupe: %w", err)
 	}
 	if res.Outcome == textmatch.OutcomeMatch {
 		// Texto igual/casi-igual: la respuesta desempata. Equivalente (o ambas vacías,
 		// caso open_ended) ⇒ duplicado; claramente distinta ⇒ preguntas distintas que
 		// comparten redacción.
-		return equalAnswerSets(a.answers, b.answers), tierText, nil
+		return equalAnswerSets(a.answers, b.answers), tierText, 0, nil
 	}
 
 	// Escalón 2 — significado (coseno sobre embeddings crudos).
 	cos, ok := cosine(a.embed, b.embed)
 	if ok {
 		if cos >= d.cfg.DupHigh {
-			return true, tierEmbed, nil
+			return true, tierEmbed, 0, nil
 		}
 		if cos < d.cfg.DupLow {
-			return false, tierEmbed, nil
+			return false, tierEmbed, 0, nil
 		}
 	}
 	// Sin embeddings comparables (longitudes distintas / vector nulo) la zona gris
 	// absorbe el par: que decida el juez, no un coseno inválido.
 
-	// Escalón 3 — juez LLM (solo zona gris), un par por llamada.
-	verdict, err := d.judge.JudgePairEquivalence(ctx, llm.PairEquivalenceRequest{
+	// Escalón 3 — juez LLM (solo zona gris), un par por llamada. Un fallo de CALIDAD del
+	// juez se reintenta una vez con otra temperatura; si persiste, el par no se agrupa
+	// (conservador) y se cuenta como no decidido. La infraestructura aborta la pasada.
+	req := llm.PairEquivalenceRequest{
 		QuestionText: a.payload.QuestionText,
 		Expected:     a.payload.QuestionText,
 		Candidate:    b.payload.QuestionText,
 		Language:     "es",
-	})
-	if err != nil {
-		return false, tierLLM, fmt.Errorf("juez de equivalencia en dedupe: %w", err)
 	}
-	return verdict.Verdict == llm.VerdictCorrect, tierLLM, nil
+	verdict, err := d.judge.JudgePairEquivalence(ctx, req)
+	if err == nil {
+		return verdict.Verdict == llm.VerdictCorrect, tierLLM, 1, nil
+	}
+	if !errors.Is(err, llm.ErrLLMQuality) {
+		return false, tierLLM, 1, fmt.Errorf("juez de equivalencia en dedupe: %w", err)
+	}
+	d.logger.Warn("el juez de duplicadas falló por calidad; se reintenta con otra temperatura",
+		"job_id", jobID, "candidate_a", a.record.ID, "candidate_b", b.record.ID,
+		"temp_retry", llm.InvalidOutputRetryTemperature, "motivo", err.Error())
+	retryTemp := llm.InvalidOutputRetryTemperature
+	req.Temperature = &retryTemp
+	verdict, err = d.judge.JudgePairEquivalence(ctx, req)
+	if err == nil {
+		return verdict.Verdict == llm.VerdictCorrect, tierLLM, 2, nil
+	}
+	if !errors.Is(err, llm.ErrLLMQuality) {
+		return false, tierLLM, 2, fmt.Errorf("juez de equivalencia en dedupe: %w", err)
+	}
+	d.logger.Warn("el juez de duplicadas sigue sin calidad tras el reintento; el par no se agrupa y queda sin decidir",
+		"job_id", jobID, "candidate_a", a.record.ID, "candidate_b", b.record.ID, "motivo", err.Error())
+	return false, tierUndecided, 2, nil
 }
 
 // resolveGroups convierte el union-find en updates M2M: por cada grupo con ≥2 miembros

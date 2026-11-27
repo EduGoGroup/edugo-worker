@@ -23,6 +23,7 @@ type Config struct {
 	CircuitBreakers  CircuitBreakersConfig  `mapstructure:"circuit_breakers"`
 	RateLimiter      RateLimiterConfig      `mapstructure:"rate_limiter"`
 	Shutdown         ShutdownConfig         `mapstructure:"shutdown"`
+	AIRescue         AIRescueConfig         `mapstructure:"ai_rescue"`
 }
 
 type MessagingConfig struct {
@@ -282,6 +283,9 @@ type LLMLocalConfig struct {
 	// corrección pide JSON estructurado, no prosa creativa, y el determinismo la
 	// hace reproducible. Env: LLM_LOCAL_TEMPERATURE.
 	Temperature float64 `mapstructure:"temperature"`
+	// MaxInFlight caps the inferences in flight against the local model (HU-IA.10).
+	// Zero is the default (1). Env: LLM_LOCAL_MAX_IN_FLIGHT.
+	MaxInFlight int `mapstructure:"max_in_flight"`
 }
 
 // LLMAPIConfig configura el provider por API (Claude/Gemini). Env:
@@ -293,6 +297,9 @@ type LLMAPIConfig struct {
 	BaseURL   string        `mapstructure:"base_url"`
 	Timeout   time.Duration `mapstructure:"timeout"`
 	MaxTokens int           `mapstructure:"max_tokens"`
+	// MaxInFlight caps the requests in flight against the paid provider (HU-IA.10).
+	// Zero is the default (4). Env: LLM_API_MAX_IN_FLIGHT.
+	MaxInFlight int `mapstructure:"max_in_flight"`
 }
 
 func (c *Config) Validate() error {
@@ -300,7 +307,11 @@ func (c *Config) Validate() error {
 		return fmt.Errorf("RABBITMQ_URL is required")
 	}
 	// NLP.APIKey es opcional - si no está, usamos SmartFallback
-	return nil
+	if err := c.LLM.validateInferenceCaps(); err != nil {
+		return err
+	}
+	_, err := c.AIRescue.Settings()
+	return err
 }
 
 // GetActiveNLPConfig retorna la configuración del provider NLP activo con valores por defecto

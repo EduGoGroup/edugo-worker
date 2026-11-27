@@ -106,3 +106,6 @@ tmp/
 
 # Claude Code local settings
 .claude/
+
+# Python (scripts/e2e)
+__pycache__/

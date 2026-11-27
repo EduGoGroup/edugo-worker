@@ -406,3 +406,101 @@ func TestDedupe_SkipsTerminalStatuses(t *testing.T) {
 		t.Fatalf("con 1 sola candidata viva no hay pares → no se embebe: calls=%d", emb.calls)
 	}
 }
+
+// --- el juez que falla (HU-IA.9) ---
+
+// scriptedJudge devuelve un resultado por llamada (repite el último) y guarda la
+// temperatura que recibió cada una.
+type scriptedJudge struct {
+	outcomes []error // nil = veredicto «correct»
+	temps    []*float64
+}
+
+func (j *scriptedJudge) JudgePairEquivalence(_ context.Context, req llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
+	idx := len(j.temps)
+	j.temps = append(j.temps, req.Temperature)
+	if idx >= len(j.outcomes) {
+		idx = len(j.outcomes) - 1
+	}
+	if err := j.outcomes[idx]; err != nil {
+		return llm.ReviewResult{}, err
+	}
+	return llm.ReviewResult{Verdict: llm.VerdictCorrect, Score: 1}, nil
+}
+
+// warnLogger guarda los mensajes de Warn.
+type warnLogger struct {
+	nopLogger
+	warns []string
+}
+
+func (l *warnLogger) Warn(msg string, _ ...any) { l.warns = append(l.warns, msg) }
+
+// greyZonePair arma dos candidatas que solo el juez puede decidir (coseno ≈ 0,707).
+func greyZonePair() (*fakeStore, *fakeEmbedder) {
+	q1 := "en que anio se fundo la ciudad"
+	q2 := "cual fue el motivo de la fundacion"
+	store := &fakeStore{records: []m2m.CandidateRecord{
+		candRecord("a", 0, "open_ended", q1, nil, nil, []string{"i1"}),
+		candRecord("b", 1, "open_ended", q2, nil, nil, []string{"i1"}),
+	}}
+	return store, &fakeEmbedder{vecs: map[string][]float32{q1: {1, 0}, q2: {1, 1}}}
+}
+
+var errJudgeQuality = fmt.Errorf("%w: ollama returned status 500: token repeat limit reached", llm.ErrLLMQuality)
+
+// El juez falla por calidad dos veces: la pasada termina, el par no se agrupa y se
+// cuenta como no decidido; el segundo intento va a 0,3 y queda en el log.
+func TestDedupe_JudgeQualityFailure_RetriesThenUndecided(t *testing.T) {
+	store, emb := greyZonePair()
+	judge := &scriptedJudge{outcomes: []error{errJudgeQuality}}
+	log := &warnLogger{}
+
+	rep, err := NewDedupePass(store, emb, judge, Config{}, log).Run(context.Background(), "job-1")
+	if err != nil {
+		t.Fatalf("un fallo de calidad del juez no debe abortar la pasada: %v", err)
+	}
+	if rep.PairsUndecided != 1 || rep.PairsLLM != 0 || rep.LLMCalls != 2 || rep.Clusters != 0 || rep.DroppedDup != 0 {
+		t.Fatalf("reporte inesperado: %+v", rep)
+	}
+	if len(judge.temps) != 2 || judge.temps[0] != nil || judge.temps[1] == nil || *judge.temps[1] != llm.InvalidOutputRetryTemperature {
+		t.Fatalf("se esperaba un reintento a %v, temperaturas: %v", llm.InvalidOutputRetryTemperature, judge.temps)
+	}
+	if st := statusByID(store); st["a"] != statusCandidate || st["b"] != statusCandidate {
+		t.Fatalf("un par no decidido no se agrupa: %v", st)
+	}
+	if len(log.warns) != 2 {
+		t.Fatalf("se esperaban dos avisos (el reintento y el par sin decidir), hubo %v", log.warns)
+	}
+}
+
+// El reintento decide el par.
+func TestDedupe_JudgeQualityThenOK_UsesRetryVerdict(t *testing.T) {
+	store, emb := greyZonePair()
+	judge := &scriptedJudge{outcomes: []error{errJudgeQuality, nil}}
+
+	rep, err := newPass(store, emb, judge).Run(context.Background(), "job-1")
+	if err != nil {
+		t.Fatalf("Run: %v", err)
+	}
+	if rep.PairsLLM != 1 || rep.PairsUndecided != 0 || rep.LLMCalls != 2 || rep.DroppedDup != 1 {
+		t.Fatalf("reporte inesperado: %+v", rep)
+	}
+	if len(judge.temps) != 2 || judge.temps[1] == nil || *judge.temps[1] != llm.InvalidOutputRetryTemperature {
+		t.Fatalf("se esperaban dos llamadas, la segunda con temperatura de reintento: %v", judge.temps)
+	}
+}
+
+// Un error de infraestructura sigue abortando la pasada, sin reintento.
+func TestDedupe_JudgeInfraError_AbortsPass(t *testing.T) {
+	store, emb := greyZonePair()
+	judge := &scriptedJudge{outcomes: []error{fmt.Errorf("ollama request failed: connection refused")}}
+
+	rep, err := newPass(store, emb, judge).Run(context.Background(), "job-1")
+	if err == nil {
+		t.Fatal("un error de infraestructura del juez debe abortar la pasada")
+	}
+	if len(judge.temps) != 1 || rep.PairsUndecided != 0 || rep.PairsLLM != 0 {
+		t.Fatalf("la infraestructura no se reintenta: llamadas %d, reporte %+v", len(judge.temps), rep)
+	}
+}

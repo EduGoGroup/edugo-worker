@@ -1,26 +1,18 @@
 package main
 
-// material.go — modo "material" del harness (plan 043 F3b): mide las DOS llamadas del
-// pipeline material→evaluación sobre documentos reales de testdata.
+// material.go — modo "material" del arnés (AR-IA.3): la medida del riel
+// material→evaluación ENTERO. Por cada caso (un PDF) monta el procesador de
+// producción sobre un almacén en memoria (material_rail.go) y lo deja correr: fase 0
+// (extraer y trocear), fase 1 (leer y preguntar por trozo) y las cuatro pasadas de la
+// fase 2, con los reintentos de producción. Solo necesita Ollama.
 //
-//   - Batería A (digest): por cada trozo corre DigestChunk ("leer") encadenando el
-//     summary del trozo anterior, y valida los artefactos contra ChunkArtifactsV1.
-//   - Batería B (candidatas): con las ideas de A corre ProposeCandidates ("preguntar")
-//     y valida cada candidata contra CandidatePayloadV1.
-//
-// El flujo espeja al processor de F3c: extrae texto (pdf.Extractor para .pdf, lectura
-// directa para .txt), porciona con la Config de los flags -chunk-* (default = la config
-// productiva 300/400/200/80, no chunking.DefaultConfig) y encadena A→B por trozo. Mide
-// —no en papel— para elegir modelo y variante de prompt (-digest-prompt v1|v2). Reporta
-// tabla + JSON; no corre nada si Ollama no responde (reporta el error del provider).
-//
-// NOTA (hallazgo F3b): el extractor de PDF (internal/infrastructure/pdf) devuelve hoy el
-// content-stream crudo (operadores + texto entre paréntesis) y además rechaza PDFs de una
-// sola página porque no invoca EnsurePageCount antes de leer PageCount. Por eso los .txt
-// hermanos son la entrada por defecto de la medición; los .pdf de testdata ejercitan el
-// camino pdf.Extractor y quedan listos para cuando el dueño de ese paquete lo corrija.
+// MIDE, NO JUZGA (ADR 0048): una corrida por caso; una salida inválida del modelo es
+// un dato; no imprime veredictos y guarda la corrida en el historial. Termina con
+// código != 0 solo si no pudo correr (sin modelo, sin PDF, una sección declarada que
+// no aparece en el texto, sin poder guardar).
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -32,407 +24,240 @@ import (
 
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-worker/internal/chunking"
+	"github.com/EduGoGroup/edugo-worker/internal/config"
 	"github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
-	"github.com/EduGoGroup/edugo-worker/internal/llm"
-	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
-// maxSummaryWords es el tope de palabras del summary encadenable (D-043.7): un resumen
-// escrito para otro LLM debe ser mínimo en tokens. Por encima cuenta como "no OK".
-const maxSummaryWords = 120
-
-// defaultMaterialDir es la carpeta de testdata usada cuando no se pasa -material-inputs.
+// defaultMaterialDir es la carpeta de datos del modo, relativa a la raíz del worker.
 const defaultMaterialDir = "cmd/llm-harness/testdata/material"
 
-// materialChunkMetric son las métricas de correr A+B sobre UN trozo (o de un input que
-// ni siquiera pudo cargarse: ChunkSeq = -1 y LoadErr poblado).
-type materialChunkMetric struct {
-	Input      string `json:"input"`
-	ChunkSeq   int    `json:"chunk_seq"`
-	ChunkWords int    `json:"chunk_words"`
-	LoadErr    string `json:"load_err,omitempty"`
+// defaultMaterialCases son los casos congelados de la línea base.
+const defaultMaterialCases = defaultMaterialDir + "/cases.json"
 
-	// Batería A (digest).
-	DigestMS        int64    `json:"digest_ms"`
-	DigestErr       string   `json:"digest_err,omitempty"`
-	ArtifactsValid  bool     `json:"artifacts_valid"`
-	ArtifactsIssues []string `json:"artifacts_issues,omitempty"`
-	MainIdeas       int      `json:"main_ideas"`
-	SecondaryIdeas  int      `json:"secondary_ideas"`
-	SummaryWords    int      `json:"summary_words"`
-	SummaryOK       bool     `json:"summary_ok"`
-
-	// Batería B (candidatas).
-	BSkipped    bool   `json:"b_skipped,omitempty"`
-	ProposeMS   int64  `json:"propose_ms"`
-	ProposeErr  string `json:"propose_err,omitempty"`
-	CandTotal   int    `json:"cand_total"`
-	CandValid   int    `json:"cand_valid"`
-	CandInRange bool   `json:"cand_in_range"`
-	// CandDeictic cuenta candidatas cuyo enunciado referencia el contexto del prompt
-	// («según las ideas», «según el texto»…): no autocontenidas (deuda 043). Se mide con
-	// el detector determinista de materialpipeline, independiente de la validez de forma.
-	CandDeictic int              `json:"cand_deictic"`
-	TypeCounts  map[string]int   `json:"type_counts,omitempty"`
-	CandIssues  []candidateIssue `json:"cand_issues,omitempty"`
-
-	summaryText string // no exportado: se encadena al trozo siguiente
+// materialCase es un caso: un PDF y, si se declaran, los títulos literales de sus
+// secciones (para contar cuántas quedan con pregunta en el borrador).
+type materialCase struct {
+	ID       string   `json:"id"`
+	PDF      string   `json:"pdf"`
+	Title    string   `json:"title,omitempty"`
+	Sections []string `json:"sections,omitempty"`
 }
 
-// candidateIssue registra por qué una candidata puntual no validó (D-043.5): su índice
-// en la tanda, su tipo declarado y los Issue textuales del *ValidationError. Se usa para
-// diagnosticar sesgos sistemáticos del prompt B (F3b, medición).
-type candidateIssue struct {
-	Index        int      `json:"index"`
-	QuestionType string   `json:"question_type"`
-	Issues       []string `json:"issues"`
-}
-
-// materialInputs resuelve la lista de entradas: la lista explícita (coma-separada) o,
-// si viene vacía, todos los .txt de la carpeta de testdata por defecto.
-func materialInputs(explicit string) ([]string, error) {
-	if strings.TrimSpace(explicit) != "" {
-		var out []string
-		for p := range strings.SplitSeq(explicit, ",") {
-			if s := strings.TrimSpace(p); s != "" {
-				out = append(out, s)
-			}
-		}
-		return out, nil
-	}
-	entries, err := os.ReadDir(defaultMaterialDir)
+// loadMaterialCases lee el fichero de casos; las rutas de PDF son relativas a él.
+// Devuelve también su huella.
+func loadMaterialCases(path string) ([]materialCase, string, error) {
+	raw, err := os.ReadFile(path)
 	if err != nil {
-		return nil, fmt.Errorf("leyendo carpeta de testdata %q: %w", defaultMaterialDir, err)
+		return nil, "", fmt.Errorf("leyendo los casos %q: %w", path, err)
 	}
-	var out []string
-	for _, e := range entries {
-		if !e.IsDir() && strings.HasSuffix(e.Name(), ".txt") {
-			out = append(out, filepath.Join(defaultMaterialDir, e.Name()))
+	var f struct {
+		Cases []materialCase `json:"cases"`
+	}
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return nil, "", fmt.Errorf("los casos %q no parsean: %w", path, err)
+	}
+	if len(f.Cases) == 0 {
+		return nil, "", fmt.Errorf("los casos %q están vacíos", path)
+	}
+	seen := map[string]struct{}{}
+	for i := range f.Cases {
+		c := &f.Cases[i]
+		if c.ID == "" || c.PDF == "" {
+			return nil, "", fmt.Errorf("caso %d de %q sin id o sin pdf", i, path)
+		}
+		if _, dup := seen[c.ID]; dup {
+			return nil, "", fmt.Errorf("id de caso repetido: %q", c.ID)
+		}
+		seen[c.ID] = struct{}{}
+		if !filepath.IsAbs(c.PDF) {
+			c.PDF = filepath.Join(filepath.Dir(path), c.PDF)
 		}
 	}
-	sort.Strings(out)
-	return out, nil
+	return f.Cases, fileSHA256(raw), nil
 }
 
-// loadMaterialText carga el texto de un input: .pdf pasa por pdf.Extractor (camino real
-// del processor); cualquier otra extensión se lee como texto plano.
-func loadMaterialText(path string, log logger.Logger) (string, error) {
-	if strings.EqualFold(filepath.Ext(path), ".pdf") {
-		f, err := os.Open(path)
-		if err != nil {
-			return "", err
-		}
-		defer func() { _ = f.Close() }()
-		return pdf.NewExtractor(log).Extract(context.Background(), f)
-	}
-	b, err := os.ReadFile(path)
-	if err != nil {
-		return "", err
-	}
-	return string(b), nil
-}
-
-// materialOptions agrupa los parámetros del modo material. El porcionado es
-// configurable por flags (default = la config productiva de internal/config, no el
-// DefaultConfig del paquete chunking) para que el harness mida lo que corre en vivo.
-type materialOptions struct {
-	timeout   time.Duration
-	inputsCSV string
-	chunkCfg  chunking.Config
-	// skipPropose omite la Batería B: para experimentos que solo miden el digest A
-	// ahorra la mitad de la corrida.
-	skipPropose bool
-	// digestVariant elige el prompt de la llamada A: "v2" = tarea partida (la ruta
-	// productiva del provider ollama desde el experimento 2026-07-19; default) o
-	// "v1" = llamada única legacy para regresión (vive en material_v1.go, solo local).
-	digestVariant string
-	provider      string
-	ollamaURL     string
-	ollamaModel   string
-}
-
-// runMaterial corre las baterías A y B sobre las entradas y reporta tabla + JSON.
-func runMaterial(p llm.LLMProvider, opts materialOptions) {
-	inputs, err := materialInputs(opts.inputsCSV)
-	if err != nil {
-		fatalf("resolviendo entradas: %v", err)
-	}
-	if len(inputs) == 0 {
-		fatalf("no hay entradas para el modo material (pasa -material-inputs o coloca .txt en %s)", defaultMaterialDir)
-	}
-	if err := opts.chunkCfg.Validate(); err != nil {
-		fatalf("config de chunking inválida: %v", err)
-	}
-	if opts.digestVariant != "v1" && opts.digestVariant != "v2" {
-		fatalf("variante de digest desconocida %q (usa v1|v2)", opts.digestVariant)
-	}
-	// v1 legacy vive en el harness contra Ollama; con provider api el modo material
-	// corre siempre la ruta productiva del provider (que en api sigue siendo la
-	// llamada única — la partición v2 se cableó solo en ollama, donde se midió).
-	if opts.digestVariant == "v1" && opts.provider != "local" && opts.provider != "ollama" {
-		fatalf("-digest-prompt=v1 (llamada única legacy) solo está implementada para el provider local/ollama")
-	}
-
-	log := logger.NewZapLogger("error", "console")
-
-	fmt.Printf("== llm-harness (material) ==\n")
-	fmt.Printf("provider : %s\n", p.Name())
-	fmt.Printf("entradas : %d\n", len(inputs))
-	fmt.Printf("chunking : target=%d max=%d min=%d merge=%d\n", opts.chunkCfg.TargetWords, opts.chunkCfg.MaxWords, opts.chunkCfg.MinWords, opts.chunkCfg.MergeThresholdWords)
-	fmt.Printf("digest   : %s%s\n\n", opts.digestVariant, map[bool]string{true: " (Batería B omitida)", false: ""}[opts.skipPropose])
-
-	var metrics []materialChunkMetric
-	for _, in := range inputs {
-		name := filepath.Base(in)
-		text, err := loadMaterialText(in, log)
-		if err != nil {
-			fmt.Printf("  %-24s FALLO carga/extracción: %v\n", name, err)
-			metrics = append(metrics, materialChunkMetric{Input: name, ChunkSeq: -1, LoadErr: err.Error()})
-			continue
-		}
-		chunks := chunking.Split(text, opts.chunkCfg)
-		fmt.Printf("  %-24s %d bytes → %d trozos\n", name, len(text), len(chunks))
-
-		var prevSummary *string
-		for _, ch := range chunks {
-			m := runMaterialChunk(p, opts, name, ch, prevSummary)
-			metrics = append(metrics, m)
-			if strings.TrimSpace(m.summaryText) != "" {
-				s := m.summaryText
-				prevSummary = &s
-			}
-		}
-	}
-
-	fmt.Println()
-	printMaterialTable(metrics)
-	printMaterialJSON(p, metrics)
-}
-
-// runMaterialChunk corre A y —si A dio ideas— B sobre un trozo. La medición NO reintenta
-// (a diferencia de los modos prep/review): F3b quiere ver la tasa cruda del modelo por
-// llamada, no la tasa tras reintentos.
-func runMaterialChunk(p llm.LLMProvider, opts materialOptions, input string, ch chunking.Chunk, prevSummary *string) materialChunkMetric {
-	timeout := opts.timeout
-	m := materialChunkMetric{
-		Input:      input,
-		ChunkSeq:   ch.Seq,
-		ChunkWords: len(strings.Fields(ch.Text)),
-		TypeCounts: map[string]int{},
-	}
-
-	// --- Batería A: DigestChunk (v2 = ruta productiva del provider, partida en dos;
-	// v1 = llamada única legacy para regresión, material_v1.go) ---
-	var digest *llm.DigestChunkResult
-	var errA error
-	startA := time.Now()
-	if opts.digestVariant == "v1" {
-		digest, errA = digestChunkV1(opts, ch.Text, prevSummary)
-	} else {
-		ctxA, cancelA := context.WithTimeout(context.Background(), timeout)
-		digest, errA = p.DigestChunk(ctxA, llm.DigestChunkInput{
-			ChunkText:   ch.Text,
-			PrevSummary: prevSummary,
-			Language:    "es",
-		})
-		cancelA()
-	}
-	m.DigestMS = time.Since(startA).Milliseconds()
-
-	if errA != nil {
-		m.DigestErr = errA.Error()
-		return m // sin artefactos no hay B
-	}
-
-	m.MainIdeas = len(digest.Artifacts.MainIdeas)
-	m.SecondaryIdeas = len(digest.Artifacts.SecondaryIdeas)
-	m.summaryText = digest.Summary
-	m.SummaryWords = len(strings.Fields(digest.Summary))
-	m.SummaryOK = m.SummaryWords > 0 && m.SummaryWords <= maxSummaryWords
-
-	rawArtifacts, _ := digest.Artifacts.Marshal()
-	if _, verr := materialpipeline.ValidateChunkArtifacts(rawArtifacts); verr != nil {
-		m.ArtifactsIssues = issueStrings(verr)
-	} else {
-		m.ArtifactsValid = true
-	}
-
-	// --- Batería B: ProposeCandidates (solo si A dejó ideas utilizables) ---
-	if opts.skipPropose {
-		m.BSkipped = true
-		return m
-	}
-	if m.MainIdeas == 0 {
-		m.ProposeErr = "A no produjo main_ideas; B omitida"
-		return m
-	}
-
-	ctxB, cancelB := context.WithTimeout(context.Background(), timeout)
-	startB := time.Now()
-	candidates, errB := p.ProposeCandidates(ctxB, llm.ProposeCandidatesInput{
-		Artifacts: digest.Artifacts,
-		Language:  "es",
-	})
-	m.ProposeMS = time.Since(startB).Milliseconds()
-	cancelB()
-
-	if errB != nil {
-		m.ProposeErr = errB.Error()
-		return m
-	}
-
-	m.CandTotal = len(candidates)
-	m.CandInRange = m.CandTotal >= 2 && m.CandTotal <= 4
-	for i, c := range candidates {
-		m.TypeCounts[c.QuestionType]++
-		if materialpipeline.DetectDeicticReference(c.QuestionText) != "" {
-			m.CandDeictic++
-		}
-		rawCand, _ := c.Marshal()
-		if _, verr := materialpipeline.ValidateCandidatePayload(rawCand); verr == nil {
-			m.CandValid++
-		} else {
-			m.CandIssues = append(m.CandIssues, candidateIssue{
-				Index:        i,
-				QuestionType: c.QuestionType,
-				Issues:       issueStrings(verr),
-			})
-		}
-	}
-	return m
-}
-
-// issueStrings aplana los Issue de un *materialpipeline.ValidationError a texto.
-func issueStrings(err error) []string {
-	ve, ok := err.(*materialpipeline.ValidationError)
-	if !ok {
-		return []string{err.Error()}
-	}
-	out := make([]string, len(ve.Issues))
-	for i, iss := range ve.Issues {
-		out[i] = iss.String()
+// casesFromInputs arma casos sin secciones a partir de -material-inputs, para medir
+// otro PDF que no está en los casos congelados.
+func casesFromInputs(csv string) []materialCase {
+	var out []materialCase
+	for i, p := range splitCSV(csv) {
+		id := strings.TrimSuffix(filepath.Base(p), filepath.Ext(p))
+		out = append(out, materialCase{ID: fmt.Sprintf("%s-%d", id, i), PDF: p})
 	}
 	return out
 }
 
-// printMaterialTable imprime una fila por trozo con las métricas de A y B.
-func printMaterialTable(metrics []materialChunkMetric) {
-	fmt.Printf("%-22s %-5s %-6s %-7s %-5s %-9s %-7s %-5s %-4s %-6s %-5s %s\n",
-		"INPUT", "TROZO", "PALS", "A(ms)", "ARTF", "SUM(pal)", "B(ms)", "CAND", "2-4", "VÁLID", "DEÍC", "TIPOS")
-	for _, m := range metrics {
-		if m.ChunkSeq < 0 {
-			fmt.Printf("%-22s %-5s %s\n", trunc(m.Input, 22), "-", "FALLO carga: "+m.LoadErr)
-			continue
+// preparedCase es un caso ya comprobado, antes de llamar a ningún modelo: el PDF
+// existe, se extrae, y cada sección declarada aparece en su texto.
+type preparedCase struct {
+	materialCase
+	PDFSHA256      string
+	Text           string
+	SectionOffsets []int
+	ExpectedChunks int
+}
+
+// prepareMaterialCases comprueba todos los casos con el extractor y el troceo de
+// producción. Un error aquí es del arnés (no pudo correr), no del modelo.
+func prepareMaterialCases(cases []materialCase, chunkCfg chunking.Config, log logger.Logger) ([]preparedCase, error) {
+	extractor := pdf.NewExtractor(log)
+	out := make([]preparedCase, 0, len(cases))
+	for _, c := range cases {
+		raw, err := os.ReadFile(c.PDF)
+		if err != nil {
+			return nil, fmt.Errorf("caso %q: leyendo el PDF: %w", c.ID, err)
 		}
-		artf := okFail(m.ArtifactsValid)
-		if m.DigestErr != "" {
-			artf = "ERR"
+		res, err := extractor.ExtractWithMetadata(context.Background(), bytes.NewReader(raw))
+		if err != nil {
+			return nil, fmt.Errorf("caso %q: extrayendo el texto de %s: %w", c.ID, c.PDF, err)
 		}
-		sum := fmt.Sprintf("%d%s", m.SummaryWords, tick(m.SummaryOK))
-		b := fmt.Sprintf("%d", m.ProposeMS)
-		cand, rng, valid, deic, types := "-", "-", "-", "-", ""
-		if m.DigestErr == "" && m.ProposeErr == "" && m.MainIdeas > 0 && !m.BSkipped {
-			cand = fmt.Sprintf("%d", m.CandTotal)
-			rng = okFail(m.CandInRange)
-			valid = fmt.Sprintf("%d/%d", m.CandValid, m.CandTotal)
-			deic = fmt.Sprintf("%d", m.CandDeictic)
-			types = typeSummary(m.TypeCounts)
-		} else if m.ProposeErr != "" {
-			cand = "ERR"
+		offsets, err := sectionOffsets(res.Text, c.Sections)
+		if err != nil {
+			return nil, fmt.Errorf("caso %q: %w", c.ID, err)
 		}
-		fmt.Printf("%-22s %-5d %-6d %-7d %-5s %-9s %-7s %-5s %-4s %-6s %-5s %s\n",
-			trunc(m.Input, 22), m.ChunkSeq, m.ChunkWords, m.DigestMS, artf, sum, b, cand, rng, valid, deic, types)
-		if m.DigestErr != "" {
-			fmt.Printf("      A error: %s\n", trunc(m.DigestErr, 100))
-		}
-		if len(m.ArtifactsIssues) > 0 {
-			fmt.Printf("      A inválida: %s\n", strings.Join(m.ArtifactsIssues, "; "))
-		}
-		if m.ProposeErr != "" && m.MainIdeas > 0 {
-			fmt.Printf("      B error: %s\n", trunc(m.ProposeErr, 100))
-		}
-		for _, ci := range m.CandIssues {
-			fmt.Printf("      B candidata #%d inválida [%s]: %s\n", ci.Index, ci.QuestionType, strings.Join(ci.Issues, "; "))
-		}
+		out = append(out, preparedCase{
+			materialCase:   c,
+			PDFSHA256:      fileSHA256(raw),
+			Text:           res.Text,
+			SectionOffsets: offsets,
+			ExpectedChunks: len(chunking.Split(res.Text, chunkCfg)),
+		})
+	}
+	return out, nil
+}
+
+// materialParams son los parámetros con los que corrió la medida: los de producción,
+// leídos de la configuración sin entorno, más los del arnés.
+type materialParams struct {
+	ChunkTargetWords         int     `json:"chunk_target_words"`
+	ChunkMaxWords            int     `json:"chunk_max_words"`
+	ChunkMinWords            int     `json:"chunk_min_words"`
+	ChunkMergeThresholdWords int     `json:"chunk_merge_threshold_words"`
+	DedupeHigh               float64 `json:"dedupe_high"`
+	DedupeLow                float64 `json:"dedupe_low"`
+	RelevanceMin             float64 `json:"relevance_min"`
+	RelevanceMode            string  `json:"relevance_mode"`
+	TargetQuestions          int     `json:"target_questions"`
+	CallTimeoutS             float64 `json:"call_timeout_s"`
+	EmbedTimeoutS            float64 `json:"embed_timeout_s"`
+	MaxRedeliveries          int     `json:"max_redeliveries"`
+}
+
+func newMaterialParams(cfg config.MaterialPipelineConfig, callTimeout, embedTimeout time.Duration) materialParams {
+	return materialParams{
+		ChunkTargetWords:         cfg.ChunkTargetWords,
+		ChunkMaxWords:            cfg.ChunkMaxWords,
+		ChunkMinWords:            cfg.ChunkMinWords,
+		ChunkMergeThresholdWords: cfg.ChunkMergeThresholdWords,
+		DedupeHigh:               cfg.DedupeHigh,
+		DedupeLow:                cfg.DedupeLow,
+		RelevanceMin:             cfg.RelevanceMin,
+		RelevanceMode:            cfg.RelevanceMode,
+		TargetQuestions:          cfg.TargetQuestionsDefault,
+		CallTimeoutS:             callTimeout.Seconds(),
+		EmbedTimeoutS:            embedTimeout.Seconds(),
+		MaxRedeliveries:          maxRedeliveries,
 	}
 }
 
-// printMaterialJSON imprime el resumen agregado de la corrida como JSON (para diffs y
-// para comparar modelos entre corridas).
-func printMaterialJSON(p llm.LLMProvider, metrics []materialChunkMetric) {
-	agg := aggregateMaterial(p, metrics)
-	fmt.Printf("\n--- resumen ---\n")
-	fmt.Printf("trozos procesados        : %d\n", agg.Chunks)
-	fmt.Printf("artefactos A válidos     : %d/%d (%s)\n", agg.ArtifactsValid, agg.Chunks, pct(agg.ArtifactsValid, agg.Chunks))
-	fmt.Printf("summaries ≤%d palabras   : %d/%d (%s)\n", maxSummaryWords, agg.SummariesOK, agg.Chunks, pct(agg.SummariesOK, agg.Chunks))
-	fmt.Printf("candidatas B válidas     : %d/%d (%s)\n", agg.CandValid, agg.CandTotal, pct(agg.CandValid, agg.CandTotal))
-	fmt.Printf("candidatas B deícticas   : %d/%d (%s)\n", agg.CandDeictic, agg.CandTotal, pct(agg.CandDeictic, agg.CandTotal))
-	fmt.Printf("trozos con 2–4 candidatas: %d/%d (%s)\n", agg.ChunksCandInRange, agg.ChunksWithB, pct(agg.ChunksCandInRange, agg.ChunksWithB))
-	fmt.Printf("distribución de tipos    : %s\n", typeSummary(agg.TypeCounts))
-	fmt.Printf("latencia A (prom/total)  : %d ms / %d ms\n", avg(agg.DigestMSTotal, agg.Chunks), agg.DigestMSTotal)
-	fmt.Printf("latencia B (prom/total)  : %d ms / %d ms\n", avg(agg.ProposeMSTotal, agg.ChunksWithB), agg.ProposeMSTotal)
+// materialCaseRun es un caso de la corrida: su desenlace, sus cuentas y, enteros,
+// sus trozos y sus candidatas con el estado final.
+type materialCaseRun struct {
+	ID           string           `json:"id"`
+	Title        string           `json:"title,omitempty"`
+	PDF          string           `json:"pdf"`
+	PDFSHA256    string           `json:"pdf_sha256"`
+	Sections     []string         `json:"sections,omitempty"`
+	Outcome      string           `json:"outcome"`
+	Attempts     []processAttempt `json:"attempts"`
+	JobStatus    string           `json:"job_status"`
+	JobPhase     int16            `json:"job_phase"`
+	JobLastError string           `json:"job_last_error,omitempty"`
+	Metrics      caseMetrics      `json:"metrics"`
+	Passes       passRuns         `json:"passes"`
+	Chunks       []chunkRun       `json:"chunks"`
+	Candidates   []candidateRun   `json:"candidates"`
+}
 
-	out := struct {
-		Aggregate materialAggregate     `json:"aggregate"`
-		Chunks    []materialChunkMetric `json:"chunks"`
-	}{Aggregate: agg, Chunks: metrics}
-	b, err := json.MarshalIndent(out, "", "  ")
+// materialRunData es lo que el modo guarda en el historial.
+type materialRunData struct {
+	CasesSHA256 string            `json:"cases_sha256,omitempty"`
+	Params      materialParams    `json:"params"`
+	ElapsedMS   int64             `json:"elapsed_ms"`
+	Cases       []materialCaseRun `json:"cases"`
+}
+
+// runMaterialCase pasa un caso por el riel y lo cuenta.
+func runMaterialCase(ctx context.Context, deps railDeps, c preparedCase) materialCaseRun {
+	res := runRail(ctx, deps, "job-"+c.ID, c.PDF)
+	metrics, detail := computeCaseMetrics(res, c.Text, c.SectionOffsets, deps.cfg.TargetQuestionsDefault)
+	run := materialCaseRun{
+		ID: c.ID, Title: c.Title, PDF: filepath.Base(c.PDF), PDFSHA256: c.PDFSHA256, Sections: c.Sections,
+		Outcome: res.Outcome, Attempts: res.Attempts,
+		JobStatus: res.store.job.Status, JobPhase: res.store.job.Phase,
+		Metrics: metrics, Passes: collectPassRuns(res),
+		Chunks: detail.Chunks, Candidates: detail.Candidates,
+	}
+	if res.store.job.LastError != nil {
+		run.JobLastError = *res.store.job.LastError
+	}
+	return run
+}
+
+// runMaterial es la entrada del modo: corre los casos ya comprobados, imprime las
+// tablas y guarda la corrida.
+func runMaterial(deps railDeps, info runInfo, runsDir string, cases []preparedCase, casesSum string, params materialParams) {
+	fmt.Printf("== llm-harness (material) ==\n")
+	fmt.Printf("modelo    : %s (embeddings: %s)\n", info.Model, info.EmbedModel)
+	fmt.Printf("casos     : %d\n\n", len(cases))
+
+	start := time.Now()
+	data := materialRunData{CasesSHA256: casesSum, Params: params}
+	for _, c := range cases {
+		fmt.Printf("caso %s: %s (%d trozos esperados)...\n", c.ID, filepath.Base(c.PDF), c.ExpectedChunks)
+		run := runMaterialCase(context.Background(), deps, c)
+		fmt.Printf("  desenlace: %s · %d s · entregas: %d\n", run.Outcome, run.Metrics.Cost.TotalMS/1000, len(run.Attempts))
+		data.Cases = append(data.Cases, run)
+	}
+	data.ElapsedMS = time.Since(start).Milliseconds()
+
+	printMaterialTables(data.Cases)
+	saveRun(runsDir, info, data)
+}
+
+// runMaterialPairs es la entrada del modo material-pairs.
+func runMaterialPairs(deps railDeps, info runInfo, runsDir string, f pairsFile, pairsSum string, params materialParams) {
+	fmt.Printf("== llm-harness (material-pairs) ==\n")
+	fmt.Printf("modelo    : %s (embeddings: %s)\n", info.Model, info.EmbedModel)
+	fmt.Printf("parejas   : %d (cada una, dos medidas)\n\n", len(f.Pairs))
+
+	start := time.Now()
+	runs, judge, embed, err := runPairs(context.Background(), f, deps.model, deps.embedder, deps.cfg, deps.log, func(r pairRun) {
+		fmt.Printf("  %-8s real=%s/%s%s  judge_only=%s/%s%s\n", r.ID,
+			orDash(r.Real.Tier), orDash(r.Real.Verdict), errSuffix(r.Real),
+			orDash(r.JudgeOnly.Tier), orDash(r.JudgeOnly.Verdict), errSuffix(r.JudgeOnly))
+	})
 	if err != nil {
-		return
+		fatalf("midiendo las parejas: %v", err)
 	}
-	fmt.Printf("\n--- JSON ---\n%s\n", string(b))
-}
-
-// materialAggregate agrega la corrida. Se serializa dentro del JSON de salida.
-type materialAggregate struct {
-	Provider          string         `json:"provider"`
-	Chunks            int            `json:"chunks"`
-	ArtifactsValid    int            `json:"artifacts_valid"`
-	SummariesOK       int            `json:"summaries_ok"`
-	ChunksWithB       int            `json:"chunks_with_b"`
-	ChunksCandInRange int            `json:"chunks_cand_in_range"`
-	CandTotal         int            `json:"cand_total"`
-	CandValid         int            `json:"cand_valid"`
-	CandDeictic       int            `json:"cand_deictic"`
-	TypeCounts        map[string]int `json:"type_counts"`
-	DigestMSTotal     int64          `json:"digest_ms_total"`
-	ProposeMSTotal    int64          `json:"propose_ms_total"`
-}
-
-func aggregateMaterial(p llm.LLMProvider, metrics []materialChunkMetric) materialAggregate {
-	agg := materialAggregate{Provider: p.Name(), TypeCounts: map[string]int{}}
-	for _, m := range metrics {
-		if m.ChunkSeq < 0 {
-			continue
-		}
-		agg.Chunks++
-		agg.DigestMSTotal += m.DigestMS
-		if m.ArtifactsValid {
-			agg.ArtifactsValid++
-		}
-		if m.SummaryOK {
-			agg.SummariesOK++
-		}
-		if m.DigestErr == "" && m.ProposeErr == "" && m.MainIdeas > 0 && !m.BSkipped {
-			agg.ChunksWithB++
-			agg.ProposeMSTotal += m.ProposeMS
-			agg.CandTotal += m.CandTotal
-			agg.CandValid += m.CandValid
-			agg.CandDeictic += m.CandDeictic
-			if m.CandInRange {
-				agg.ChunksCandInRange++
-			}
-			for t, n := range m.TypeCounts {
-				agg.TypeCounts[t] += n
-			}
-		}
+	data := pairsRunData{
+		PairsSHA256: pairsSum, Params: params,
+		Table: pairsTable(f.Categories, runs), Judge: judge, Embed: embed,
+		ElapsedMS: time.Since(start).Milliseconds(), Pairs: runs,
 	}
-	return agg
+	printPairsTable(data.Table)
+	saveRun(runsDir, info, data)
 }
 
-// --- helpers de formato ---
+func errSuffix(m pairMeasure) string {
+	if m.ErrorKind == "" {
+		return ""
+	}
+	return " [" + m.ErrorKind + "]"
+}
 
-func typeSummary(counts map[string]int) string {
+// typeCounts escribe un conteo por tipo en orden fijo: «multiple_choice:3 true_false:1».
+func typeCounts(counts map[string]int) string {
 	if len(counts) == 0 {
 		return "-"
 	}
@@ -441,41 +266,105 @@ func typeSummary(counts map[string]int) string {
 		keys = append(keys, k)
 	}
 	sort.Strings(keys)
-	parts := make([]string, len(keys))
-	for i, k := range keys {
-		parts[i] = fmt.Sprintf("%s:%d", k, counts[k])
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%s:%d", k, counts[k]))
 	}
 	return strings.Join(parts, " ")
 }
 
-func okFail(ok bool) string {
-	if ok {
-		return "OK"
+// histogramString escribe el reparto entero: «3×2 4×5» son dos trozos con 3 y cinco con 4.
+func histogramString(h map[int]int) string {
+	if len(h) == 0 {
+		return "-"
 	}
-	return "FAIL"
+	keys := make([]int, 0, len(h))
+	for k := range h {
+		keys = append(keys, k)
+	}
+	sort.Ints(keys)
+	parts := make([]string, 0, len(keys))
+	for _, k := range keys {
+		parts = append(parts, fmt.Sprintf("%d×%d", k, h[k]))
+	}
+	return strings.Join(parts, " ")
 }
 
-func tick(ok bool) string {
-	if ok {
-		return "✓"
+// printMaterialTables imprime las cinco tablas de la ficha, una fila por caso. Sin
+// veredicto en ninguna celda.
+func printMaterialTables(runs []materialCaseRun) {
+	fmt.Printf("\n-- Generación --\n")
+	for _, r := range runs {
+		g := r.Metrics.Generation
+		fmt.Printf("%-16s trozos=%d fallidos=%d propuestas=%d por_trozo(min/med/max)=%d/%.1f/%d reparto=[%s] sin_abierta=%d descartadas=%d citan_texto=%d\n",
+			trunc(r.ID, 16), g.Chunks, g.ChunksFailed, g.ProposedTotal,
+			g.ProposedPerChunk.Min, g.ProposedPerChunk.Median, g.ProposedPerChunk.Max,
+			histogramString(g.ProposedPerChunk.Histogram), g.ChunksWithoutOpenEnded, len(g.DiscardedByContract), g.DeicticStatements)
+		fmt.Printf("%-16s   tipos: %s\n", "", typeCounts(g.ProposedTypes))
+		for _, d := range g.DiscardedByContract {
+			fmt.Printf("%-16s   descartada (trozo %d, %s): %s\n", "", d.ChunkSeq, d.Type, trunc(strings.Join(d.Issues, "; "), 120))
+		}
 	}
-	return "✗"
+
+	fmt.Printf("\n-- Sustento (la respuesta correcta está en su trozo; indicio sin modelo) --\n")
+	for _, r := range runs {
+		s := r.Metrics.Support
+		types := make([]string, 0, len(s.ByType))
+		for t := range s.ByType {
+			types = append(types, t)
+		}
+		sort.Strings(types)
+		for _, t := range types {
+			c := s.ByType[t]
+			fmt.Printf("%-16s %-16s toda=%d a_medias=%d no=%d no_aplica=%d\n", trunc(r.ID, 16), t,
+				c[supportFull], c[supportPartial], c[supportNone], c[supportNotApplicable])
+		}
+		fmt.Printf("%-16s source_ideas dadas=%d de %d · candidatas con todas dadas=%d de %d\n", trunc(r.ID, 16),
+			s.SourceIdeasGiven, s.SourceIdeas, s.CandidatesAllTrue, s.Candidates)
+	}
+
+	fmt.Printf("\n-- Reducción --\n")
+	for _, r := range runs {
+		x := r.Metrics.Reduction
+		fmt.Printf("%-16s pares(letras/coseno/juez)=%d/%d/%d grupos=%d caen_dup=%d | puntuadas=%d caen_relevancia=%d sin_puntuar=%d | caen_calidad=%d | final: %s\n",
+			trunc(r.ID, 16), x.PairsText, x.PairsEmbed, x.PairsLLM, x.Clusters, x.DroppedDup,
+			x.Scored, x.DroppedIrrelevant, x.Unscored, x.DroppedInvalid, typeCounts(x.FinalStatus))
+	}
+
+	fmt.Printf("\n-- Borrador --\n")
+	for _, r := range runs {
+		d := r.Metrics.Draft
+		fmt.Printf("%-16s seleccionadas=%d de cupo %d · tipos: %s · ideas cubiertas=%d sin_cubrir=%d · secciones con pregunta=%d de %d\n",
+			trunc(r.ID, 16), d.Selected, d.Target, typeCounts(d.SelectedTypes), d.IdeasCovered, d.IdeasUncovered,
+			d.SectionsWithSelected, d.Sections)
+	}
+
+	fmt.Printf("\n-- Coste --\n")
+	for _, r := range runs {
+		c := r.Metrics.Cost
+		fmt.Printf("%-16s llamadas: leer=%d preguntar=%d juez=%d relevancia=%d embeddings=%d(%d textos) · reintentos_calidad=%d · reentregas=%d\n",
+			trunc(r.ID, 16), c.Digest.Calls, c.Propose.Calls, c.Judge.Calls, c.Relevance.Calls, c.Embed.Calls, c.Embed.Texts,
+			c.Digest.QualityRetries+c.Propose.QualityRetries, c.Redeliveries)
+		fmt.Printf("%-16s   segundos: fase0=%.1f fase1=%.1f duplicadas=%.1f relevancia=%.1f calidad=%.1f selección=%.1f total=%.1f · desenlace=%s\n", "",
+			float64(c.Phase0MS)/1000, float64(c.Phase1MS)/1000, float64(c.DedupeMS)/1000, float64(c.RelevanceMS)/1000,
+			float64(c.QualityMS)/1000, float64(c.SelectionMS)/1000, float64(c.TotalMS)/1000, r.Outcome)
+		fmt.Printf("%-16s   salidas inválidas: leer=%d preguntar=%d juez=%d relevancia=%d · errores del proveedor: leer=%d preguntar=%d juez=%d relevancia=%d\n", "",
+			c.Digest.InvalidOutputs, c.Propose.InvalidOutputs, c.Judge.InvalidOutputs, c.Relevance.InvalidOutputs,
+			c.Digest.ProviderErrors, c.Propose.ProviderErrors, c.Judge.ProviderErrors, c.Relevance.ProviderErrors)
+	}
+
+	for _, r := range runs {
+		if len(r.Metrics.Draft.Questions) == 0 {
+			continue
+		}
+		fmt.Printf("\n-- Preguntas seleccionadas: %s --\n", r.ID)
+		for i, q := range r.Metrics.Draft.Questions {
+			fmt.Printf("%2d. [%s · trozo %d] %s\n", i+1, q.Type, q.ChunkSeq, q.Text)
+		}
+	}
 }
 
-func pct(n, total int) string {
-	if total == 0 {
-		return "n/a"
-	}
-	return fmt.Sprintf("%.0f%%", 100*float64(n)/float64(total))
-}
-
-func avg(total int64, n int) int64 {
-	if n == 0 {
-		return 0
-	}
-	return total / int64(n)
-}
-
+// trunc corta un texto a n caracteres para las tablas (lo usa también embed.go).
 func trunc(s string, n int) string {
 	if len(s) <= n {
 		return s

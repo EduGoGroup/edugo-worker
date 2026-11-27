@@ -273,3 +273,19 @@ func RecordRateLimiterAllowed(eventType string) {
 func UpdateRateLimiterTokens(eventType string, tokens float64) {
 	RateLimiterTokens.WithLabelValues(eventType).Set(tokens)
 }
+
+// InferenceWaitSeconds measures how long a call or a message waited for its inference
+// turn, by limiter ("local", "api") (HU-IA.10).
+var InferenceWaitSeconds = promauto.NewHistogramVec(
+	prometheus.HistogramOpts{
+		Name:    "worker_inference_wait_seconds",
+		Help:    "Time waited for an inference turn in seconds by limiter",
+		Buckets: []float64{0.01, 0.1, 1, 5, 15, 30, 60, 120, 300, 600, 1800},
+	},
+	[]string{"limiter"},
+)
+
+// RecordInferenceWait records one wait for an inference turn.
+func RecordInferenceWait(limiter string, waitSeconds float64) {
+	InferenceWaitSeconds.WithLabelValues(limiter).Observe(waitSeconds)
+}

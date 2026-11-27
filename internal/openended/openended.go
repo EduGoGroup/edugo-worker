@@ -35,11 +35,12 @@ type GradeInput struct {
 
 // Grade extrae las ideas del alumno (1 llamada, D-045.9) y luego comprueba cada
 // criterio con una llamada binaria, agregando el resultado de forma determinista. Hace
-// 1 (extracción) + len(Criteria) (una por criterio no vacío) llamadas al provider. Un
-// error de CheckCriterion se propaga (transitorio; el caller reintenta el intento
-// completo, idempotente). La extracción es AYUDA: si falla o sale vacía, se cae
-// EXACTAMENTE al comportamiento anterior (juicio contra la respuesta cruda) y su error
-// NO se propaga.
+// 1 (extracción) + len(Criteria) (una por criterio no vacío) llamadas al provider, más
+// un reintento por cada comprobación cuya salida sea inválida (HU-INF.5). Una
+// comprobación que sigue inválida tras el reintento, o un error del provider, se
+// propaga (el caller reintenta el intento completo, idempotente): nunca cuenta como
+// «no cumple». La extracción es AYUDA: si falla o sale vacía, se cae al juicio contra
+// la respuesta cruda y su error NO se propaga, pero el resultado lo marca (Ideas).
 func Grade(ctx context.Context, provider llm.LLMProvider, in GradeInput) (llm.ReviewResult, error) {
 	lang := in.Language
 	if lang == "" {
@@ -55,13 +56,16 @@ func Grade(ctx context.Context, provider llm.LLMProvider, in GradeInput) (llm.Re
 		StudentAnswer: in.StudentAnswer,
 		Language:      lang,
 	})
+	ideasOutcome := llm.IdeasUsed
 	switch {
 	case extractErr != nil:
 		logExtractFallback(in.Logger, "extracción de ideas falló, se corrige con la respuesta cruda", extractErr)
 		ideas = nil
+		ideasOutcome = llm.IdeasFailed
 	case len(ideas) == 0:
 		logExtractFallback(in.Logger, "extracción de ideas vacía, se corrige con la respuesta cruda", nil)
 		ideas = nil
+		ideasOutcome = llm.IdeasEmpty
 	}
 
 	var met, total int
@@ -72,13 +76,16 @@ func Grade(ctx context.Context, provider llm.LLMProvider, in GradeInput) (llm.Re
 			continue
 		}
 		total++
-		res, err := provider.CheckCriterion(ctx, llm.CriterionCheckRequest{
-			QuestionText:   in.QuestionText,
-			ExpectedAnswer: in.ExpectedAnswer,
-			Criterion:      crit,
-			StudentAnswer:  in.StudentAnswer,
-			ExtractedIdeas: ideas,
-			Language:       lang,
+		res, err := llm.CallVerdict(ctx, llm.BinaryVerdicts, func(ctx context.Context, temperature *float64) (llm.ReviewResult, error) {
+			return provider.CheckCriterion(ctx, llm.CriterionCheckRequest{
+				QuestionText:   in.QuestionText,
+				ExpectedAnswer: in.ExpectedAnswer,
+				Criterion:      crit,
+				StudentAnswer:  in.StudentAnswer,
+				ExtractedIdeas: ideas,
+				Language:       lang,
+				Temperature:    temperature,
+			})
 		})
 		if err != nil {
 			return llm.ReviewResult{}, fmt.Errorf("comprobando criterio %q: %w", crit, err)
@@ -90,7 +97,9 @@ func Grade(ctx context.Context, provider llm.LLMProvider, in GradeInput) (llm.Re
 		}
 	}
 
-	return aggregate(met, total, unmet), nil
+	result := aggregate(met, total, unmet)
+	result.Ideas = ideasOutcome
+	return result, nil
 }
 
 // aggregate recompone el veredicto+score global a partir de cuántos criterios se

@@ -23,6 +23,14 @@ var ErrPrepHashConflict = errors.New("source_hash del prep ya no coincide (la pr
 const (
 	prepSourcePathFmt = "/api/v1/internal/questions/%s/prep-source"
 	savePrepPathFmt   = "/api/v1/internal/questions/%s/llm-prep"
+	prepStatusPathFmt = "/api/v1/internal/questions/%s/prep-status"
+)
+
+// Desenlaces que el worker escribe sin artefacto (HU-IA.4).
+const (
+	PrepStatusFailed = "failed"
+	PrepStatusNone   = "none"
+	PrepStatusReady  = "ready"
 )
 
 // PrepSourceResponse es la fuente que el worker lee para preparar una pregunta
@@ -38,6 +46,25 @@ type PrepSourceResponse struct {
 	Explanation     *string `json:"explanation,omitempty"`
 	LLMPrepFeedback *string `json:"llm_prep_feedback,omitempty"`
 	SourceHash      string  `json:"source_hash"`
+	// LLMPrepStatus es el estado actual de la preparación (HU-IA.4): con ready el
+	// artefacto guardado ya es el de este hash y no se vuelve a llamar al modelo.
+	LLMPrepStatus string `json:"llm_prep_status"`
+}
+
+// SetPrepStatusRequest es el cuerpo del PUT prep-status: status (failed o none) y el
+// source_hash del prep-source leído.
+type SetPrepStatusRequest struct {
+	Status     string `json:"status"`
+	SourceHash string `json:"source_hash"`
+}
+
+// SetPrepStatusResponse es la respuesta del PUT prep-status. Conflict marca el 409:
+// el hash cambió (el profesor editó y re-encoló), no es fallo y nada se escribió.
+type SetPrepStatusResponse struct {
+	QuestionID string `json:"question_id"`
+	Status     string `json:"status"`
+	Applied    bool   `json:"applied"`
+	Conflict   bool   `json:"-"`
 }
 
 // SavePrepRequest es el cuerpo del PUT llm-prep. LLMPrep es el JSON crudo YA validado
@@ -125,6 +152,38 @@ func (c *LearningPrepClient) SavePrep(ctx context.Context, questionID string, re
 		return fmt.Errorf("%w: save-prep status %d: %s", ErrLearningPermanent, status, strings.TrimSpace(string(body)))
 	default:
 		return fmt.Errorf("save-prep returned status %d: %s", status, strings.TrimSpace(string(body)))
+	}
+}
+
+// SetPrepOutcome cierra la preparación en failed o none sin artefacto (HU-IA.4).
+//   - 2xx → la respuesta, con applied=false si el estado de la fila no lo admitía.
+//   - 409 → Conflict=true y nil: el hash cambió; no es fallo.
+//   - otros 4xx (salvo 408/429) → ErrLearningPermanent.
+//   - 5xx / red / 408 / 429 → transitorio.
+func (c *LearningPrepClient) SetPrepOutcome(ctx context.Context, questionID string, req SetPrepStatusRequest) (SetPrepStatusResponse, error) {
+	if questionID == "" {
+		return SetPrepStatusResponse{}, fmt.Errorf("question_id vacío")
+	}
+	url := c.baseURL + fmt.Sprintf(prepStatusPathFmt, questionID)
+
+	status, body, err := c.putJSON(ctx, url, req)
+	if err != nil {
+		return SetPrepStatusResponse{}, err
+	}
+	switch {
+	case status >= 200 && status < 300:
+		var out SetPrepStatusResponse
+		if err := json.Unmarshal(body, &out); err != nil {
+			return SetPrepStatusResponse{}, fmt.Errorf("parsing prep-status response: %w", err)
+		}
+		return out, nil
+	case status == http.StatusConflict:
+		return SetPrepStatusResponse{QuestionID: questionID, Conflict: true}, nil
+	case status >= 400 && status < 500 &&
+		status != http.StatusRequestTimeout && status != http.StatusTooManyRequests:
+		return SetPrepStatusResponse{}, fmt.Errorf("%w: prep-status status %d: %s", ErrLearningPermanent, status, strings.TrimSpace(string(body)))
+	default:
+		return SetPrepStatusResponse{}, fmt.Errorf("prep-status returned status %d: %s", status, strings.TrimSpace(string(body)))
 	}
 }
 

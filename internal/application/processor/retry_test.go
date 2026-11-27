@@ -2,11 +2,14 @@ package processor
 
 import (
 	"errors"
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
+	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	pdfErrors "github.com/EduGoGroup/edugo-worker/internal/infrastructure/pdf"
+	"github.com/EduGoGroup/edugo-worker/internal/llm"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -32,6 +35,11 @@ func TestClassifyError(t *testing.T) {
 		expected ErrorType
 	}{
 		{
+			name:     "prep invalido tras su reintento es permanente (HU-IA.4)",
+			err:      fmt.Errorf("prep: %w", ErrInvalidPrep),
+			expected: ErrorTypePermanent,
+		},
+		{
 			name:     "PDF corrupto es permanente",
 			err:      pdfErrors.ErrPDFCorrupt,
 			expected: ErrorTypePermanent,
@@ -49,6 +57,26 @@ func TestClassifyError(t *testing.T) {
 		{
 			name:     "PDF vacio es permanente",
 			err:      pdfErrors.ErrPDFEmpty,
+			expected: ErrorTypePermanent,
+		},
+		{
+			name:     "mensaje no enrutable es permanente",
+			err:      ErrUnroutableMessage,
+			expected: ErrorTypePermanent,
+		},
+		{
+			name:     "mensaje no enrutable envuelto es permanente",
+			err:      fmt.Errorf("%w: invalid message format", ErrUnroutableMessage),
+			expected: ErrorTypePermanent,
+		},
+		{
+			name:     "evento malformado es permanente",
+			err:      fmt.Errorf("%w: sin attempt_id", ErrMalformedEvent),
+			expected: ErrorTypePermanent,
+		},
+		{
+			name:     "4xx permanente de learning es permanente",
+			err:      fmt.Errorf("post review: %w", m2m.ErrLearningPermanent),
 			expected: ErrorTypePermanent,
 		},
 		{
@@ -81,4 +109,18 @@ func TestDefaultRetryConfig(t *testing.T) {
 	assert.Equal(t, 2.0, cfg.BackoffMultiple)
 	assert.NotNil(t, cfg.Logger)
 	assert.NotNil(t, cfg.Classifier, "should inject classifyError as Classifier")
+}
+
+func TestIsPermanent(t *testing.T) {
+	assert.False(t, IsPermanent(nil), "nil no es un fallo")
+	assert.False(t, IsPermanent(errors.New("error generico de red")))
+	assert.True(t, IsPermanent(ErrInvalidPrep), "el artefacto invalido tras el reintento es fallo de dato (HU-IA.4)")
+	assert.True(t, IsPermanent(fmt.Errorf("prep: %w", ErrInvalidPrep)))
+	assert.False(t, IsPermanent(llm.ErrLLMQuality), "la calidad sola no cambia de clase fuera del prep")
+
+	assert.True(t, IsPermanent(ErrUnroutableMessage))
+	assert.True(t, IsPermanent(fmt.Errorf("%w: missing event_type", ErrUnroutableMessage)))
+	assert.True(t, IsPermanent(ErrMalformedEvent))
+	assert.True(t, IsPermanent(fmt.Errorf("finalize: %w", m2m.ErrLearningPermanent)))
+	assert.True(t, IsPermanent(pdfErrors.ErrPDFCorrupt))
 }

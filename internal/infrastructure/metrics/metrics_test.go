@@ -267,3 +267,15 @@ func TestRecordCircuitBreakerTransition(t *testing.T) {
 	})
 	assert.Equal(t, initialTransitions+1, newTransitions, "Las transiciones deberían incrementar")
 }
+
+func TestInferenceWait_Observed(t *testing.T) {
+	labels := prometheus.Labels{"limiter": "test_limiter"}
+	before := getHistogramCount(t, InferenceWaitSeconds, labels)
+
+	RecordInferenceWait("test_limiter", 12.5)
+
+	assert.Equal(t, before+1, getHistogramCount(t, InferenceWaitSeconds, labels),
+		"una espera deja su muestra con la etiqueta del limitador")
+	assert.Equal(t, uint64(0), getHistogramCount(t, InferenceWaitSeconds, prometheus.Labels{"limiter": "other_limiter"}),
+		"la muestra no cae en otro limitador")
+}

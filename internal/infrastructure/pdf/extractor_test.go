@@ -3,12 +3,10 @@ package pdf
 import (
 	"bytes"
 	"context"
-	"strings"
 	"testing"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // MockCleaner es un mock del Cleaner para testing
@@ -137,179 +135,6 @@ startxref
 916
 %%EOF`
 	return []byte(pdfContent)
-}
-
-func TestPDFExtractor_Extract(t *testing.T) {
-	t.Skip("SKIP: Requiere PDFs fixtures reales con texto extraíble - Ver extractor_integration_test.go para documentación")
-	t.Run("extracción básica con PDF válido", func(t *testing.T) {
-		// Arrange
-		logger := newTestLogger()
-		extractor := NewExtractor(logger)
-
-		pdfBytes := generateMinimalPDF()
-		reader := bytes.NewReader(pdfBytes)
-		ctx := context.Background()
-
-		// Act
-		text, err := extractor.Extract(ctx, reader)
-
-		// Assert
-		require.NoError(t, err)
-		// Nota: el extractor puede no sacar texto de PDFs sintéticos mínimos
-		// Lo importante es que no haya error
-		assert.NotNil(t, text, "el texto extraído no debería ser nil")
-	})
-
-	t.Run("error al leer datos inválidos", func(t *testing.T) {
-		// Arrange
-		logger := newTestLogger()
-		extractor := NewExtractor(logger)
-
-		// PDF inválido
-		invalidPDF := []byte("esto no es un PDF válido")
-		reader := bytes.NewReader(invalidPDF)
-		ctx := context.Background()
-
-		// Act
-		text, err := extractor.Extract(ctx, reader)
-
-		// Assert
-		assert.Error(t, err, "debería retornar error con datos inválidos")
-		assert.Empty(t, text, "el texto debería estar vacío cuando hay error")
-		// El error ahora debe ser ErrPDFCorrupt
-		assert.ErrorIs(t, err, ErrPDFCorrupt, "el error debería ser PDF corrupto")
-	})
-
-	t.Run("manejo de reader vacío", func(t *testing.T) {
-		// Arrange
-		logger := newTestLogger()
-		extractor := NewExtractor(logger)
-
-		reader := bytes.NewReader([]byte{})
-		ctx := context.Background()
-
-		// Act
-		text, err := extractor.Extract(ctx, reader)
-
-		// Assert
-		assert.Error(t, err, "debería retornar error con reader vacío")
-		assert.Empty(t, text, "el texto debería estar vacío cuando hay error")
-	})
-}
-
-func TestPDFExtractor_ExtractWithMetadata(t *testing.T) {
-	t.Skip("SKIP: Requiere PDFs fixtures reales con texto extraíble - Ver extractor_integration_test.go para documentación")
-	t.Run("extracción con metadatos completos", func(t *testing.T) {
-		// Arrange
-		logger := newTestLogger()
-		extractor := NewExtractor(logger)
-
-		pdfBytes := generateMinimalPDF()
-		reader := bytes.NewReader(pdfBytes)
-		ctx := context.Background()
-
-		// Act
-		result, err := extractor.ExtractWithMetadata(ctx, reader)
-
-		// Assert
-		require.NoError(t, err)
-		assert.NotNil(t, result, "el resultado no debería ser nil")
-
-		// Validar estructura del resultado
-		assert.NotNil(t, result.Text, "el texto limpio no debería ser nil")
-		assert.NotNil(t, result.RawText, "el texto raw no debería ser nil")
-		assert.GreaterOrEqual(t, result.PageCount, 0, "pageCount debería ser >= 0")
-		assert.GreaterOrEqual(t, result.WordCount, 0, "wordCount debería ser >= 0")
-		assert.NotNil(t, result.Metadata, "metadata no debería ser nil")
-
-		// La detección de escaneo depende del contenido real extraído
-		// No hacemos asserts específicos ya que el extractor puede no sacar texto del PDF sintético de prueba
-	})
-
-	t.Run("detección de PDF escaneado", func(t *testing.T) {
-		// Arrange
-		logger := newTestLogger()
-		extractor := NewExtractor(logger)
-
-		// Crear un PDF con muy poco texto (< 50 palabras) para simular PDF escaneado
-		// Usamos un PDF válido pero con contenido mínimo
-		scannedPDF := `%PDF-1.4
-1 0 obj
-<< /Type /Catalog /Pages 2 0 R >>
-endobj
-2 0 obj
-<< /Type /Pages /Kids [3 0 R] /Count 1 >>
-endobj
-3 0 obj
-<< /Type /Page /Parent 2 0 R /Resources << /Font << /F1 << /Type /Font /Subtype /Type1 /BaseFont /Helvetica >> >> >> /MediaBox [0 0 612 792] /Contents 4 0 R >>
-endobj
-4 0 obj
-<< /Length 35 >>
-stream
-BT /F1 12 Tf 100 700 Td (Hola) Tj ET
-endstream
-endobj
-xref
-0 5
-0000000000 65535 f
-0000000009 00000 n
-0000000058 00000 n
-0000000115 00000 n
-0000000317 00000 n
-trailer
-<< /Size 5 /Root 1 0 R >>
-startxref
-400
-%%EOF`
-		reader := bytes.NewReader([]byte(scannedPDF))
-		ctx := context.Background()
-
-		// Act
-		result, err := extractor.ExtractWithMetadata(ctx, reader)
-
-		// Assert
-		// Ahora esperamos que retorne error ErrPDFScanned
-		assert.Error(t, err)
-		assert.ErrorIs(t, err, ErrPDFScanned, "debería detectar como PDF escaneado")
-		assert.Nil(t, result, "result debería ser nil cuando se detecta PDF escaneado")
-	})
-
-	t.Run("error con datos inválidos", func(t *testing.T) {
-		// Arrange
-		logger := newTestLogger()
-		extractor := NewExtractor(logger)
-
-		invalidPDF := []byte("datos inválidos")
-		reader := bytes.NewReader(invalidPDF)
-		ctx := context.Background()
-
-		// Act
-		result, err := extractor.ExtractWithMetadata(ctx, reader)
-
-		// Assert
-		assert.Error(t, err, "debería retornar error con datos inválidos")
-		assert.Nil(t, result, "el resultado debería ser nil cuando hay error")
-	})
-
-	t.Run("conteo de palabras correcto", func(t *testing.T) {
-		// Arrange
-		logger := newTestLogger()
-		extractor := NewExtractor(logger)
-
-		pdfBytes := generateMinimalPDF()
-		reader := bytes.NewReader(pdfBytes)
-		ctx := context.Background()
-
-		// Act
-		result, err := extractor.ExtractWithMetadata(ctx, reader)
-
-		// Assert
-		require.NoError(t, err)
-
-		// Verificar que el conteo de palabras sea consistente con el texto
-		wordCount := len(strings.Fields(result.Text))
-		assert.Equal(t, result.WordCount, wordCount, "el conteo de palabras debería ser consistente")
-	})
 }
 
 func TestTextCleaner_Clean(t *testing.T) {
@@ -515,35 +340,6 @@ func TestTextCleaner_RemoveHeaders(t *testing.T) {
 			assert.Equal(t, tt.expected, result)
 		})
 	}
-}
-
-func TestPDFExtractor_IntegrationWithCleaner(t *testing.T) {
-	t.Skip("SKIP: Requiere PDFs fixtures reales con texto extraíble - Ver extractor_integration_test.go para documentación")
-	t.Run("integración completa extractor con cleaner", func(t *testing.T) {
-		// Arrange
-		logger := newTestLogger()
-
-		// Crear extractor con cleaner real
-		extractor := &PDFExtractor{
-			logger:  logger,
-			cleaner: NewCleaner(),
-		}
-
-		pdfBytes := generateMinimalPDF()
-		reader := bytes.NewReader(pdfBytes)
-		ctx := context.Background()
-
-		// Act
-		result, err := extractor.ExtractWithMetadata(ctx, reader)
-
-		// Assert
-		require.NoError(t, err)
-		assert.NotNil(t, result)
-
-		// Ambos campos deberían existir (pueden estar vacíos si el PDF no tiene texto extraíble)
-		assert.NotNil(t, result.RawText, "raw text no debería ser nil")
-		assert.NotNil(t, result.Text, "texto limpio no debería ser nil")
-	})
 }
 
 func TestNewExtractor(t *testing.T) {

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
 
@@ -47,6 +48,9 @@ type Config struct {
 	Timeout time.Duration
 	// MaxTokens del completion. Default 4096.
 	MaxTokens int
+	// Limiter caps the requests in flight against the paid provider (HU-IA.10): a
+	// ceiling on spend and on requests, not on the machine. nil is "no cap".
+	Limiter *inferencecap.Limiter
 }
 
 // Provider es la implementación por API de llm.LLMProvider.
@@ -95,22 +99,17 @@ func (p *Provider) GenerateAssessment(ctx context.Context, material llm.Material
 	return llm.ExtractJSON(out)
 }
 
-// ReviewAnswer pide la corrección de una respuesta.
+// ReviewAnswer pide la corrección de una respuesta. No manda esquema: la versión de
+// API del worker (2023-06-01) no consta en la documentación de Anthropic como
+// compatible con la salida estructurada (decisión 1 de la HU-INF.5). El resultado
+// lleva el crudo y lo revalida quien llama. Tampoco manda temperatura (nunca la
+// mandó): el reintento de una salida inválida aquí repite la misma petición.
 func (p *Provider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest) (llm.ReviewResult, error) {
-	prompt := llm.BuildReviewPrompt(req)
-	out, err := p.complete(ctx, prompt)
+	out, err := p.complete(ctx, llm.BuildReviewPrompt(req))
 	if err != nil {
 		return llm.ReviewResult{}, err
 	}
-	rawJSON, err := llm.ExtractJSON(out)
-	if err != nil {
-		return llm.ReviewResult{}, err
-	}
-	var result llm.ReviewResult
-	if err := json.Unmarshal(rawJSON, &result); err != nil {
-		return llm.ReviewResult{}, fmt.Errorf("respuesta de corrección no parseable: %w", err)
-	}
-	return result, nil
+	return llm.DecodeVerdictOutput(out, "corrección")
 }
 
 // PrepareQuestion pide el artefacto de preparación (JSON crudo del contrato
@@ -125,41 +124,23 @@ func (p *Provider) PrepareQuestion(ctx context.Context, req llm.PrepRequest) (js
 }
 
 // JudgePairEquivalence pide la equivalencia binaria de un par (plan 042 F3c). Mismo
-// camino que ReviewAnswer: el resultado es un ReviewResult (verdict/score/feedback).
+// camino que ReviewAnswer: el resultado lleva el crudo y lo revalida quien llama.
 func (p *Provider) JudgePairEquivalence(ctx context.Context, req llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
-	prompt := llm.BuildPairEquivalencePrompt(req)
-	out, err := p.complete(ctx, prompt)
+	out, err := p.complete(ctx, llm.BuildPairEquivalencePrompt(req))
 	if err != nil {
 		return llm.ReviewResult{}, err
 	}
-	rawJSON, err := llm.ExtractJSON(out)
-	if err != nil {
-		return llm.ReviewResult{}, err
-	}
-	var result llm.ReviewResult
-	if err := json.Unmarshal(rawJSON, &result); err != nil {
-		return llm.ReviewResult{}, fmt.Errorf("respuesta de equivalencia no parseable: %w", err)
-	}
-	return result, nil
+	return llm.DecodeVerdictOutput(out, "equivalencia")
 }
 
 // CheckCriterion pide el cumplimiento binario de un criterio (plan 042 F4b). Mismo
-// camino que ReviewAnswer: el resultado es un ReviewResult (verdict/score/feedback).
+// camino que ReviewAnswer: el resultado lleva el crudo y lo revalida quien llama.
 func (p *Provider) CheckCriterion(ctx context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
-	prompt := llm.BuildCriterionCheckPrompt(req)
-	out, err := p.complete(ctx, prompt)
+	out, err := p.complete(ctx, llm.BuildCriterionCheckPrompt(req))
 	if err != nil {
 		return llm.ReviewResult{}, err
 	}
-	rawJSON, err := llm.ExtractJSON(out)
-	if err != nil {
-		return llm.ReviewResult{}, err
-	}
-	var result llm.ReviewResult
-	if err := json.Unmarshal(rawJSON, &result); err != nil {
-		return llm.ReviewResult{}, fmt.Errorf("respuesta de criterio no parseable: %w", err)
-	}
-	return result, nil
+	return llm.DecodeVerdictOutput(out, "criterio")
 }
 
 // ScoreRelevance puntúa la relevancia 0..1 de una candidata contra las ideas del job
@@ -191,7 +172,7 @@ func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest
 	}
 	rawJSON, err := llm.ExtractJSON(out)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: respuesta de extracción de ideas no parseable: %v", llm.ErrLLMQuality, err)
 	}
 	return llm.ParseExtractedIdeas(rawJSON)
 }
@@ -238,8 +219,15 @@ func (p *Provider) ProposeCandidates(ctx context.Context, in llm.ProposeCandidat
 	return candidates, nil
 }
 
-// complete enruta al backend concreto.
+// complete enruta al backend concreto. Antes pide su turno al tope del proveedor por
+// API (HU-IA.10): la espera queda fuera del reloj de la petición.
 func (p *Provider) complete(ctx context.Context, prompt string) (string, error) {
+	release, err := p.cfg.Limiter.Acquire(ctx)
+	if err != nil {
+		return "", fmt.Errorf("llm api request not sent: %w", err)
+	}
+	defer release()
+
 	switch p.cfg.Provider {
 	case ProviderAnthropic:
 		return p.completeAnthropic(ctx, prompt)

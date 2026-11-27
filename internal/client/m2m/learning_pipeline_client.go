@@ -20,6 +20,16 @@ import (
 // envuelve con ErrLearningPermanent: el clasificador de retry no debe verlo.
 var ErrPipelineConflict = errors.New("conflicto de estado en el carril de materiales (409; el caller decide)")
 
+// ErrNoSelectedCandidates marca el 422 con que learning rechaza la entrega de un job
+// sin ninguna candidata seleccionada (code PIPELINE_NO_SELECTED_CANDIDATES): no hay
+// borrador que armar (HU-IA.5, deuda 171). Envuelve ErrLearningPermanent, así que el
+// clasificador de retry lo sigue viendo permanente; el sentinel propio deja que el
+// processor ponga en el job el motivo exacto.
+var ErrNoSelectedCandidates = fmt.Errorf("%w: el job no tiene candidatas seleccionadas que entregar", ErrLearningPermanent)
+
+// codeNoSelectedCandidates es el code del 422 de learning sin seleccionadas.
+const codeNoSelectedCandidates = "PIPELINE_NO_SELECTED_CANDIDATES"
+
 // Rutas M2M del carril de materiales en learning (plan 043 F1). Base = api_learning.base_url.
 const (
 	pipelineJobPathFmt          = "/api/v1/internal/pipeline/jobs/%s"
@@ -320,7 +330,13 @@ func (c *LearningPipelineClient) MarkChunkFailed(ctx context.Context, chunkID, r
 	}, nil)
 }
 
-// UpdateJobStatus avanza el estado/fase del job (p.ej. a "processing" tras porcionar).
+// UpdateJobStatus avanza el estado/fase del job. Contrato de learning (HU-IA.5):
+//   - "processing" desde pending|processing: tomar el job, fin de una fase o latido
+//     (refresca updated_at). La fase nunca retrocede: learning conserva la mayor.
+//   - "failed" desde pending|processing, con el motivo en lastError.
+//   - "done" NO es un destino: learning lo rechaza (409). Solo DeliverJob cierra un
+//     job en done.
+//
 // 409 → ErrPipelineConflict (transición no válida desde el estado actual).
 func (c *LearningPipelineClient) UpdateJobStatus(ctx context.Context, jobID, status string, phase int16, lastError *string) error {
 	if jobID == "" {
@@ -409,12 +425,15 @@ func (c *LearningPipelineClient) UpdateCandidates(ctx context.Context, updates [
 
 // DeliverJob cierra la fase 2 del reduce (plan 044 D-044.6): pide a learning que arme el
 // draft desde las candidatas `selected` del job y lo persista (assessment_id + job a `done`
-// fase 2, todo server-side). Devuelve el id del assessment creado y su número de preguntas.
-// Idempotente: un job ya entregado responde 200 con el assessment existente (mismo id).
-// Semántica de estado (helper do): 422 (sin candidatas seleccionadas o import rechazado)
+// fase 2, todo server-side). Es lo ÚNICO que cierra un job en `done` y procede desde
+// `processing`/fase 1 (HU-IA.5). Devuelve el id del assessment creado y su número de
+// preguntas. Idempotente: un job ya entregado responde 200 con el assessment existente
+// (mismo id). Semántica de estado (helper do): 422 sin candidatas seleccionadas →
+// ErrNoSelectedCandidates (que envuelve ErrLearningPermanent); 422 por import rechazado
 // y 404 → ErrLearningPermanent (permanente, el job NO avanza server-side; el caller lo
-// trata como dead-end → DLQ); 5xx/red/timeout → transitorio (el redelivery reanuda la
-// fase 2 por status, las pasadas saltan lo terminal).
+// marca failed → DLQ); 409 → ErrPipelineConflict (el job no está en processing/fase 1);
+// 5xx/red/timeout → transitorio (el redelivery reanuda la fase 2 por status, las pasadas
+// saltan lo terminal).
 func (c *LearningPipelineClient) DeliverJob(ctx context.Context, jobID string) (string, int, error) {
 	if jobID == "" {
 		return "", 0, fmt.Errorf("job_id vacío")
@@ -423,6 +442,9 @@ func (c *LearningPipelineClient) DeliverJob(ctx context.Context, jobID string) (
 
 	var out deliverResponse
 	if err := c.do(ctx, http.MethodPost, url, nil, &out); err != nil {
+		if errors.Is(err, ErrLearningPermanent) && strings.Contains(err.Error(), codeNoSelectedCandidates) {
+			return "", 0, fmt.Errorf("%w: %v", ErrNoSelectedCandidates, err)
+		}
 		return "", 0, err
 	}
 	return out.AssessmentID, out.Questions, nil

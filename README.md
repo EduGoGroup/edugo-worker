@@ -184,19 +184,89 @@ LLM_API_MODEL=claude-sonnet-5
 > secretos (nunca en la imagen ni en el repo), igual que el `service-jwt-secret`
 > del plan 020. Las base URLs apuntan a los servicios internos de Cloud Run.
 
-### Harness de providers LLM (D-039.8)
+### Harness de providers LLM (D-039.8, ADR 0048)
 
-`make llm-harness ARGS="..."` (o `go run ./cmd/llm-harness ...`) toma un material
-de muestra, corre `GenerateAssessment` con el provider elegido y **valida el JSON
-contra las reglas del contrato `assessment_import` v1** (plan 038), reportando
-pass/fail y tiempos. Sirve para elegir el modelo local **midiendo** (design 039 §6)
-y como regresión de prompts para el plan 041.
+`make llm-harness ARGS="..."` (o `go run ./cmd/llm-harness ...`) pasa casos por el
+modelo real y **mide, no juzga** (ADR 0048 del ecosistema):
+
+- **Una corrida por caso.** No hay reintentos ni casos apartados: una salida vacía o
+  inválida es un dato (`inválidas: n`).
+- **No hay PASS/FAIL por lo que escribe el modelo.** El código de salida solo es != 0
+  si el arnés no pudo correr (sin modelo, sin banco, sin poder guardar).
+- **Cada corrida se guarda** como fichero nuevo en `cmd/llm-harness/testdata/runs/`,
+  con la fecha UTC en el nombre, el modelo y su digest, y el commit del worker. Nunca
+  pisa una anterior.
+- **El modelo** sale de `-model` o de `LLM_LOCAL_MODEL`. Sin modelo dicho no arranca.
+  Antes de medir comprueba que Ollama responde y que el modelo está instalado. No
+  descarga nada.
+
+Modos: `generate` (contrato 038), `review`, `prep`, `review-prep`, `material`,
+`material-pairs`, `embed`, `relevance` y `bank`.
+
+**El modo `material`** (AR-IA.3) mide el riel material→evaluación entero. Por cada caso de
+`cmd/llm-harness/testdata/material/cases.json` (un PDF) monta **el procesador de producción**
+(`processor.NewMaterialPipelineProcessor` y su `Process`) sobre un almacén en memoria que hace de
+learning: fase 0 (extraer y trocear), fase 1 (leer y preguntar por trozo) y las cuatro pasadas de
+la fase 2, con los reintentos de producción y sus parámetros (300/400/200/80, 0,93 y 0,50,
+relevancia 0,4, cupo 20). Sin cola, sin learning y sin base: solo Ollama, con el modelo generador
+y el de embeddings (`-embed-model`, por defecto el de la configuración). Imprime cinco tablas
+(generación, sustento, reducción, borrador y coste) y guarda la corrida con las candidatas
+enteras. Una reentrega de la cola se imita volviendo a llamar a `Process` sobre el mismo almacén,
+hasta 3 veces y solo tras un error transitorio; un caso que no termina se guarda como
+`incomplete`. Antes de mirar si hay modelo comprueba los datos: un PDF que falta o una sección
+declarada que no aparece en el texto extraído paran el arnés con código 1.
+
+**El modo `material-pairs`** (AR-IA.3) pasa las parejas etiquetadas de
+`testdata/material/pairs.json` por la pasada de duplicadas real (`reduce.DedupePass`), cada una
+dos veces: con el embedder de producción (qué escalón decide: letras, coseno o juez) y con uno
+fijo en la zona gris (el juez solo). Cuenta por categoría lo que coincide con la etiqueta, las
+duplicadas que se escapan, las falsas duplicadas y las salidas inválidas.
 
 ```bash
-# Contra un Ollama local (no instala nada; si no hay Ollama, reporta el error):
-make llm-harness ARGS="-provider ollama -model qwen2.5:7b -questions 3"
+LLM_LOCAL_MODEL=gemma4:e4b make llm-harness ARGS="-mode material"
+LLM_LOCAL_MODEL=gemma4:e4b make llm-harness ARGS="-mode material-pairs"
+```
 
-# Contra la API (Anthropic):
+Para medir otro PDF sin tocar los casos congelados: `-material-inputs ruta/al.pdf` (sin
+secciones) o `-material-cases otro.json`.
+
+**El modo `bank`** (AR-INF.1) pasa el banco etiquetado de learning por el carril de
+corrección real (`processor.ReviewAnswerLane`). Solo pasan los casos que la parte
+determinista dejó pendientes, que son los que en producción llegan al modelo. El
+informe de esos casos lo escribe la prueba de learning:
+
+```bash
+# 1. En edugo-api-learning: el informe determinista (fuera de git).
+ANSWER_BANK_REPORT=/tmp/bank-det.json GOWORK=off go test -count=1 -run TestAnswerBank ./internal/core/domain/
+
+# 2. Aquí: el banco por el modelo local, a temperatura 0, una corrida por modelo.
+for m in gemma4:e2b-it-qat gemma4:e4b; do
+  make llm-harness ARGS="-mode bank -provider ollama -model $m -timeout 300s \
+    -bank ../edugo-api-learning/internal/core/domain/testdata/answer_bank.json \
+    -deterministic /tmp/bank-det.json"
+done
+```
+
+Desde la HU-INF.5 el «antes» y el «después» se miden con los dos modelos, `gemma4:e2b-it-qat`
+y `gemma4:e4b` (el de `LLM_LOCAL_MODEL`), con `-timeout 300s` por caso (no los 120 s de
+producción). El banco lee el `answer_spec` de cada caso, como lo sirve el `GET` de pendientes.
+La tabla separa las vacías resueltas por regla (sin modelo) de las que no hicieron ninguna
+llamada (una lista resuelta sin modelo), cuenta los reintentos de una salida inválida, las
+extracciones de ideas con error y vacías, y los casos en que el `score` del modelo no es el
+número que propone Go: en los carriles globales el número sale del veredicto.
+
+**Lo que cierra la salida del modelo** (HU-INF.5). Las llamadas del carril de revisión (el
+juicio global, el par, el criterio y la extracción de ideas) mandan a Ollama el JSON Schema de su
+salida en `format`, y Go lo revalida siempre (`internal/llm/schema.go`). El proveedor de pago no
+manda esquema: la versión de API del worker no consta como compatible. Una salida inválida se
+reintenta una vez a temperatura 0,3 y, si sigue mal, es un error: la respuesta queda sin
+propuesta para la docente. Una respuesta sin letras ni números se cierra como incorrecta sin
+llamar al modelo.
+
+Otros ejemplos:
+
+```bash
+make llm-harness ARGS="-mode review -provider ollama -model qwen2.5:7b"
 make llm-harness ARGS="-provider api -api-provider anthropic -api-key $LLM_API_KEY -api-model claude-sonnet-5 -material ./material.txt"
 ```
 

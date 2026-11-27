@@ -7,11 +7,13 @@ import (
 	"fmt"
 	"math"
 	"strings"
+	"time"
 
 	"github.com/EduGoGroup/edugo-shared/logger"
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 	"github.com/EduGoGroup/edugo-worker/internal/openended"
 	"github.com/EduGoGroup/edugo-worker/internal/questionprep"
 	"github.com/EduGoGroup/edugo-worker/internal/shortanswer"
@@ -44,8 +46,8 @@ const (
 const reviewLanguage = "es"
 
 // ErrMalformedEvent marca un evento que no se puede decodificar/validar. El
-// clasificador de retry lo trata como permanente: reintentar no lo arregla, va al
-// DLQ. Ver classifyError en retry.go.
+// clasificador lo trata como permanente: reintentar no lo arregla, y el consumer lo
+// manda a la cola muerta sin reintentos. Ver classifyError e IsPermanent en retry.go.
 var ErrMalformedEvent = errors.New("evento attempt.review_requested malformado")
 
 // ErrInvalidVerdict marca una respuesta del LLM cuyo verdict no es uno de los
@@ -56,6 +58,18 @@ var ErrMalformedEvent = errors.New("evento attempt.review_requested malformado")
 // corrija a mano. classifyError no lo lista como permanente, así que reusa el
 // carril de retry existente de un fallo de provider.
 var ErrInvalidVerdict = errors.New("veredicto del LLM inválido")
+
+// releaseClaimTimeout es el tope de la liberación del candado. Se libera con un
+// contexto propio, que no hereda la cancelación del mensaje (apagado del worker),
+// para que el reintento no choque con el candado de esta entrega (bug 0138).
+const releaseClaimTimeout = 5 * time.Second
+
+// Códigos del 409 de claim que manda learning. ErrClaimConflict los funde en un
+// solo error; el cuerpo, que viaja en el mensaje, dice cuál fue.
+const (
+	claimConflictCodeActive     = "AI_REVIEW_CLAIM_ACTIVE"
+	claimConflictCodeNotPending = "ATTEMPT_NOT_PENDING_REVIEW"
+)
 
 // SchoolSettingsReader es la porción del SettingsClient M2M que usa el processor.
 // Se define como interfaz para poder mockearla en tests. *m2m.SettingsClient la
@@ -71,8 +85,9 @@ type LearningReviewClient interface {
 	// Claim reclama el candado «en revisión por IA» del intento antes de procesar.
 	// Un m2m.ErrClaimConflict (409) obliga a abstenerse (no es fallo).
 	Claim(ctx context.Context, attemptID string) error
-	// ReleaseClaim libera el candado al terminar el lote cuando NO se finaliza
-	// (flujo teacher / short_answer). Idempotente.
+	// ReleaseClaim libera el candado en toda salida que no finaliza el intento:
+	// al terminar el lote del flujo teacher / short_answer y en cada salida con
+	// error, para que el reintento pueda reclamar. Idempotente.
 	ReleaseClaim(ctx context.Context, attemptID string) error
 	GetPendingAnswers(ctx context.Context, attemptID string) (m2m.PendingAnswersResponse, error)
 	PostAnswerReview(ctx context.Context, attemptID, answerID string, review m2m.AnswerReviewRequest) (m2m.AnswerReviewResponse, error)
@@ -92,6 +107,11 @@ type AttemptReviewProcessor struct {
 	learning  LearningReviewClient
 	providers map[string]llm.LLMProvider
 	logger    logger.Logger
+	// turns maps the mode ("local"/"api") to its inference cap (HU-IA.10). A mode
+	// without limiter does not wait.
+	turns map[string]*inferencecap.Limiter
+	// failures recibe el «no aplica» de la revisión apagada (HU-IA.6); nil no avisa.
+	failures FailureReporter
 }
 
 // NewAttemptReviewProcessor construye el processor. providers mapea el mode
@@ -109,6 +129,35 @@ func NewAttemptReviewProcessor(
 		providers: providers,
 		logger:    log,
 	}
+}
+
+// WithInferenceTurns sets the inference cap of each mode. A review takes the turn of its
+// mode for the whole message, before the lock, and releases it on every exit (HU-IA.10).
+func (p *AttemptReviewProcessor) WithInferenceTurns(turns map[string]*inferencecap.Limiter) *AttemptReviewProcessor {
+	p.turns = turns
+	return p
+}
+
+// holdTurn waits for the inference turn of the mode and returns the context that carries
+// it. The wait is logged on its own line: it is not part of any answer's duration.
+func (p *AttemptReviewProcessor) holdTurn(ctx context.Context, attemptID, mode string) (context.Context, func(), error) {
+	limiter := p.turns[mode]
+	if limiter == nil {
+		return ctx, func() {}, nil
+	}
+	start := time.Now()
+	held, release, err := limiter.Hold(ctx)
+	if err != nil {
+		return ctx, release, fmt.Errorf("esperando turno de inferencia de attempt %s: %w", attemptID, err)
+	}
+	taken := time.Now()
+	p.logger.Info("turno de inferencia tomado",
+		"attempt_id", attemptID, "limiter", limiter.Name(), "wait_ms", taken.Sub(start).Milliseconds())
+	return held, func() {
+		release()
+		p.logger.Info("turno de inferencia soltado",
+			"attempt_id", attemptID, "limiter", limiter.Name(), "held_ms", time.Since(taken).Milliseconds())
+	}, nil
 }
 
 // EventType satisface processor.Processor.
@@ -145,6 +194,7 @@ func (p *AttemptReviewProcessor) Process(ctx context.Context, payload []byte) er
 			"school_id", evt.Payload.SchoolID,
 			"mode", mode,
 		)
+		reportNotApplicable(ctx, p.failures, p.logger, m2m.RescueTargetAttempt, evt.Payload.AttemptID)
 		return nil
 	}
 
@@ -153,15 +203,19 @@ func (p *AttemptReviewProcessor) Process(ctx context.Context, payload []byte) er
 
 // orchestrate ejecuta la revisión asistida de un intento con la política resuelta.
 //
-// Idempotencia y retry (gate de tasks.md): todo el flujo es seguro de reprocesar.
-// El GET re-lee solo las respuestas AÚN pendientes y el POST review es upsert del
-// lado de learning, así que un redelivery tras un fallo a mitad no duplica ni
-// corrompe. Por eso los fallos transitorios (LLM o M2M 5xx/red) se devuelven como
-// error para que el consumer reintente. Un 4xx permanente de learning
-// (ErrLearningPermanent) o un mode sin provider se envuelven en un error que el
-// clasificador marca permanente; aun así el consumer con DLQ reintenta MaxRetries
-// antes de mandar el mensaje al DLQ (ConsumeWithDLQ no consulta el clasificador),
-// lo cual es inofensivo porque el reproceso es idempotente.
+// Candado y retry (bug 0138): el candado no es reentrante, así que un único defer,
+// puesto al reclamar, lo libera en toda salida salvo cuando finalize salió bien. Sin
+// eso, el reintento del consumer (3, a los 5, 10 y 20 s, dentro de los 10 minutos
+// del candado) recibe el 409 de su propio candado y se abstiene.
+//
+// Un fallo del modelo o un veredicto inválido en una respuesta no detiene a las
+// demás: se acumula y se devuelve al final, sin finalizar, para que la reentrega
+// vuelva solo sobre las que fallaron (el GET re-lee solo las AÚN pendientes y el
+// POST review es upsert en learning). Un fallo de learning (GET, POST o finalize) sí
+// corta: no es de la respuesta. Un 4xx permanente de learning (ErrLearningPermanent)
+// o un mode sin provider se envuelven en un error que el clasificador marca
+// permanente: el consumer con DLQ consulta IsPermanent y manda el mensaje a la cola
+// muerta sin reintentos.
 func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mode, flow string, answers []events.AttemptReviewAnswerRef) error {
 	provider, ok := p.providers[mode]
 	if !ok || provider == nil {
@@ -170,17 +224,36 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 		return fmt.Errorf("%w: no hay LLMProvider para mode=%q", ErrMalformedEvent, mode)
 	}
 
+	// Turno de inferencia del modo, por mensaje y ANTES del candado: quien espera turno
+	// no tiene el candado, y las llamadas de esta revisión van seguidas (HU-IA.10).
+	ctx, releaseTurn, err := p.holdTurn(ctx, attemptID, mode)
+	if err != nil {
+		return err
+	}
+	defer releaseTurn()
+
 	// Candado «en revisión por IA»: reclamar ANTES de tocar nada, para que profe y
 	// worker no choquen (plan 040 F4). Un 409 (candado ajeno vigente o intento ya
 	// completado por el profe) NO es un fallo: el worker se abstiene y ACKea.
 	if err := p.learning.Claim(ctx, attemptID); err != nil {
 		if errors.Is(err, m2m.ErrClaimConflict) {
-			p.logger.Info("intento no reclamable (candado ajeno o ya completado), se abstiene (ACK)",
-				"attempt_id", attemptID, "motivo", err.Error())
+			p.logger.Info("intento no reclamable, se abstiene (ACK)",
+				"attempt_id", attemptID, "causa", claimConflictCause(err), "motivo", err.Error())
 			return nil
 		}
 		return fmt.Errorf("reclamando candado de attempt %s: %w", attemptID, err)
 	}
+
+	// Con el candado tomado, toda salida lo libera salvo un finalize correcto (que
+	// cierra el intento). Las salidas con error lo liberan para que el reintento
+	// pueda reclamar.
+	finalized := false
+	releaseReason := "salida con error: se libera para que el reintento pueda reclamar"
+	defer func() {
+		if !finalized {
+			p.releaseClaim(ctx, attemptID, releaseReason)
+		}
+	}()
 
 	// Regla de fondo (mixto open_ended + short_answer): la presencia de CUALQUIER
 	// short_answer fuerza el flujo teacher (no finalizar), porque la corrección de
@@ -205,39 +278,43 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 	// idempotente; si no, liberamos el candado para el profesor.
 	if len(pending.Answers) == 0 {
 		if finalizeAtEnd {
-			return p.finalize(ctx, attemptID, "sin pendientes (posible redelivery)")
+			if err := p.finalize(ctx, attemptID, "sin pendientes (posible redelivery)"); err != nil {
+				return err
+			}
+			finalized = true
+			return nil
 		}
 		p.logger.Info("review sin pendientes, flujo teacher/short_answer: release-claim",
 			"attempt_id", attemptID, "mode", mode, "flow", flow, "has_short_answer", hasShortAnswer)
-		p.releaseClaim(ctx, attemptID, "sin pendientes (posible redelivery)")
+		releaseReason = "sin pendientes (posible redelivery)"
 		return nil
 	}
 
+	var answerErrs []error
 	for _, ans := range pending.Answers {
-		result, err := p.reviewOne(ctx, provider, ans)
+		// Mensaje cancelado (apagado del worker): las que quedan fallarían todas por
+		// lo mismo, no por la respuesta. Se corta y el reintento las retoma.
+		if ctxErr := ctx.Err(); ctxErr != nil {
+			answerErrs = append(answerErrs, fmt.Errorf("revisión de attempt %s interrumpida: %w", attemptID, ctxErr))
+			break
+		}
+
+		// reviewAnswer resuelve la vacía por regla, elige el carril, revalida el
+		// veredicto y deriva los puntos (HU-INF.5). Un fallo del LLM o una salida que
+		// sigue inválida tras su reintento (ErrInvalidVerdict) es de esta respuesta:
+		// NO se postea una review IA «propuesta» —la answer queda para el profesor—,
+		// se sigue con las demás y el error se devuelve al final.
+		lane, err := p.reviewAnswer(ctx, provider, ans)
 		if err != nil {
-			// Fallo del LLM: transitorio. Reintentar es seguro (aún no escribimos esta
-			// review; las ya escritas no vuelven a aparecer en el GET pending).
-			return fmt.Errorf("LLM revisando answer %s (attempt %s): %w", ans.AnswerID, attemptID, err)
+			p.logger.Warn("fallo del LLM o veredicto inválido en una respuesta, se sigue con las demás",
+				append([]any{"attempt_id", attemptID, "answer_id", ans.AnswerID, "question_type", ans.QuestionType,
+					"veredicto_invalido", errors.Is(err, ErrInvalidVerdict), "motivo", err.Error()},
+					reviewLogFields(lane, provider.Name())...)...)
+			answerErrs = append(answerErrs, fmt.Errorf("LLM revisando answer %s (attempt %s): %w", ans.AnswerID, attemptID, err))
+			continue
 		}
 
-		// Guardia anti-basura: si el verdict no es válido para el tipo de pregunta
-		// (p.ej. "" por un `{}` de qwen3), el LLM no emitió un juicio usable. Se trata
-		// igual que un fallo del provider (mismo carril de retry) y NO se postea una
-		// review IA de 0 puntos «propuesta» — la answer queda para el profesor.
-		if err := validateVerdict(ans.QuestionType, result.Verdict); err != nil {
-			p.logger.Warn("veredicto del LLM inválido, se descarta la propuesta (no se postea review IA)",
-				"attempt_id", attemptID,
-				"answer_id", ans.AnswerID,
-				"question_type", ans.QuestionType,
-				"verdict", string(result.Verdict),
-				"score", result.Score,
-				"provider", provider.Name(),
-			)
-			return fmt.Errorf("revisando answer %s (attempt %s): %w", ans.AnswerID, attemptID, err)
-		}
-
-		points := scaledPoints(result.Score, ans.Points)
+		result, points := lane.Result, lane.Points
 		if _, err := p.learning.PostAnswerReview(ctx, attemptID, ans.AnswerID, m2m.AnswerReviewRequest{
 			PointsAwarded: points,
 			Feedback:      result.Feedback,
@@ -245,36 +322,62 @@ func (p *AttemptReviewProcessor) orchestrate(ctx context.Context, attemptID, mod
 			return fmt.Errorf("escribiendo review de answer %s (attempt %s): %w", ans.AnswerID, attemptID, err)
 		}
 
-		p.logger.Info("answer revisada por LLM",
+		p.logger.Info("answer revisada por LLM", append([]any{
 			"attempt_id", attemptID,
 			"answer_id", ans.AnswerID,
 			"question_type", ans.QuestionType,
 			"verdict", string(result.Verdict),
 			"score", result.Score,
 			"points_awarded", points,
-			"provider", provider.Name(),
-		)
+			"en_blanco_por_regla", lane.BlankByRule,
+		}, reviewLogFields(lane, provider.Name())...)...)
+	}
+
+	// Alguna respuesta quedó sin propuesta: no se finaliza y se devuelve el error
+	// para que el consumer reintente (el defer libera el candado).
+	if len(answerErrs) > 0 {
+		return fmt.Errorf("revisión incompleta de attempt %s (%d pendientes al empezar): %w",
+			attemptID, len(pending.Answers), errors.Join(answerErrs...))
 	}
 
 	// Todas las pendientes quedaron revisadas.
 	if finalizeAtEnd {
-		return p.finalize(ctx, attemptID, "todas las respuestas revisadas")
+		if err := p.finalize(ctx, attemptID, "todas las respuestas revisadas"); err != nil {
+			return err
+		}
+		finalized = true
+		return nil
 	}
 
-	// Flujo teacher (o presencia de short_answer): NO finalize. Se libera el candado
-	// y el intento queda ai_reviewed para que el profesor lo vise (plan 040 F4).
+	// Flujo teacher (o presencia de short_answer): NO finalize. El defer libera el
+	// candado y el intento queda ai_reviewed para que el profesor lo vise (plan 040 F4).
 	p.logger.Info("review completada, flujo teacher/short_answer: release-claim (sin finalize)",
 		"attempt_id", attemptID, "answers", len(pending.Answers), "has_short_answer", hasShortAnswer)
-	p.releaseClaim(ctx, attemptID, "revisión completada, intento queda para el profesor")
+	releaseReason = "revisión completada, intento queda para el profesor"
 	return nil
+}
+
+// claimConflictCause dice cuál de las dos causas de learning trajo el 409 de claim,
+// por el código que viaja en el cuerpo del error. El log de abstención la lleva.
+func claimConflictCause(err error) string {
+	msg := err.Error()
+	switch {
+	case strings.Contains(msg, claimConflictCodeActive):
+		return "candado activo (otra entrega o el propio candado sin liberar)"
+	case strings.Contains(msg, claimConflictCodeNotPending):
+		return "el intento ya no está pendiente de revisión"
+	default:
+		return "desconocida"
+	}
 }
 
 // reviewOne produce el ReviewResult de UNA answer, eligiendo el carril según el prep
 // (plan 042 F3c). short_answer con prep content_kind=list ⇒ carril TRITURADO (match
 // determinista + pares binarios, reemplaza el juicio global). short_answer con prep
 // de otro content_kind ⇒ prompt global enriquecido con los ítems normalizados. Sin
-// prep (o inválido) o cualquier otro tipo ⇒ flujo global actual intacto.
-func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLMProvider, ans m2m.PendingAnswer) (llm.ReviewResult, error) {
+// prep (o inválido) o cualquier otro tipo ⇒ flujo global actual intacto. Devuelve
+// además el carril elegido, también cuando hay error (HU-IA.2).
+func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLMProvider, ans m2m.PendingAnswer) (llm.ReviewResult, ReviewLane, error) {
 	prep := p.parsePrep(ans)
 
 	req := llm.ReviewRequest{
@@ -290,17 +393,22 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 		if prep.ContentKind == questionprep.ContentKindList {
 			p.logger.Info("short_answer con prep list: carril triturado (match determinista + pares)",
 				"answer_id", ans.AnswerID, "items", len(prep.Items))
-			return shortanswer.Grade(ctx, provider, shortanswer.GradeInput{
+			res, err := shortanswer.Grade(ctx, provider, shortanswer.GradeInput{
 				QuestionText:  ans.QuestionText,
 				StudentAnswer: ans.StudentAnswer,
 				Items:         prep.Items,
 				ItemsVerbatim: prep.ItemsVerbatim,
 				Language:      reviewLanguage,
 			})
+			return res, ReviewLaneList, err
 		}
 		// term/number/date/free: mejora barata del prompt global (D-042.10 §short_answer,
 		// punto 5) sin cambiar el contrato del POST review.
 		req.ExpectedAnswer = enrichExpectedWithPrep(ans.ExpectedAnswer, prep)
+	}
+	if ans.QuestionType == llm.QuestionTypeShortAnswer {
+		// P19 (HU-INF.5): el prompt global de la corta sabe qué aceptó y qué exigió la docente.
+		req.AnswerSpec = p.parseAnswerSpec(ans)
 	}
 
 	if ans.QuestionType == questionprep.QuestionTypeOpenEnded && prep != nil {
@@ -313,7 +421,7 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 		if len(criteria) > 0 {
 			p.logger.Info("open_ended con prep criteria: carril por criterios (una llamada por criterio)",
 				"answer_id", ans.AnswerID, "criteria", len(criteria))
-			return openended.Grade(ctx, provider, openended.GradeInput{
+			res, err := openended.Grade(ctx, provider, openended.GradeInput{
 				QuestionText:   ans.QuestionText,
 				ExpectedAnswer: ans.ExpectedAnswer,
 				StudentAnswer:  ans.StudentAnswer,
@@ -321,6 +429,7 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 				Language:       reviewLanguage,
 				Logger:         p.logger,
 			})
+			return res, ReviewLaneCriteria, err
 		}
 		// F4a: sin criterios reales, se enriquece el prompt global con intención/ideas/variantes.
 		req.Prep = &llm.ReviewPrep{
@@ -331,7 +440,9 @@ func (p *AttemptReviewProcessor) reviewOne(ctx context.Context, provider llm.LLM
 		}
 	}
 
-	return provider.ReviewAnswer(ctx, req)
+	p.logger.Info("revisión por juicio global", "answer_id", ans.AnswerID)
+	res, err := p.reviewGlobal(ctx, provider, req)
+	return res, ReviewLaneGlobal, err
 }
 
 // parsePrep decodifica y valida el llm_prep que learning adjuntó a la answer contra
@@ -378,11 +489,15 @@ func nonBlankCriteria(criteria []string) []string {
 	return out
 }
 
-// releaseClaim libera el candado de mejor esfuerzo: un fallo NO es fatal (el
-// candado vence por TTL del lado de learning), así que se loguea y se sigue. Las
-// reviews ya quedaron escritas; reprocesar por un release fallido sería en vano.
+// releaseClaim libera el candado de mejor esfuerzo, con un contexto propio que no
+// hereda la cancelación del mensaje y con tope releaseClaimTimeout. Un fallo no se
+// devuelve: se loguea y el candado vence por TTL en learning (10 minutos). Si la
+// salida fue con error, los reintentos que caigan en esa ventana chocarán con él y
+// se abstendrán; ese hueco es la deuda 150.
 func (p *AttemptReviewProcessor) releaseClaim(ctx context.Context, attemptID, reason string) {
-	if err := p.learning.ReleaseClaim(ctx, attemptID); err != nil {
+	relCtx, cancel := context.WithTimeout(context.WithoutCancel(ctx), releaseClaimTimeout)
+	defer cancel()
+	if err := p.learning.ReleaseClaim(relCtx, attemptID); err != nil {
 		p.logger.Warn("no se pudo liberar el candado (vencerá por TTL)",
 			"attempt_id", attemptID, "motivo", err.Error(), "contexto", reason)
 		return

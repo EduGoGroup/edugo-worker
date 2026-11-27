@@ -14,8 +14,21 @@ import (
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
+	"github.com/EduGoGroup/edugo-worker/internal/llm/inferencecap"
 	"github.com/EduGoGroup/edugo-worker/internal/materialpipeline"
 )
+
+// ErrRepeatLimit marks Ollama's 500 "token repeat limit reached": the model got stuck
+// repeating one token and Ollama aborted the prediction. The server is fine; it is the
+// model's output that failed, so it wraps llm.ErrLLMQuality (HU-IA.9).
+var ErrRepeatLimit = fmt.Errorf("%w: ollama cortó un bucle de repetición del modelo", llm.ErrLLMQuality)
+
+// repeatLimitBody is the text Ollama 0.34.4 puts in the body of that 500.
+const repeatLimitBody = "token repeat limit reached"
+
+// materialRetrySeed is the fixed, non-zero seed of the material quality retries: at the
+// retry temperature it makes the draw repeatable from one run to the next (HU-IA.9).
+const materialRetrySeed = 7919
 
 // Config configura el provider Ollama. Se inyecta desde bootstrap/config; el
 // provider NUNCA lee env directo (D-039.3).
@@ -33,6 +46,9 @@ type Config struct {
 	// parpadea entre corridas (medido en 045: criterios open_ended que oscilaban
 	// correct/incorrect sin cambiar el input).
 	Temperature float64
+	// Limiter caps the inferences in flight against this Ollama (HU-IA.10). Every
+	// generation asks its turn right before the HTTP request opens; nil is "no cap".
+	Limiter *inferencecap.Limiter
 }
 
 // Provider es la implementación Ollama de llm.LLMProvider.
@@ -41,6 +57,7 @@ type Provider struct {
 	model       string
 	temperature float64
 	httpClient  *http.Client
+	limiter     *inferencecap.Limiter
 }
 
 // New construye el provider Ollama a partir de su config.
@@ -54,19 +71,22 @@ func New(cfg Config) *Provider {
 		model:       cfg.Model,
 		temperature: cfg.Temperature,
 		httpClient:  &http.Client{Timeout: timeout},
+		limiter:     cfg.Limiter,
 	}
 }
 
 // Name identifica al provider.
 func (p *Provider) Name() string { return "ollama:" + p.model }
 
-// generateRequest es el body de POST /api/generate. format:"json" fuerza a
-// Ollama a emitir JSON válido (reduce alucinaciones de formato).
+// generateRequest es el body de POST /api/generate. Format es "json" (fuerza a
+// Ollama a emitir JSON válido) o, en las llamadas del carril de revisión, el JSON
+// Schema de la salida de esa llamada (HU-INF.5): Ollama restringe la forma al
+// generar. Medido con Ollama 0.34.4 (P9.1).
 type generateRequest struct {
-	Model  string `json:"model"`
-	Prompt string `json:"prompt"`
-	Stream bool   `json:"stream"`
-	Format string `json:"format,omitempty"`
+	Model  string          `json:"model"`
+	Prompt string          `json:"prompt"`
+	Stream bool            `json:"stream"`
+	Format json.RawMessage `json:"format,omitempty"`
 	// Think desactiva el "thinking" de los modelos que lo soportan (qwen3, etc.).
 	// Con format:"json" el razonamiento se corta y deja el objeto vacío `{}`
 	// (verdict/score/feedback en cero): una review IA engañosa. Forzar think:false
@@ -79,10 +99,13 @@ type generateRequest struct {
 	Options *generateOptions `json:"options,omitempty"`
 }
 
-// generateOptions son las opciones de muestreo de Ollama que el worker fija.
-// Hoy solo temperature (determinismo); ampliable (top_p, seed) sin tocar callers.
+// generateOptions son las opciones de muestreo de Ollama que el worker fija: la
+// temperatura siempre y, solo en los reintentos del material, la semilla (HU-IA.9).
 type generateOptions struct {
 	Temperature float64 `json:"temperature"`
+	// Seed es nil salvo en un reintento de «leer» o «preguntar»: sin ella, el cuerpo
+	// de la petición es el de siempre.
+	Seed *int `json:"seed,omitempty"`
 }
 
 // generateResponse es la respuesta (con stream:false, un solo objeto).
@@ -101,22 +124,19 @@ func (p *Provider) GenerateAssessment(ctx context.Context, material llm.Material
 	return llm.ExtractJSON(out)
 }
 
-// ReviewAnswer pide al modelo la corrección de una respuesta.
+// jsonFormat es el modo JSON sin esquema de Ollama, el de las llamadas que no son del
+// carril de revisión (generación, preparación, material, relevancia).
+var jsonFormat = json.RawMessage(`"json"`)
+
+// ReviewAnswer pide al modelo la corrección de una respuesta, con el esquema de su
+// tipo de pregunta en format. El resultado lleva el crudo: lo revalida quien llama.
 func (p *Provider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest) (llm.ReviewResult, error) {
-	prompt := llm.BuildReviewPrompt(req)
-	out, err := p.generate(ctx, prompt)
+	schema := llm.VerdictSchema(llm.ReviewVerdicts(req.QuestionType)).JSON()
+	out, err := p.generateFormat(ctx, llm.BuildReviewPrompt(req), p.temperatureFor(req.Temperature), schema)
 	if err != nil {
 		return llm.ReviewResult{}, err
 	}
-	rawJSON, err := llm.ExtractJSON(out)
-	if err != nil {
-		return llm.ReviewResult{}, err
-	}
-	var result llm.ReviewResult
-	if err := json.Unmarshal(rawJSON, &result); err != nil {
-		return llm.ReviewResult{}, fmt.Errorf("respuesta de corrección no parseable: %w", err)
-	}
-	return result, nil
+	return llm.DecodeVerdictOutput(out, "corrección")
 }
 
 // PrepareQuestion pide al modelo el artefacto de preparación (JSON crudo del
@@ -125,49 +145,34 @@ func (p *Provider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest) (llm
 // thinking. El caller valida el JSON contra el contrato antes de persistirlo.
 func (p *Provider) PrepareQuestion(ctx context.Context, req llm.PrepRequest) (json.RawMessage, error) {
 	prompt := llm.BuildPrepPrompt(req)
-	out, err := p.generate(ctx, prompt)
+	out, err := p.generateFormat(ctx, prompt, p.temperatureFor(req.Temperature), jsonFormat)
 	if err != nil {
 		return nil, err
 	}
 	return llm.ExtractJSON(out)
 }
 
-// JudgePairEquivalence pide la equivalencia binaria de un par (plan 042 F3c). Mismo
-// camino que ReviewAnswer: el resultado es un ReviewResult (verdict/score/feedback).
+// JudgePairEquivalence pide la equivalencia binaria de un par (plan 042 F3c), con el
+// esquema binario en format. Mismo camino que ReviewAnswer. El esquema le alcanza
+// también al juez del dedupe, que usa esta llamada: solo le restringe la forma.
 func (p *Provider) JudgePairEquivalence(ctx context.Context, req llm.PairEquivalenceRequest) (llm.ReviewResult, error) {
-	prompt := llm.BuildPairEquivalencePrompt(req)
-	out, err := p.generate(ctx, prompt)
+	schema := llm.VerdictSchema(llm.BinaryVerdicts).JSON()
+	out, err := p.generateFormat(ctx, llm.BuildPairEquivalencePrompt(req), p.temperatureFor(req.Temperature), schema)
 	if err != nil {
 		return llm.ReviewResult{}, err
 	}
-	rawJSON, err := llm.ExtractJSON(out)
-	if err != nil {
-		return llm.ReviewResult{}, err
-	}
-	var result llm.ReviewResult
-	if err := json.Unmarshal(rawJSON, &result); err != nil {
-		return llm.ReviewResult{}, fmt.Errorf("respuesta de equivalencia no parseable: %w", err)
-	}
-	return result, nil
+	return llm.DecodeVerdictOutput(out, "equivalencia")
 }
 
-// CheckCriterion pide el cumplimiento binario de un criterio (plan 042 F4b). Mismo
-// camino que ReviewAnswer: el resultado es un ReviewResult (verdict/score/feedback).
+// CheckCriterion pide el cumplimiento binario de un criterio (plan 042 F4b), con el
+// esquema binario en format. Mismo camino que ReviewAnswer.
 func (p *Provider) CheckCriterion(ctx context.Context, req llm.CriterionCheckRequest) (llm.ReviewResult, error) {
-	prompt := llm.BuildCriterionCheckPrompt(req)
-	out, err := p.generate(ctx, prompt)
+	schema := llm.VerdictSchema(llm.BinaryVerdicts).JSON()
+	out, err := p.generateFormat(ctx, llm.BuildCriterionCheckPrompt(req), p.temperatureFor(req.Temperature), schema)
 	if err != nil {
 		return llm.ReviewResult{}, err
 	}
-	rawJSON, err := llm.ExtractJSON(out)
-	if err != nil {
-		return llm.ReviewResult{}, err
-	}
-	var result llm.ReviewResult
-	if err := json.Unmarshal(rawJSON, &result); err != nil {
-		return llm.ReviewResult{}, fmt.Errorf("respuesta de criterio no parseable: %w", err)
-	}
-	return result, nil
+	return llm.DecodeVerdictOutput(out, "criterio")
 }
 
 // ScoreRelevance puntúa la relevancia 0..1 de una candidata contra las ideas del job
@@ -189,19 +194,18 @@ func (p *Provider) ScoreRelevance(ctx context.Context, req llm.RelevanceRequest)
 	return llm.ParseRelevanceResult(rawJSON)
 }
 
-// ExtractIdeas descompone la respuesta del alumno en ideas atómicas (plan 045 F4).
-// Mismo camino que las demás llamadas: build prompt → generar → ExtractJSON → validar
-// la forma {"ideas":[…]}. Una extracción que no parsea es fallo transitorio (el caller
-// decide el fallback a la respuesta cruda).
+// ExtractIdeas descompone la respuesta del alumno en ideas atómicas (plan 045 F4),
+// con IdeasSchema en format. Build prompt → generar → ExtractJSON → revalidar la forma
+// {"ideas":[…]} (ParseExtractedIdeas). Una extracción que no parsea es un error de
+// calidad; el caller decide el fallback a la respuesta cruda y lo marca.
 func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest) ([]string, error) {
-	prompt := llm.BuildExtractIdeasPrompt(req)
-	out, err := p.generate(ctx, prompt)
+	out, err := p.generateFormat(ctx, llm.BuildExtractIdeasPrompt(req), p.temperature, llm.IdeasSchema.JSON())
 	if err != nil {
 		return nil, err
 	}
 	rawJSON, err := llm.ExtractJSON(out)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("%w: respuesta de extracción de ideas no parseable: %v", llm.ErrLLMQuality, err)
 	}
 	return llm.ParseExtractedIdeas(rawJSON)
 }
@@ -214,16 +218,15 @@ func (p *Provider) ExtractIdeas(ctx context.Context, req llm.ExtractIdeasRequest
 // control, a ~+22% de latencia. El caller valida contra ChunkArtifactsV1, igual.
 func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*llm.DigestChunkResult, error) {
 	// Override opcional de temperatura (jitter del reintento por calidad, plan 043);
-	// nil = temperatura por instancia (determinista). Aplica a AMBAS mitades.
-	temperature := p.temperature
-	if in.Temperature != nil {
-		temperature = *in.Temperature
-	}
+	// nil = temperatura por instancia (determinista). Aplica a AMBAS mitades, y con él
+	// viaja la semilla fija del reintento.
+	options := p.materialOptions(in.Temperature)
 
 	// A1: summary encadenable + tema (la mitad que sostiene el pipeline, va primero).
-	outS, err := p.generateWithTemperature(ctx, llm.BuildDigestSummaryPrompt(in), temperature)
+	outS, err := p.generateWith(ctx, llm.BuildDigestSummaryPrompt(in), options, jsonFormat)
 	if err != nil {
-		// Fallo de transporte/HTTP: es INFRA, sube SIN el sentinel de calidad.
+		// Transporte o HTTP: INFRA, sube SIN el sentinel de calidad. La excepción es el
+		// 500 del bucle de repetición (ErrRepeatLimit), que ya llega como calidad.
 		return nil, err
 	}
 	rawS, err := llm.ExtractJSON(outS)
@@ -237,7 +240,7 @@ func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*l
 	}
 
 	// A2: solo las ideas del trozo.
-	outI, err := p.generateWithTemperature(ctx, llm.BuildDigestIdeasPrompt(in), temperature)
+	outI, err := p.generateWith(ctx, llm.BuildDigestIdeasPrompt(in), options, jsonFormat)
 	if err != nil {
 		return nil, err
 	}
@@ -258,14 +261,12 @@ func (p *Provider) DigestChunk(ctx context.Context, in llm.DigestChunkInput) (*l
 // cada candidata contra CandidatePayloadV1.
 func (p *Provider) ProposeCandidates(ctx context.Context, in llm.ProposeCandidatesInput) ([]materialpipeline.CandidatePayloadV1, error) {
 	prompt := llm.BuildProposeCandidatesPrompt(in)
-	// Override opcional de temperatura (jitter del reintento por calidad de la fase B).
-	temperature := p.temperature
-	if in.Temperature != nil {
-		temperature = *in.Temperature
-	}
-	out, err := p.generateWithTemperature(ctx, prompt, temperature)
+	// Override opcional de temperatura (jitter del reintento por calidad de la fase B),
+	// con la semilla fija del reintento.
+	out, err := p.generateWith(ctx, prompt, p.materialOptions(in.Temperature), jsonFormat)
 	if err != nil {
-		// Fallo de transporte/HTTP: INFRA, sube SIN el sentinel de calidad.
+		// Transporte o HTTP: INFRA, sube SIN el sentinel de calidad. La excepción es el
+		// 500 del bucle de repetición (ErrRepeatLimit), que ya llega como calidad.
 		return nil, err
 	}
 	rawJSON, err := llm.ExtractJSON(out)
@@ -281,20 +282,46 @@ func (p *Provider) ProposeCandidates(ctx context.Context, in llm.ProposeCandidat
 
 // generate ejecuta POST /api/generate con la temperatura por instancia del provider.
 func (p *Provider) generate(ctx context.Context, prompt string) (string, error) {
-	return p.generateWithTemperature(ctx, prompt, p.temperature)
+	return p.generateFormat(ctx, prompt, p.temperature, jsonFormat)
 }
 
-// generateWithTemperature ejecuta POST /api/generate con una temperatura explícita y
-// devuelve el texto crudo del modelo. La usa DigestChunk para aplicar el jitter del
-// reintento por calidad sin cambiar el default determinista del resto de llamadas.
-func (p *Provider) generateWithTemperature(ctx context.Context, prompt string, temperature float64) (string, error) {
+// materialOptions son las opciones de una llamada del material («leer» o «preguntar»):
+// sin override, la temperatura del proveedor y nada más; con el override del reintento
+// de calidad, esa temperatura y la semilla fija.
+func (p *Provider) materialOptions(override *float64) generateOptions {
+	if override == nil {
+		return generateOptions{Temperature: p.temperature}
+	}
+	seed := materialRetrySeed
+	return generateOptions{Temperature: *override, Seed: &seed}
+}
+
+// temperatureFor devuelve la temperatura de una llamada: la de la petición si viene
+// (el reintento de una salida inválida) o la del proveedor.
+func (p *Provider) temperatureFor(override *float64) float64 {
+	if override != nil {
+		return *override
+	}
+	return p.temperature
+}
+
+// generateFormat ejecuta POST /api/generate con una temperatura y un format
+// explícitos ("json" o un JSON Schema) y devuelve el texto crudo del modelo.
+func (p *Provider) generateFormat(ctx context.Context, prompt string, temperature float64, format json.RawMessage) (string, error) {
+	return p.generateWith(ctx, prompt, generateOptions{Temperature: temperature}, format)
+}
+
+// generateWith ejecuta POST /api/generate con las opciones y el format dados. Un estado
+// no 2xx es un error de infraestructura, salvo el 500 con que Ollama corta un bucle de
+// repetición del modelo: ese sale como ErrRepeatLimit (calidad) con el mensaje original.
+func (p *Provider) generateWith(ctx context.Context, prompt string, options generateOptions, format json.RawMessage) (string, error) {
 	reqBody := generateRequest{
 		Model:   p.model,
 		Prompt:  prompt,
 		Stream:  false,
-		Format:  "json",
+		Format:  format,
 		Think:   false,
-		Options: &generateOptions{Temperature: temperature},
+		Options: &options,
 	}
 	bodyBytes, err := json.Marshal(reqBody)
 	if err != nil {
@@ -308,6 +335,14 @@ func (p *Provider) generateWithTemperature(ctx context.Context, prompt string, t
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
+	// The turn is asked here, with the request built and not yet open: the client
+	// timeout only counts the inference, never the wait (HU-IA.10).
+	release, err := p.limiter.Acquire(ctx)
+	if err != nil {
+		return "", fmt.Errorf("ollama request not sent: %w", err)
+	}
+	defer release()
+
 	resp, err := p.httpClient.Do(httpReq)
 	if err != nil {
 		return "", fmt.Errorf("ollama request failed: %w", err)
@@ -319,7 +354,11 @@ func (p *Provider) generateWithTemperature(ctx context.Context, prompt string, t
 		return "", fmt.Errorf("reading ollama response: %w", err)
 	}
 	if resp.StatusCode < 200 || resp.StatusCode >= 300 {
-		return "", fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, strings.TrimSpace(string(body)))
+		text := strings.TrimSpace(string(body))
+		if resp.StatusCode == http.StatusInternalServerError && strings.Contains(text, repeatLimitBody) {
+			return "", fmt.Errorf("%w: ollama returned status %d: %s", ErrRepeatLimit, resp.StatusCode, text)
+		}
+		return "", fmt.Errorf("ollama returned status %d: %s", resp.StatusCode, text)
 	}
 
 	var gr generateResponse

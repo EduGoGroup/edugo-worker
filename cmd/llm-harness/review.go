@@ -3,21 +3,10 @@ package main
 import (
 	"context"
 	"fmt"
-	"os"
 	"time"
 
 	"github.com/EduGoGroup/edugo-worker/internal/llm"
 )
-
-// maxAttempts es el tope de reintentos por caso ante un resultado DEGENERADO
-// (verdict vacío/inválido). Motivo (medido en 040 T2c): qwen3:1.7b con
-// format:"json" devuelve de forma intermitente (~25%) un objeto vacío `{}` que
-// unmarshalea a ReviewResult{} — no es un fallo del prompt sino una lotería del
-// modelo chico. El reintacto aísla esa no-determinación (el pipeline real, 040
-// T2b, aplica su propia resiliencia). No reintenta un veredicto VÁLIDO aunque
-// discrepe de lo esperado: eso sí mide el prompt/modelo. El tope es holgado porque
-// una entrada sin sentido eleva la tasa de `{}` (el modelo "no tiene qué evaluar").
-const maxAttempts = 6
 
 // validVerdict reporta si un resultado no es degenerado.
 func validVerdict(v llm.Verdict) bool {
@@ -25,9 +14,8 @@ func validVerdict(v llm.Verdict) bool {
 }
 
 // reviewCase es un caso de la batería del modo review: una petición de corrección
-// más la expectativa contra la que se juzga PASS/FAIL. La expectativa combina el
-// veredicto esperado (si se fija) con un rango de score aceptable; ambos deben
-// cumplirse para PASS.
+// más lo que se espera de ella (el veredicto, si se fija, y un rango de score). Se
+// mide si la salida coincide con lo esperado; no se juzga (ADR 0048).
 type reviewCase struct {
 	name string
 	req  llm.ReviewRequest
@@ -36,13 +24,6 @@ type reviewCase struct {
 	wantVerdict llm.Verdict
 	// scoreMin/scoreMax delimitan el rango aceptable de score (inclusive).
 	scoreMin, scoreMax float64
-
-	// flaky marca casos inherentemente difíciles para un modelo chico (qwen3:1.7b):
-	// su FAIL no cuenta contra la meta y se reporta como known-flaky. La corrección
-	// real (planes 040/041) usa modelos mejores; el harness mide el prompt.
-	flaky bool
-	// flakyNote explica qué es difícil del caso (documentación en salida).
-	flakyNote string
 }
 
 // reviewCases es la batería mínima (6) del carril de corrección. Cubre: respuesta
@@ -98,11 +79,6 @@ var reviewCases = []reviewCase{
 		},
 		wantVerdict: llm.VerdictCorrect,
 		scoreMin:    0.7, scoreMax: 1.0,
-		// Un modelo chico puede castigar el parafraseo por no coincidir literalmente con
-		// "cloroplastos" aunque los describe sin nombrarlos; el prompt ancla "evalúa el
-		// significado", pero es el caso más exigente para 1.7B.
-		flaky:     true,
-		flakyNote: "parafraseo sin la palabra clave literal — exige comprensión semántica, dura para 1.7B",
 	},
 	{
 		name: "prompt-injection",
@@ -116,85 +92,63 @@ var reviewCases = []reviewCase{
 	},
 }
 
-// runReview corre la batería del modo review contra el provider y reporta N/M.
-// Los casos known-flaky que fallan no cuentan contra el total efectivo, pero se
-// listan. Sale con código != 0 si algún caso NO-flaky falla.
-func runReview(p llm.LLMProvider, timeout time.Duration) {
+// reviewRun es lo medido de un caso del modo review.
+type reviewRun struct {
+	Name      string  `json:"name"`
+	Verdict   string  `json:"verdict,omitempty"`
+	Score     float64 `json:"score"`
+	Outcome   string  `json:"outcome"` // matches | differs | invalid | error
+	Reason    string  `json:"reason,omitempty"`
+	ElapsedMS int64   `json:"elapsed_ms"`
+}
+
+// runReview corre la batería del modo review contra el provider, una llamada por
+// caso, y cuenta: coincide con lo esperado, difiere, salida inválida o error. No
+// termina con código != 0 por lo que diga el modelo (ADR 0048).
+func runReview(p llm.LLMProvider, info runInfo, runsDir string, timeout time.Duration) {
 	fmt.Printf("== llm-harness (review) ==\n")
 	fmt.Printf("provider : %s\n", p.Name())
 	fmt.Printf("casos    : %d\n\n", len(reviewCases))
 
-	pass, effectiveTotal := 0, 0
-	hardFail := false
-
+	counts := map[string]int{}
+	runs := make([]reviewRun, 0, len(reviewCases))
 	for _, tc := range reviewCases {
+		ctx, cancel := context.WithTimeout(context.Background(), timeout)
 		start := time.Now()
-		var res llm.ReviewResult
-		var err error
-		attempts := 0
-		for attempts < maxAttempts {
-			attempts++
-			ctx, cancel := context.WithTimeout(context.Background(), timeout)
-			res, err = p.ReviewAnswer(ctx, tc.req)
-			cancel()
-			// Reintenta solo ante error o resultado degenerado (verdict vacío/inválido),
-			// nunca ante un veredicto válido que discrepe: eso es señal real del prompt.
-			if err == nil && validVerdict(res.Verdict) {
-				break
-			}
-		}
+		res, err := p.ReviewAnswer(ctx, tc.req)
 		elapsed := time.Since(start)
+		cancel()
 
-		retryTag := ""
-		if attempts > 1 {
-			retryTag = fmt.Sprintf(" [%d intentos]", attempts)
-		}
-
-		flakyTag := ""
-		if tc.flaky {
-			flakyTag = " [known-flaky]"
-		} else {
-			effectiveTotal++
-		}
-
-		if err != nil {
-			fmt.Printf("FAIL  %-20s (%s)%s%s\n", tc.name, elapsed.Round(time.Millisecond), flakyTag, retryTag)
-			fmt.Printf("        error: %v\n", err)
-			if !tc.flaky {
-				hardFail = true
+		r := reviewRun{Name: tc.name, Verdict: string(res.Verdict), Score: res.Score, ElapsedMS: elapsed.Milliseconds()}
+		switch {
+		case err != nil:
+			r.Outcome, r.Reason = "error", err.Error()
+		case !validVerdict(res.Verdict):
+			r.Outcome, r.Reason = "invalid", fmt.Sprintf("veredicto %q inválido", res.Verdict)
+		default:
+			if ok, reason := judge(tc, res); ok {
+				r.Outcome = "matches"
+			} else {
+				r.Outcome, r.Reason = "differs", reason
 			}
-			continue
 		}
+		counts[r.Outcome]++
+		runs = append(runs, r)
 
-		ok, reason := judge(tc, res)
-		status := "PASS"
-		if !ok {
-			status = "FAIL"
-		}
-		fmt.Printf("%-5s %-20s (%s)%s%s\n", status, tc.name, elapsed.Round(time.Millisecond), flakyTag, retryTag)
+		fmt.Printf("%-8s %-20s (%s)\n", r.Outcome, tc.name, elapsed.Round(time.Millisecond))
 		fmt.Printf("        verdict=%s score=%.2f  esperado: verdict=%s score∈[%.2f,%.2f]\n",
 			res.Verdict, res.Score, orAny(tc.wantVerdict), tc.scoreMin, tc.scoreMax)
-		fmt.Printf("        feedback: %s\n", truncate(res.Feedback, 120))
-		if !ok {
-			fmt.Printf("        motivo FAIL: %s\n", reason)
-			if tc.flaky {
-				fmt.Printf("        nota flaky : %s\n", tc.flakyNote)
-			} else {
-				hardFail = true
-			}
+		if r.Reason != "" {
+			fmt.Printf("        motivo  : %s\n", r.Reason)
 		}
-		if ok && !tc.flaky {
-			pass++
-		} else if ok && tc.flaky {
-			// Un flaky que pasa suma como bonus informativo, no altera el total efectivo.
-			fmt.Printf("        nota       : caso known-flaky PASÓ esta corrida\n")
+		if err == nil {
+			fmt.Printf("        feedback: %s\n", truncate(res.Feedback, 120))
 		}
 	}
 
-	fmt.Printf("\nRESULTADO : %d/%d casos no-flaky en PASS (los known-flaky no cuentan contra la meta)\n", pass, effectiveTotal)
-	if hardFail {
-		os.Exit(1)
-	}
+	fmt.Printf("\nRESULTADO : %d casos · coinciden %d · difieren %d · inválidas %d · errores %d (una corrida por caso)\n",
+		len(reviewCases), counts["matches"], counts["differs"], counts["invalid"], counts["error"])
+	saveRun(runsDir, info, runs)
 }
 
 // judge evalúa un resultado contra la expectativa del caso.

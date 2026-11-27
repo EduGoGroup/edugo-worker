@@ -58,6 +58,16 @@ func Load() (*Config, error) {
 			"llm.api.provider":   "LLM_API_PROVIDER",
 			"llm.api.api_key":    "LLM_API_KEY",
 			"llm.api.model":      "LLM_API_MODEL",
+			// Tope de inferencias simultáneas por limitador (HU-IA.10).
+			"llm.local.max_in_flight": "LLM_LOCAL_MAX_IN_FLIGHT",
+			"llm.api.max_in_flight":   "LLM_API_MAX_IN_FLIGHT",
+			// Rescate de lo fallado en el carril de IA (HU-IA.6).
+			"ai_rescue.enabled":                 "AI_RESCUE_ENABLED",
+			"ai_rescue.sweep_interval":          "AI_RESCUE_SWEEP_INTERVAL",
+			"ai_rescue.min_age":                 "AI_RESCUE_MIN_AGE",
+			"ai_rescue.max_retries":             "AI_RESCUE_MAX_RETRIES",
+			"ai_rescue.retry_backoff":           "AI_RESCUE_RETRY_BACKOFF",
+			"ai_rescue.job_pending_stale_after": "AI_RESCUE_JOB_PENDING_STALE_AFTER",
 			// Embeddings local (plan 044 D-044.1): host/modelo/timeout del cliente Ollama
 			// de embeddings, separado del provider LLM.
 			"llm.embed.base_url": "LLM_EMBED_BASE_URL",

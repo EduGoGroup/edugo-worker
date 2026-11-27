@@ -20,10 +20,12 @@ import (
 var ErrLearningPermanent = errors.New("learning respondió error permanente (4xx)")
 
 // ErrClaimConflict marca un 409 de POST claim: el intento NO es reclamable por la
-// IA (ya lo completó el profesor, o hay un candado ajeno vigente <10min). No es un
-// fallo: el worker DEBE ABSTENERSE (log y saltar el intento, sin error fatal). El
-// clasificador de retry no lo ve porque el processor lo convierte en ACK. Ver
-// contrato del candado en el plan 040 F4.
+// IA. Funde las dos causas de learning, que viajan en el cuerpo del error:
+// ATTEMPT_NOT_PENDING_REVIEW (ya lo completó el profesor) y AI_REVIEW_CLAIM_ACTIVE
+// (candado vigente <10min, de otra entrega o el propio si no se pudo liberar). No es
+// un fallo: el worker DEBE ABSTENERSE (log con la causa y ACK). El clasificador de
+// retry no lo ve porque el processor lo convierte en ACK. Ver contrato del candado
+// en el plan 040 F4.
 var ErrClaimConflict = errors.New("intento no reclamable por la IA (candado ajeno vigente o ya completado)")
 
 // Rutas de los endpoints M2M en learning (plan 040 F2/F4). Base = api_learning.base_url.
@@ -52,6 +54,11 @@ type PendingAnswer struct {
 	// (learning lo añade por answer); ausente (omitempty) cuando la pregunta no tiene
 	// prep. El carril de corrección degrada al flujo global sin él (D-042.10 §4).
 	LLMPrep json.RawMessage `json:"llm_prep,omitempty"`
+
+	// AnswerSpec son las alternativas y las reglas de la corta (answer_spec, ADR 0049),
+	// en su forma canónica. Ausente sin spec. Lo lee el prompt global de la corta
+	// (HU-INF.5); learning lo sirve desde la HU-INF.2.
+	AnswerSpec json.RawMessage `json:"answer_spec,omitempty"`
 }
 
 // PendingAnswersResponse es la respuesta de GET answers?review=pending. Answers
@@ -192,11 +199,12 @@ func (c *LearningClient) Claim(ctx context.Context, attemptID string) error {
 	}
 }
 
-// ReleaseClaim libera el candado del intento (idempotente). El worker lo llama al
-// TERMINAR su lote de reviews cuando NO finaliza (flujo teacher / short_answer),
-// en lugar de finalizar. Un 404/409 aquí NO es fatal: el candado ya no existe o
-// expiró por TTL, así que se trata como no-op. El resto de 4xx (salvo 408/429) es
-// permanente; 5xx/red/timeout es transitorio.
+// ReleaseClaim libera el candado del intento (idempotente). El worker lo llama en
+// toda salida que NO finaliza: al terminar su lote del flujo teacher / short_answer
+// y en cada salida con error, para que el reintento pueda reclamar (bug 0138). Un
+// 404/409 aquí NO es fatal: el candado ya no existe o expiró por TTL, así que se
+// trata como no-op. El resto de 4xx (salvo 408/429) es permanente; 5xx/red/timeout
+// es transitorio.
 func (c *LearningClient) ReleaseClaim(ctx context.Context, attemptID string) error {
 	if attemptID == "" {
 		return fmt.Errorf("attempt_id vacío")

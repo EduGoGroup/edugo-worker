@@ -64,8 +64,8 @@ run: ## Ejecutar en modo desarrollo
 
 dev: deps run ## Desarrollo completo
 
-llm-harness: ## Smoke del provider LLM: mode=generate (039 D-039.8, contrato 038) o mode=review (040 T2c, corrección). Flags via ARGS="..."
-	@echo "$(YELLOW)🧪 llm-harness (provider LLM: generate=contrato 038 · review=corrección de respuestas)...$(RESET)"
+llm-harness: ## Mide el modelo LLM (ADR 0048: una corrida por caso, sin PASS/FAIL, historial en cmd/llm-harness/testdata/runs/). Modos: generate|review|prep|review-prep|material|material-pairs|embed|relevance|bank. Flags via ARGS="..."
+	@echo "$(YELLOW)🧪 llm-harness (mide, no juzga: cada corrida se guarda en cmd/llm-harness/testdata/runs/)...$(RESET)"
 	@echo "$(YELLOW)   ej: make llm-harness ARGS=\"-mode review -provider ollama -model qwen3:1.7b\"$(RESET)"
 	@$(GOCMD) run ./cmd/llm-harness $(ARGS)
 

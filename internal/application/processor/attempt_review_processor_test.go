@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"testing"
+	"time"
 
 	"github.com/EduGoGroup/edugo-shared/messaging/events"
 	"github.com/EduGoGroup/edugo-worker/internal/client/m2m"
@@ -873,9 +874,10 @@ func TestAttemptReviewProcessor_OpenEnded_CriteriosEnBlanco_NoCeroSilencioso(t *
 	if len(learning.reviewCalls) != 1 {
 		t.Fatalf("esperaba 1 review posteada, hubo %d", len(learning.reviewCalls))
 	}
-	// El puntaje NO es 0 silencioso: viene del juicio global (0.8 → 8 de 10).
-	if got := learning.reviewCalls[0].PointsAwarded; got < 7.99 || got > 8.01 {
-		t.Fatalf("esperaba ~8.0 puntos del flujo global, hubo %.2f (¿0 silencioso?)", got)
+	// El puntaje NO es 0 silencioso: viene del juicio global. Desde la HU-INF.5 (P8)
+	// el número sale del veredicto, no del score del modelo: «correct» con 0.8 → 10 de 10.
+	if got := learning.reviewCalls[0].PointsAwarded; got < 9.99 || got > 10.01 {
+		t.Fatalf("esperaba 10 puntos del flujo global (veredicto correct), hubo %.2f (¿0 silencioso?)", got)
 	}
 }
 
@@ -917,5 +919,364 @@ func TestAttemptReviewProcessor_OpenEnded_SinPrep_FlujoGlobal(t *testing.T) {
 	}
 	if provider.lastReviewReq.Prep != nil {
 		t.Fatal("sin prep, req.Prep debe ser nil")
+	}
+}
+
+// --- HU-INF.1 (bug 0138): el reintento no muere en su propio candado ---
+
+// statefulLearning es un doble de learning CON estado: el candado no es reentrante
+// (un segundo Claim con el candado tomado devuelve el 409 de learning, como
+// AI_REVIEW_CLAIM_ACTIVE) y el GET de pendientes filtra las respuestas ya revisadas,
+// igual que el usecase real. Con él, dos llamadas a Process simulan la reentrega.
+type statefulLearning struct {
+	answers  []m2m.PendingAnswer
+	reviewed map[string]m2m.AnswerReviewRequest
+	claimed  bool
+
+	claimCalls      int
+	releaseCalls    int
+	releaseCtxErrs  []error
+	releaseDeadline []time.Duration
+	finalizeCalls   int
+}
+
+func newStatefulLearning(answers ...m2m.PendingAnswer) *statefulLearning {
+	return &statefulLearning{answers: answers, reviewed: map[string]m2m.AnswerReviewRequest{}}
+}
+
+func (s *statefulLearning) Claim(_ context.Context, _ string) error {
+	s.claimCalls++
+	if s.claimed {
+		return fmt.Errorf(`%w: {"code":"AI_REVIEW_CLAIM_ACTIVE"}`, m2m.ErrClaimConflict)
+	}
+	s.claimed = true
+	return nil
+}
+
+func (s *statefulLearning) ReleaseClaim(ctx context.Context, _ string) error {
+	s.releaseCalls++
+	s.releaseCtxErrs = append(s.releaseCtxErrs, ctx.Err())
+	if dl, ok := ctx.Deadline(); ok {
+		s.releaseDeadline = append(s.releaseDeadline, time.Until(dl))
+	} else {
+		s.releaseDeadline = append(s.releaseDeadline, -1)
+	}
+	if ctx.Err() != nil {
+		// Un contexto cancelado no llega a learning: el candado sigue tomado.
+		return ctx.Err()
+	}
+	s.claimed = false
+	return nil
+}
+
+func (s *statefulLearning) GetPendingAnswers(_ context.Context, attemptID string) (m2m.PendingAnswersResponse, error) {
+	out := m2m.PendingAnswersResponse{AttemptID: attemptID}
+	for _, a := range s.answers {
+		if _, done := s.reviewed[a.AnswerID]; !done {
+			out.Answers = append(out.Answers, a)
+		}
+	}
+	return out, nil
+}
+
+func (s *statefulLearning) PostAnswerReview(_ context.Context, _ string, answerID string, review m2m.AnswerReviewRequest) (m2m.AnswerReviewResponse, error) {
+	s.reviewed[answerID] = review
+	return m2m.AnswerReviewResponse{AnswerID: answerID, ReviewStatus: "reviewed"}, nil
+}
+
+func (s *statefulLearning) FinalizeAttempt(_ context.Context, attemptID string) (m2m.FinalizeResponse, error) {
+	s.finalizeCalls++
+	s.claimed = false
+	return m2m.FinalizeResponse{AttemptID: attemptID, Status: "completed"}, nil
+}
+
+// failingByAnswerProvider falla según la respuesta, no según el número de llamada.
+// ReviewRequest no lleva el answer_id (y reviewOne no se toca en esta HU), así que
+// cada respuesta del test lleva un StudentAnswer único y se indexa por él.
+// failTimes[x] = n hace fallar n veces la respuesta x; -1, siempre.
+type failingByAnswerProvider struct {
+	mockLLMProvider
+	failTimes map[string]int
+	callsBy   map[string]int
+}
+
+func newFailingByAnswerProvider(failTimes map[string]int) *failingByAnswerProvider {
+	return &failingByAnswerProvider{
+		mockLLMProvider: mockLLMProvider{score: 1.0, verdict: llm.VerdictCorrect, feedback: "ok"},
+		failTimes:       failTimes,
+		callsBy:         map[string]int{},
+	}
+}
+
+func (f *failingByAnswerProvider) ReviewAnswer(ctx context.Context, req llm.ReviewRequest) (llm.ReviewResult, error) {
+	f.callsBy[req.StudentAnswer]++
+	n := f.failTimes[req.StudentAnswer]
+	if n < 0 || f.callsBy[req.StudentAnswer] <= n {
+		return llm.ReviewResult{}, errors.New("ollama timeout en " + req.StudentAnswer)
+	}
+	return f.mockLLMProvider.ReviewAnswer(ctx, req)
+}
+
+// openEndedWithText es una respuesta abierta cuyo StudentAnswer es su propio id, para
+// que failingByAnswerProvider la reconozca.
+func openEndedWithText(id string, points float64) m2m.PendingAnswer {
+	a := pendingAnswer(id, points)
+	a.StudentAnswer = id
+	return a
+}
+
+func directSettings() *mockSettingsReader {
+	return &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowDirect)}
+}
+
+// CA-INF.1.local: el modelo falla una vez en la segunda respuesta y el mensaje se
+// reentrega; el reintento reclama y corrige solo la que faltaba.
+func TestAttemptReview_RedeliveryAfterMidFailure_ReviewsMissingAnswer(t *testing.T) {
+	learning := newStatefulLearning(openEndedWithText("a1", 10), openEndedWithText("a2", 10))
+	provider := newFailingByAnswerProvider(map[string]int{"a2": 1})
+	p := newProcessor(directSettings(), learning, provider)
+	payload := validEventPayload(t)
+
+	if err := p.Process(context.Background(), payload); err == nil {
+		t.Fatal("la primera entrega debe devolver error (falló a2) para que el consumer reintente")
+	}
+	if learning.claimed {
+		t.Fatal("tras la salida con error el candado debe quedar libre")
+	}
+	if learning.finalizeCalls != 0 {
+		t.Fatalf("con una respuesta sin propuesta no se finaliza, hubo %d", learning.finalizeCalls)
+	}
+
+	// Reentrega del mismo mensaje.
+	if err := p.Process(context.Background(), payload); err != nil {
+		t.Fatalf("la reentrega debe completar la revisión, hubo error: %v", err)
+	}
+	if learning.claimCalls != 2 {
+		t.Fatalf("la reentrega debe reclamar de nuevo: esperaba 2 claims, hubo %d", learning.claimCalls)
+	}
+	if _, ok := learning.reviewed["a2"]; !ok {
+		t.Fatal("la reentrega debe dejar a2 con propuesta")
+	}
+	if provider.callsBy["a1"] != 1 || provider.callsBy["a2"] != 2 {
+		t.Fatalf("la reentrega solo debe volver sobre a2: llamadas a1=%d a2=%d", provider.callsBy["a1"], provider.callsBy["a2"])
+	}
+	if learning.finalizeCalls != 1 {
+		t.Fatalf("flow direct debe finalizar al completar, hubo %d", learning.finalizeCalls)
+	}
+}
+
+// Las cinco salidas con error con el candado tomado devuelven error y liberan una vez.
+func TestAttemptReview_ErrorExits_ReleaseClaim(t *testing.T) {
+	cases := []struct {
+		name     string
+		learning *mockLearningClient
+		provider *mockLLMProvider
+	}{
+		{
+			name:     "falla la lectura de pendientes",
+			learning: &mockLearningClient{pendingErr: errors.New("learning 503")},
+			provider: &mockLLMProvider{score: 1, verdict: llm.VerdictCorrect},
+		},
+		{
+			name: "falla el modelo",
+			learning: &mockLearningClient{pending: m2m.PendingAnswersResponse{
+				Answers: []m2m.PendingAnswer{pendingAnswer("a1", 10)}}},
+			provider: &mockLLMProvider{failOnCall: 1, err: errors.New("ollama timeout")},
+		},
+		{
+			name: "veredicto inválido",
+			learning: &mockLearningClient{pending: m2m.PendingAnswersResponse{
+				Answers: []m2m.PendingAnswer{pendingAnswer("a1", 10)}}},
+			provider: &mockLLMProvider{verdict: ""},
+		},
+		{
+			name: "falla la escritura de la review",
+			learning: &mockLearningClient{
+				pending:   m2m.PendingAnswersResponse{Answers: []m2m.PendingAnswer{pendingAnswer("a1", 10)}},
+				reviewErr: errors.New("learning 503"),
+			},
+			provider: &mockLLMProvider{score: 1, verdict: llm.VerdictCorrect},
+		},
+		{
+			name: "falla finalize al terminar",
+			learning: &mockLearningClient{
+				pending:     m2m.PendingAnswersResponse{Answers: []m2m.PendingAnswer{pendingAnswer("a1", 10)}},
+				finalizeErr: errors.New("learning 503"),
+			},
+			provider: &mockLLMProvider{score: 1, verdict: llm.VerdictCorrect},
+		},
+		{
+			name: "falla finalize sin pendientes",
+			learning: &mockLearningClient{
+				pending:     m2m.PendingAnswersResponse{Answers: nil},
+				finalizeErr: errors.New("learning 503"),
+			},
+			provider: &mockLLMProvider{},
+		},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := newProcessor(directSettings(), tc.learning, tc.provider)
+			if err := p.Process(context.Background(), validEventPayload(t)); err == nil {
+				t.Fatal("la salida debe devolver error para que el consumer reintente")
+			}
+			if tc.learning.claimCalls != 1 {
+				t.Fatalf("esperaba 1 claim, hubo %d", tc.learning.claimCalls)
+			}
+			if tc.learning.releaseCall != 1 {
+				t.Fatalf("la salida con error debe liberar el candado 1 vez, hubo %d", tc.learning.releaseCall)
+			}
+		})
+	}
+}
+
+// Una respuesta que falla siempre no deja sin propuesta a las de detrás.
+func TestAttemptReview_FailingAnswer_DoesNotBlockOthers(t *testing.T) {
+	learning := newStatefulLearning(
+		openEndedWithText("a1", 10), openEndedWithText("a2", 10), openEndedWithText("a3", 10))
+	provider := newFailingByAnswerProvider(map[string]int{"a1": -1})
+	p := newProcessor(directSettings(), learning, provider)
+	payload := validEventPayload(t)
+
+	err := p.Process(context.Background(), payload)
+	if err == nil {
+		t.Fatal("con a1 sin propuesta Process debe devolver error")
+	}
+	if classifyError(err) != ErrorTypeTransient {
+		t.Fatalf("el fallo del modelo debe seguir siendo transitorio, hubo %v", err)
+	}
+	for _, id := range []string{"a2", "a3"} {
+		if _, ok := learning.reviewed[id]; !ok {
+			t.Fatalf("%s debe quedar con propuesta aunque a1 falle", id)
+		}
+	}
+	if learning.finalizeCalls != 0 {
+		t.Fatalf("con una respuesta sin propuesta no se finaliza, hubo %d", learning.finalizeCalls)
+	}
+
+	// Reentrega: solo vuelve sobre a1.
+	if err := p.Process(context.Background(), payload); err == nil {
+		t.Fatal("a1 sigue fallando: la reentrega debe devolver error")
+	}
+	if provider.callsBy["a1"] != 2 || provider.callsBy["a2"] != 1 || provider.callsBy["a3"] != 1 {
+		t.Fatalf("la reentrega solo debe volver sobre a1: a1=%d a2=%d a3=%d",
+			provider.callsBy["a1"], provider.callsBy["a2"], provider.callsBy["a3"])
+	}
+	if learning.releaseCalls != 2 || learning.claimed {
+		t.Fatalf("cada entrega con error debe liberar: releases=%d, tomado=%v", learning.releaseCalls, learning.claimed)
+	}
+}
+
+// Con el contexto del mensaje cancelado (apagado del worker), la liberación llega a
+// learning con un contexto vivo y con tope corto.
+func TestAttemptReview_ReleaseSurvivesCancelledContext(t *testing.T) {
+	reader := &mockSettingsReader{settings: settingsWith(
+		settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowTeacher)}
+	learning := newStatefulLearning() // sin pendientes: camino que libera hoy
+	p := newProcessor(reader, learning, &mockLLMProvider{})
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+
+	_ = p.Process(ctx, validEventPayload(t))
+
+	if learning.releaseCalls != 1 {
+		t.Fatalf("esperaba 1 liberación, hubo %d", learning.releaseCalls)
+	}
+	if learning.releaseCtxErrs[0] != nil {
+		t.Fatalf("la liberación debe llegar con un contexto vivo, llegó con: %v", learning.releaseCtxErrs[0])
+	}
+	if d := learning.releaseDeadline[0]; d <= 0 || d > releaseClaimTimeout {
+		t.Fatalf("la liberación debe tener un tope de %s, tuvo %s", releaseClaimTimeout, d)
+	}
+	if learning.claimed {
+		t.Fatal("el candado debe quedar libre")
+	}
+}
+
+// El log de abstención dice cuál de las dos causas de learning trajo el 409.
+func TestClaimConflictCause(t *testing.T) {
+	cases := map[string]string{
+		`{"code":"AI_REVIEW_CLAIM_ACTIVE"}`:     "candado activo (otra entrega o el propio candado sin liberar)",
+		`{"code":"ATTEMPT_NOT_PENDING_REVIEW"}`: "el intento ya no está pendiente de revisión",
+		"candado ajeno vigente":                 "desconocida",
+	}
+	for body, want := range cases {
+		err := fmt.Errorf("%w: %s", m2m.ErrClaimConflict, body)
+		if got := claimConflictCause(err); got != want {
+			t.Fatalf("causa de %q: esperaba %q, hubo %q", body, want, got)
+		}
+	}
+}
+
+// cancellingProvider cancela el contexto del mensaje en la primera respuesta, como un
+// apagado del worker a mitad de la revisión, y devuelve el error del contexto.
+type cancellingProvider struct {
+	mockLLMProvider
+	cancel context.CancelFunc
+}
+
+func (c *cancellingProvider) ReviewAnswer(ctx context.Context, _ llm.ReviewRequest) (llm.ReviewResult, error) {
+	c.calls++
+	c.cancel()
+	return llm.ReviewResult{}, ctx.Err()
+}
+
+// Con el mensaje cancelado a mitad, el bucle no sigue llamando al modelo por las que
+// quedan: corta, devuelve error y libera con un contexto vivo.
+func TestAttemptReview_CancelledMidReview_StopsAndReleases(t *testing.T) {
+	learning := newStatefulLearning(
+		openEndedWithText("a1", 10), openEndedWithText("a2", 10), openEndedWithText("a3", 10))
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	provider := &cancellingProvider{cancel: cancel}
+	p := newProcessor(directSettings(), learning, provider)
+
+	err := p.Process(ctx, validEventPayload(t))
+	if !errors.Is(err, context.Canceled) {
+		t.Fatalf("esperaba un error de contexto cancelado, hubo: %v", err)
+	}
+	if provider.calls != 1 {
+		t.Fatalf("tras la cancelación no debe llamar más al modelo, hubo %d llamadas", provider.calls)
+	}
+	if learning.releaseCalls != 1 || learning.releaseCtxErrs[0] != nil || learning.claimed {
+		t.Fatalf("debe liberar 1 vez con contexto vivo: releases=%d err=%v tomado=%v",
+			learning.releaseCalls, learning.releaseCtxErrs, learning.claimed)
+	}
+	if learning.finalizeCalls != 0 {
+		t.Fatalf("no debe finalizar, hubo %d", learning.finalizeCalls)
+	}
+}
+
+// TestAttemptReview_ReviewOffReportsNotApplicable (HU-IA.6): con la revisión apagada el
+// worker avisa «no aplica» del intento y sigue confirmando, también si el aviso falla.
+func TestAttemptReview_ReviewOffReportsNotApplicable(t *testing.T) {
+	for _, reportErr := range []error{nil, errors.New("learning caído")} {
+		reader := &mockSettingsReader{settings: settingsWith(settingKeyReviewMode, reviewModeOff)}
+		learning := &mockLearningClient{}
+		rep := &recordingReporter{err: reportErr}
+		p := newProcessor(reader, learning, &mockLLMProvider{}).WithFailureReporter(rep)
+
+		if err := p.Process(context.Background(), validEventPayload(t)); err != nil {
+			t.Fatalf("mode=off confirma aunque el aviso falle (%v): %v", reportErr, err)
+		}
+		want := m2m.FailureReportRequest{TargetType: m2m.RescueTargetAttempt, TargetID: "attempt-1",
+			Kind: m2m.RescueKindNotApplicable}
+		if len(rep.reports) != 1 || rep.reports[0] != want {
+			t.Fatalf("esperaba un aviso «no aplica» del intento, got %+v", rep.reports)
+		}
+		if learning.finalizeCalls != 0 || len(learning.reviewCalls) != 0 {
+			t.Fatalf("mode=off no toca la revisión")
+		}
+	}
+
+	// Con la revisión encendida, el corto-circuito no aplica y no hay aviso.
+	reader := &mockSettingsReader{settings: settingsWith(settingKeyReviewMode, reviewModeLocal, settingKeyReviewFlow, reviewFlowTeacher)}
+	rep := &recordingReporter{}
+	p := newProcessor(reader, &mockLearningClient{}, &mockLLMProvider{}).WithFailureReporter(rep)
+	_ = p.Process(context.Background(), validEventPayload(t))
+	if len(rep.reports) != 0 {
+		t.Fatalf("con la revisión encendida no se avisa «no aplica»: %+v", rep.reports)
 	}
 }
